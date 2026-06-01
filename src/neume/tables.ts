@@ -18,7 +18,8 @@ export const KIND_NAMES: Readonly<Record<string, string>> = {
   sc: "scandicus", pf: "porrectus flexus", sf: "scandicus flexus",
   tr: "torculus resupinus", st: "stropha", ds: "distropha", ts: "tristropha",
   tg: "trigonus", bv: "bivirga", tv: "trivirga", pr: "pressus maior",
-  pi: "pressus minor", vs: "virga strata", or: "oriscus", sa: "scandicus",
+  pi: "pressus minor", vs: "virga strata", or: "oriscus",
+  sa: "scandicus", // ref: GregorioNabcRef.tex:233/286 — sa nomeia o mesmo neuma que sc
   pq: "pes quassus", qi: "quilisma (2 loops)", ql: "quilisma (3 loops)",
   pt: "pes stratus", oc: "oriscus-clivis", ni: "nihil",
 };
