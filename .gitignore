@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/binaries/gregorio-lsp*
+!src-tauri/binaries/.gitkeep
+src/assets/*.wasm
+.DS_Store
