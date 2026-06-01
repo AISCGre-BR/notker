@@ -1,5 +1,6 @@
 import { EditorView } from "@codemirror/view";
 import { createEditor, externalLinter } from "./editor/editor";
+import { highlightTheme } from "./editor/theme";
 import { LspClient } from "./lsp/client";
 import { SidecarTransport } from "./lsp/transport-sidecar";
 import { lspDiagnosticsToCM, formatDocument } from "./lsp/cm-lsp";
@@ -16,24 +17,33 @@ type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
 const URI = "inmemory://notker.gabc";
 let diagnostics: Diagnostic[] = [];
 
+/** Escreve uma linha de status no rodapé (instrumentação visível de runtime). */
+function setStatus(msg: string): void {
+  const el = document.querySelector("#status");
+  if (el) el.textContent = msg;
+}
+
 async function boot() {
   const app = document.querySelector<HTMLElement>("#app")!;
   app.textContent = "";
 
-  // Collect extra extensions; highlighter is optional — a WASM load failure
-  // must not prevent the editor from mounting.
-  const extraExtensions: Parameters<typeof createEditor>[2] = [];
+  // O tema (cores dos tokens) é SEMPRE incluído — independente de o WASM do
+  // realce carregar — para que as marcas de decoração tenham cor quando existirem.
+  const extraExtensions: Parameters<typeof createEditor>[2] = [highlightTheme];
 
+  // Highlighter é opcional: uma falha de carga do WASM não pode impedir o editor
+  // de montar. Reportamos o resultado no rodapé de status.
+  let highlightStatus = "realce: ativo";
   try {
     const highlighter = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
     extraExtensions.push(highlighter);
   } catch (err) {
-    console.error("[notker] falha ao carregar highlighter WASM; editor inicia sem realce de sintaxe:", err);
+    highlightStatus = "realce: FALHOU — " + String(err);
+    console.error("[notker] falha ao carregar highlighter WASM:", err);
   }
 
-  // Wire a doc-change callback before constructing the editor so the
-  // updateListener can reference it.  The real callback is assigned after
-  // the LSP client is ready; until then it is a no-op.
+  // Callback de mudança de doc, referenciado pelo updateListener; o valor real é
+  // atribuído após o cliente LSP estar pronto.
   let onDocChange = () => {};
 
   extraExtensions.push(
@@ -47,7 +57,7 @@ async function boot() {
   client.onNotification("textDocument/publishDiagnostics", (p: { uri: string; diagnostics: LspDiagnosticParam[] }) => {
     if (p.uri !== URI) return;
     diagnostics = lspDiagnosticsToCM(view.state.doc, p.diagnostics);
-    forceLinting(view); // força o linter a re-pintar os diagnósticos
+    forceLinting(view);
   });
   await client.start();
   await client.request("initialize", { processId: null, capabilities: {}, rootUri: null });
@@ -60,17 +70,50 @@ async function boot() {
     textDocument: { uri: URI, version: ++version },
     contentChanges: [{ text: view.state.doc.toString() }],
   });
-  // Use the updateListener wired above — captures ALL edits (paste, undo/redo,
-  // programmatic replacements), not just physical keystrokes.
   onDocChange = sync;
 
+  setStatus(highlightStatus + "  ·  LSP: conectado  ·  Ctrl+O abrir · Ctrl+S salvar · Ctrl+Shift+F formatar");
+
+  /** Substitui todo o conteúdo do editor (usado ao abrir arquivo). */
+  function replaceDoc(text: string): void {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+  }
+
   window.addEventListener("keydown", async (e) => {
-    if (e.ctrlKey && e.key === "o") { e.preventDefault(); const r = await openGabc(); if (r) location.reload(); }
-    if (e.ctrlKey && e.key === "s") { e.preventDefault(); await saveAsGabc(view.state.doc.toString()); }
+    if (e.ctrlKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
+      e.preventDefault();
+      try {
+        setStatus("Ctrl+O: abrindo diálogo…");
+        const r = await openGabc();
+        if (!r) { setStatus("Ctrl+O: cancelado"); return; }
+        replaceDoc(r.content); // carrega o conteúdo de fato (antes fazia location.reload e perdia tudo)
+        setStatus("aberto: " + r.path);
+      } catch (err) {
+        setStatus("Ctrl+O ERRO: " + String(err));
+        console.error("[notker] erro ao abrir:", err);
+      }
+    }
+    if (e.ctrlKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+      e.preventDefault();
+      try {
+        setStatus("Ctrl+S: salvando…");
+        const p = await saveAsGabc(view.state.doc.toString());
+        setStatus(p ? "salvo: " + p : "Ctrl+S: cancelado");
+      } catch (err) {
+        setStatus("Ctrl+S ERRO: " + String(err));
+        console.error("[notker] erro ao salvar:", err);
+      }
+    }
     if (e.ctrlKey && e.shiftKey && (e.key === "F" || e.key === "f")) {
       e.preventDefault();
-      const f = await formatDocument(client, URI, view.state.doc);
-      if (f != null) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: f } });
+      try {
+        const f = await formatDocument(client, URI, view.state.doc);
+        if (f != null) { replaceDoc(f); setStatus("formatado"); }
+        else setStatus("formatar: sem alterações");
+      } catch (err) {
+        setStatus("Ctrl+Shift+F ERRO: " + String(err));
+        console.error("[notker] erro ao formatar:", err);
+      }
     }
   });
 }
@@ -78,5 +121,6 @@ async function boot() {
 boot().catch((err) => {
   const app = document.querySelector("#app");
   if (app) app.textContent = "Falha ao iniciar o Notker: " + String(err);
+  setStatus("BOOT ERRO: " + String(err));
   console.error(err);
 });

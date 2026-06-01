@@ -1,3 +1,26 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />
-<title>Notker</title></head>
-<body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Notker</title>
+    <style>
+      html, body { margin: 0; height: 100%; }
+      body { display: flex; flex-direction: column; font-family: system-ui, sans-serif; }
+      #app { flex: 1 1 auto; overflow: auto; }
+      #status {
+        flex: 0 0 auto;
+        font: 12px/1.6 ui-monospace, monospace;
+        color: #555;
+        background: #f3f1ec;
+        border-top: 1px solid #d8d3c8;
+        padding: 2px 10px;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <footer id="status">pronto</footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
