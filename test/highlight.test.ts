@@ -4,11 +4,14 @@
  * Tests for tree-sitter-gregorio WASM loading and CodeMirror highlight
  * decoration building. Requires that `npm run grammar` has been run first
  * (generates src/assets/tree-sitter-gregorio.wasm and src/assets/tree-sitter.wasm).
+ *
+ * When the WASM artifacts are absent (e.g. in CI before `npm run grammar`),
+ * the suites skip gracefully rather than failing.
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { Parser, Language } from "web-tree-sitter";
 import { buildDecorationsFromSource } from "../src/editor/highlight-tree-sitter.js";
 
@@ -16,12 +19,16 @@ import { buildDecorationsFromSource } from "../src/editor/highlight-tree-sitter.
 const RUNTIME_WASM = resolve(__dirname, "../src/assets/tree-sitter.wasm");
 const GRAMMAR_WASM = resolve(__dirname, "../src/assets/tree-sitter-gregorio.wasm");
 
+// Check at module load time (top-level) so skipIf works correctly.
+const wasmPresent = existsSync(RUNTIME_WASM) && existsSync(GRAMMAR_WASM);
+
 /** Canonical sample that exercises header, separator, clef, neumes, NABC, divisio */
 const SAMPLE = `name: Teste;\nnabc-lines: 1;\n%%\n(c4) Pó(eh/hi|pe)pu(h)lus(h) (::)\n`;
 
 let parser: Parser;
 
 beforeAll(async () => {
+  if (!wasmPresent) return; // nothing to initialise when skipping
   await Parser.init({
     locateFile: () => RUNTIME_WASM,
   });
@@ -30,7 +37,7 @@ beforeAll(async () => {
   parser.setLanguage(lang);
 }, 30_000);
 
-describe("tree-sitter-gregorio WASM", () => {
+describe.skipIf(!wasmPresent)("tree-sitter-gregorio WASM", () => {
   it("parses the sample and returns a non-null tree", () => {
     const tree = parser.parse(SAMPLE);
     expect(tree).not.toBeNull();
@@ -101,7 +108,7 @@ describe("tree-sitter-gregorio WASM", () => {
   });
 });
 
-describe("buildDecorationsFromSource", () => {
+describe.skipIf(!wasmPresent)("buildDecorationsFromSource", () => {
   it("returns a DecorationSet without throwing", () => {
     // This is the key robustness test: no RangeSetBuilder ordering/overlap error.
     let decos: ReturnType<typeof buildDecorationsFromSource> | null = null;
