@@ -22,14 +22,39 @@ export function lspDiagnosticsToCM(doc: Text, diags: LspDiagnostic[]): CMDiagnos
   }));
 }
 
-/** Formata o documento via LSP (grefmt) e devolve o texto formatado, ou null. */
-export async function formatDocument(client: LspClient, uri: string, _doc: Text): Promise<string | null> {
-  const edits = await client.request<Array<{ newText?: string }> | null>("textDocument/formatting", {
+interface LspTextEdit {
+  range: LspRange;
+  newText: string;
+}
+
+/**
+ * Formata o documento via LSP (grefmt) e devolve o texto completo resultante,
+ * ou null quando o servidor não devolve edições.
+ *
+ * Aplica TODOS os edits retornados pelo servidor em ordem descendente de
+ * offset para que splices anteriores não invalidem os offsets seguintes.
+ */
+export async function formatDocument(client: LspClient, uri: string, doc: Text): Promise<string | null> {
+  const edits = await client.request<LspTextEdit[] | null>("textDocument/formatting", {
     textDocument: { uri },
     options: { tabSize: 2, insertSpaces: true },
   });
   if (!edits || edits.length === 0) return null;
-  return edits[0].newText ?? null;
+
+  let text = doc.toString();
+
+  // Sort edits by start offset descending so later splices don't shift earlier ones.
+  const sorted = [...edits].sort(
+    (a, b) => posToOffset(doc, b.range.start) - posToOffset(doc, a.range.start),
+  );
+
+  for (const edit of sorted) {
+    const from = posToOffset(doc, edit.range.start);
+    const to = posToOffset(doc, edit.range.end);
+    text = text.slice(0, from) + edit.newText + text.slice(to);
+  }
+
+  return text;
 }
 
 export function runGregorioCommand(client: LspClient, command: string, uri: string): void {
