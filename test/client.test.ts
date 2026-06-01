@@ -7,8 +7,8 @@ function fakeTransport(): Transport & { emit: (s: string) => void; sent: string[
     sent: [] as string[],
     async start() {}, async stop() {},
     write(s: string) { this.sent.push(s); },
-    onData(cb) { onData = cb; },
-    emit(s) { onData(s); },
+    onData(cb: (s: string) => void) { onData = cb; },
+    emit(s: string) { onData(s); },
   } as any;
 }
 
