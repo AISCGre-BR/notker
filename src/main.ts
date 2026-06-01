@@ -1,8 +1,10 @@
+import { EditorView } from "@codemirror/view";
 import { createEditor, externalLinter } from "./editor/editor";
 import { LspClient } from "./lsp/client";
 import { SidecarTransport } from "./lsp/transport-sidecar";
 import { lspDiagnosticsToCM, formatDocument } from "./lsp/cm-lsp";
 import { makeTreeSitterHighlighter } from "./editor/highlight-tree-sitter";
+import { forceLinting } from "@codemirror/lint";
 import { openGabc, saveAsGabc } from "./files/file-io";
 import type { Diagnostic } from "@codemirror/lint";
 import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
@@ -18,17 +20,34 @@ async function boot() {
   const app = document.querySelector<HTMLElement>("#app")!;
   app.textContent = "";
 
-  const highlighter = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
-  const view = createEditor(app, "name: Novo;\n%%\n(c4) ", [
-    highlighter,
+  // Collect extra extensions; highlighter is optional — a WASM load failure
+  // must not prevent the editor from mounting.
+  const extraExtensions: Parameters<typeof createEditor>[2] = [];
+
+  try {
+    const highlighter = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
+    extraExtensions.push(highlighter);
+  } catch (err) {
+    console.error("[notker] falha ao carregar highlighter WASM; editor inicia sem realce de sintaxe:", err);
+  }
+
+  // Wire a doc-change callback before constructing the editor so the
+  // updateListener can reference it.  The real callback is assigned after
+  // the LSP client is ready; until then it is a no-op.
+  let onDocChange = () => {};
+
+  extraExtensions.push(
     externalLinter(() => diagnostics),
-  ]);
+    EditorView.updateListener.of((u) => { if (u.docChanged) onDocChange(); }),
+  );
+
+  const view = createEditor(app, "name: Novo;\n%%\n(c4) ", extraExtensions);
 
   const client = new LspClient(new SidecarTransport());
   client.onNotification("textDocument/publishDiagnostics", (p: { uri: string; diagnostics: LspDiagnosticParam[] }) => {
     if (p.uri !== URI) return;
     diagnostics = lspDiagnosticsToCM(view.state.doc, p.diagnostics);
-    view.dispatch({}); // re-roda o linter
+    forceLinting(view); // força o linter a re-pintar os diagnósticos
   });
   await client.start();
   await client.request("initialize", { processId: null, capabilities: {}, rootUri: null });
@@ -41,7 +60,9 @@ async function boot() {
     textDocument: { uri: URI, version: ++version },
     contentChanges: [{ text: view.state.doc.toString() }],
   });
-  view.dom.addEventListener("keyup", sync);
+  // Use the updateListener wired above — captures ALL edits (paste, undo/redo,
+  // programmatic replacements), not just physical keystrokes.
+  onDocChange = sync;
 
   window.addEventListener("keydown", async (e) => {
     if (e.ctrlKey && e.key === "o") { e.preventDefault(); const r = await openGabc(); if (r) location.reload(); }
@@ -53,4 +74,9 @@ async function boot() {
     }
   });
 }
-void boot();
+
+boot().catch((err) => {
+  const app = document.querySelector("#app");
+  if (app) app.textContent = "Falha ao iniciar o Notker: " + String(err);
+  console.error(err);
+});
