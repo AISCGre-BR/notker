@@ -1,5 +1,5 @@
 import type { Transport } from "./client";
-import type { Child } from "@tauri-apps/plugin-shell";
+import { Command, type Child } from "@tauri-apps/plugin-shell";
 
 /**
  * Minimal interface that the SidecarTransport needs from the Tauri Command object.
@@ -15,12 +15,11 @@ export type CommandLike = {
 
 /**
  * Factory padrão: constrói o Command real usando `@tauri-apps/plugin-shell`.
- * Definida como função nomeada para que o import seja lazy (a função só é
- * chamada em runtime, nunca durante a carga do módulo em ambiente de testes).
+ * Usa import ESM estático (não `require`, que não existe no bundle do Vite).
+ * É seguro nos testes porque a factory só é INVOCADA em runtime no Tauri — as
+ * suítes injetam um test double via construtor e nunca chamam esta função.
  */
 function defaultMakeCommand(): CommandLike {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Command } = require("@tauri-apps/plugin-shell") as typeof import("@tauri-apps/plugin-shell");
   return Command.sidecar("binaries/gregorio-lsp", [], {
     encoding: "raw",
   }) as unknown as CommandLike;
