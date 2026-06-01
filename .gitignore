@@ -6,3 +6,6 @@ src-tauri/binaries/gregorio-lsp*
 !src-tauri/binaries/.gitkeep
 src/assets/*.wasm
 .DS_Store
+
+# specs/plans do brainstorm (privados — vivem no notker-planning)
+docs/superpowers/
