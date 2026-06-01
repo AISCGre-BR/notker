@@ -11,7 +11,10 @@
     "test": "vitest run",
     "sidecar": "bash scripts/build-sidecar.sh",
     "grammar": "bash scripts/build-grammar-wasm.sh",
-    "typecheck:test": "tsc -p tsconfig.test.json"
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "neume:glyphs": "python3 scripts/extract-glyph-paths.py",
+    "neume:db": "tsx scripts/build-neume-db.ts",
+    "neume": "npm run neume:glyphs && npm run neume:db"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.1",
@@ -29,6 +32,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.0",
+    "tsx": "4.19.2",
     "@types/node": "22.19.17",
     "@vitest/web-worker": "4.1.5",
     "jsdom": "26.0.0",

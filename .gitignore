@@ -5,6 +5,9 @@ src-tauri/gen/
 src-tauri/binaries/gregorio-lsp*
 !src-tauri/binaries/.gitkeep
 src/assets/*.wasm
+src/assets/neume-db.json
+scripts/.cache/*
+!scripts/.cache/.gitkeep
 .DS_Store
 
 # specs/plans do brainstorm (privados — vivem no notker-planning)
