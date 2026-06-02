@@ -20,6 +20,7 @@ import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
 import { createCommands } from "./ui/commands";
+import { createToolbar } from "./ui/toolbar";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -88,7 +89,7 @@ async function boot() {
   });
   onDocChange = sync;
 
-  setStatus(highlightStatus + "  ·  LSP: conectado  ·  Ctrl+O abrir · Ctrl+S salvar · Ctrl+Shift+F formatar · F2 busca · Ctrl+Alt+L régua · Ctrl+Alt+E/I overlay");
+  setStatus(highlightStatus + "  ·  LSP: conectado");
 
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
@@ -215,6 +216,16 @@ async function boot() {
     openOverlayPanel: () => {},
     togglePreview: () => {},
   });
+
+  createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
+    { id: "openFile", label: "Abrir", title: "Ctrl+O" },
+    { id: "saveFile", label: "Salvar", title: "Ctrl+S" },
+    { id: "format", label: "Formatar", title: "Ctrl+Shift+F" },
+    { id: "openSearch", label: "Buscar", title: "F2" },
+    { id: "openOverlayPanel", label: "Overlay", title: "Ctrl+Alt+E/I" },
+    { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
+    { id: "togglePreview", label: "Preview" },
+  ]);
 
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
