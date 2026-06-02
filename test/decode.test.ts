@@ -31,4 +31,16 @@ describe("decodeGlyph", () => {
     const e = decodeGlyph("stgall", "pv", { path: "M0Z", viewBox: "0 0 1 1", advance: 1 }, annot);
     expect(e.name).toBe("pv");
   });
+  it("adiciona nomes de modificadores aos termos (su→subpunctis, su2→subbipunctis)", () => {
+    const e = decodeGlyph("stgall", "peNsu2", { path: "M0Z", viewBox: "0 0 1 1", advance: 1 }, annot);
+    expect(e.nabc).toBe("pe-su2");
+    expect(e.terms).toContain("subpunctis");
+    expect(e.terms).toContain("subbipunctis");
+    expect(e.terms).toContain("pes");
+  });
+  it("pp adiciona prepunctis/praepunctis", () => {
+    const e = decodeGlyph("stgall", "popp2", { path: "M0Z", viewBox: "0 0 1 1", advance: 1 }, annot);
+    expect(e.terms).toContain("prepunctis");
+    expect(e.terms).toContain("praepunctis");
+  });
 });

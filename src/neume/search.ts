@@ -28,11 +28,18 @@ export class NeumeSearch {
   query(raw: string, limit = 200): EffectiveEntry[] {
     const q = norm(raw.trim());
     if (!q) return this.items.slice(0, limit);
+    const words = q.split(/\s+/).filter(Boolean);
     const scored: { e: EffectiveEntry; s: number }[] = [];
     for (const e of this.items) {
-      let best = -1;
-      for (const t of e.terms) best = Math.max(best, scoreTerm(t, q));
-      if (best >= 0) scored.push({ e, s: best });
+      let total = 0;
+      let ok = true;
+      for (const w of words) {
+        let best = -1;
+        for (const t of e.terms) best = Math.max(best, scoreTerm(t, w));
+        if (best < 0) { ok = false; break; }
+        total += best;
+      }
+      if (ok) scored.push({ e, s: total });
     }
     scored.sort((a, b) => b.s - a.s || a.e.id.localeCompare(b.e.id));
     return scored.slice(0, limit).map((x) => x.e);

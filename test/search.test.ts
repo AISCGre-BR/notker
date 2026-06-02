@@ -30,4 +30,18 @@ describe("NeumeSearch", () => {
     const withHidden = [...items, { ...eff("stgall:x", "oculto", ["oculto"]), hidden: true }];
     expect(new NeumeSearch(withHidden).query("oculto").length).toBe(0);
   });
+  it("query multi-palavra exige que todas as palavras casem (AND)", () => {
+    const items = [
+      eff("stgall:pe-su2", "pes", ["pes", "pe", "pe-su2", "subpunctis", "subbipunctis"]),
+      eff("stgall:pe", "pes", ["pes", "pe"]),
+      eff("stgall:cl", "clivis", ["clivis", "cl"]),
+    ];
+    const r = new NeumeSearch(items).query("pes subpunctis");
+    expect(r.length).toBe(1);
+    expect(r[0].id).toBe("stgall:pe-su2");
+  });
+  it("query multi-palavra ainda funciona para 'pes subbipunctis'", () => {
+    const items = [eff("stgall:pe-su2", "pes", ["pes", "subpunctis", "subbipunctis"])];
+    expect(new NeumeSearch(items).query("pes subbipunctis").length).toBe(1);
+  });
 });

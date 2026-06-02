@@ -10,6 +10,16 @@ function extractLetters(rest: string): string[] {
   return rest.match(/l[st][a-z]*\d*/g) ?? [];
 }
 
+/** Termos de busca derivados dos modificadores NABC (GregorioNabcRef:270-271,528). */
+function modifierTerms(rest: string): string[] {
+  const out: string[] = [];
+  const su = rest.match(/su[tuwx]?(\d)?/);   // subpunctis (su) + opcional forma + contagem
+  if (su) { out.push("subpunctis"); if (su[1] === "2") out.push("subbipunctis"); }
+  const pp = rest.match(/pp[tuwx]?(\d)?/);   // prepunctis (pp)
+  if (pp) out.push("prepunctis", "praepunctis");
+  return out;
+}
+
 export function decodeGlyph(
   family: Family,
   code: string,
@@ -26,7 +36,7 @@ export function decodeGlyph(
   const ptTerms = (a.pt ?? []).map(norm);
 
   const terms = Array.from(new Set([
-    norm(name), norm(base), norm(code), norm(nabc), ...ptTerms,
+    norm(name), norm(base), norm(code), norm(nabc), ...ptTerms, ...modifierTerms(rest).map(norm),
   ].filter(Boolean)));
 
   return {
