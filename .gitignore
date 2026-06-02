@@ -12,3 +12,6 @@ scripts/.cache/*
 
 # specs/plans do brainstorm (privados — vivem no notker-planning)
 docs/superpowers/
+
+# git worktrees (superpowers)
+.claude/worktrees/
