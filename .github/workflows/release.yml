@@ -9,8 +9,17 @@ permissions:
   contents: write
 
 jobs:
-  macos-arm:
-    runs-on: macos-14 # Apple Silicon (aarch64-apple-darwin)
+  build:
+    name: build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14, label: macos-arm, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
+          - { os: macos-13, label: macos-intel, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
+          - { os: ubuntu-22.04, label: linux, glob: "src-tauri/target/release/bundle/appimage/*.AppImage" }
+          - { os: windows-latest, label: windows, glob: "src-tauri/target/release/bundle/nsis/*-setup.exe" }
     steps:
       - uses: actions/checkout@v4
 
@@ -24,29 +33,57 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Dependências do sistema (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libappindicator3-dev librsvg2-dev patchelf
+
       - run: npm ci
 
-      # Sidecar LSP compilado para o host (aarch64-apple-darwin), nome esperado
-      # pelo externalBin do Tauri (binaries/gregorio-lsp-<triple>).
+      # Sidecar LSP compilado para o host (nome esperado pelo externalBin do Tauri).
       - name: Build gregorio-lsp sidecar
+        shell: bash
         run: npm run sidecar
 
-      # Os assets portáveis (wasm da gramática + neume-db.json) são versionados,
-      # então o frontend (beforeBuildCommand: npm run build) compila direto.
-      - name: Build + bundle (.app/.dmg) e publica no Release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Os assets portáveis (wasm + neume-db.json) são versionados; o frontend
+      # (beforeBuildCommand: npm run build) compila direto. tauri build empacota nativo.
+      - name: Build + bundle
+        run: npx tauri build
+
+      - uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Notker ${{ github.ref_name }}"
-          prerelease: true
-          releaseBody: |
-            Build **alpha** para **macOS Apple Silicon** — não assinado (sem conta Apple Developer).
+          name: notker-${{ matrix.label }}
+          path: ${{ matrix.glob }}
+          if-no-files-found: error
+          retention-days: 30
 
-            **Como abrir** (Gatekeeper bloqueia apps não assinados):
-            1. Baixe o `.dmg`, abra e arraste **Notker** para *Aplicativos*.
-            2. Na 1ª execução: clique com o botão direito em Notker → **Abrir** → **Abrir**.
-            3. Se ainda bloquear, no Terminal: `xattr -dr com.apple.quarantine /Applications/Notker.app`
+  release:
+    name: release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-            Requisitos: macOS com Apple Silicon (M1+). Usa o WebKit do sistema — nenhuma dependência extra a instalar.
+      - name: Publicar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Notker ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          fail_on_unmatched_files: false
+          files: |
+            artifacts/notker-macos-arm/*.dmg
+            artifacts/notker-macos-intel/*.dmg
+            artifacts/notker-linux/*.AppImage
+            artifacts/notker-windows/*-setup.exe
+          body: |
+            ## Downloads
+
+            - macOS Apple Silicon: `.dmg` (arm64) · macOS Intel: `.dmg` (x64) · Linux: `.AppImage` · Windows: `.exe`
+            - _Builds não assinadas. macOS: Ctrl+clique → Abrir. Windows: SmartScreen → Executar assim mesmo._
