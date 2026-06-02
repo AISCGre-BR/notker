@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos-arm:
+    runs-on: macos-14 # Apple Silicon (aarch64-apple-darwin)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Sidecar LSP compilado para o host (aarch64-apple-darwin), nome esperado
+      # pelo externalBin do Tauri (binaries/gregorio-lsp-<triple>).
+      - name: Build gregorio-lsp sidecar
+        run: npm run sidecar
+
+      # Os assets portáveis (wasm da gramática + neume-db.json) são versionados,
+      # então o frontend (beforeBuildCommand: npm run build) compila direto.
+      - name: Build + bundle (.app/.dmg) e publica no Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Notker ${{ github.ref_name }}"
+          prerelease: true
+          releaseBody: |
+            Build **alpha** para **macOS Apple Silicon** — não assinado (sem conta Apple Developer).
+
+            **Como abrir** (Gatekeeper bloqueia apps não assinados):
+            1. Baixe o `.dmg`, abra e arraste **Notker** para *Aplicativos*.
+            2. Na 1ª execução: clique com o botão direito em Notker → **Abrir** → **Abrir**.
+            3. Se ainda bloquear, no Terminal: `xattr -dr com.apple.quarantine /Applications/Notker.app`
+
+            Requisitos: macOS com Apple Silicon (M1+). Usa o WebKit do sistema — nenhuma dependência extra a instalar.
