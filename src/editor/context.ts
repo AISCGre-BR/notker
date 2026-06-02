@@ -11,11 +11,10 @@
 //   Clave: "c_clef" | "f_clef" | "gabc_clef"  (texto sem parênteses, ex: "c4")
 
 interface TSNode {
-  type: string;
-  startIndex: number;
-  endIndex: number;
-  childCount: number;
-  child(i: number): TSNode | null;
+  type: string; startIndex: number; endIndex: number;
+  parent: TSNode | null;
+  childCount: number; child(i: number): TSNode | null;
+  namedChildren?: TSNode[];
   descendantForIndex(start: number, end?: number): TSNode | null;
 }
 
@@ -48,25 +47,6 @@ export interface NabcContext {
 // Funções internas
 // ---------------------------------------------------------------------------
 
-/** Desce a árvore mantendo a cadeia de ancestrais até `pos`. */
-function ancestorsAt(root: TSNode, pos: number): TSNode[] {
-  const chain: TSNode[] = [];
-  let node: TSNode | null = root;
-  while (node) {
-    chain.push(node);
-    let next: TSNode | null = null;
-    for (let i = 0; i < node.childCount; i++) {
-      const c = node.child(i);
-      if (c && c.startIndex <= pos && pos <= c.endIndex) {
-        next = c;
-        break;
-      }
-    }
-    node = next;
-  }
-  return chain;
-}
-
 /** Nó mais profundo (folha) na posição `pos`. */
 function deepestAt(root: TSNode, pos: number): TSNode {
   return root.descendantForIndex(pos) ?? root;
@@ -88,18 +68,14 @@ export function nodeKindAt(tree: TSTree, pos: number): string {
  * Informa se `pos` está dentro de uma anotação NABC e, caso positivo,
  * o intervalo [tokenFrom, tokenTo) do nó NABC mais próximo.
  */
-export function nabcContextAt(
-  tree: TSTree,
-  _doc: string,
-  pos: number
-): NabcContext {
-  const chain = ancestorsAt(tree.rootNode, pos);
-  // Percorre a cadeia da folha para a raiz em busca do primeiro nó NABC.
-  const nabc = [...chain].reverse().find((n) => NABC_KINDS.has(n.type));
-  if (!nabc) {
-    return { inNabc: false, tokenFrom: pos, tokenTo: pos };
+export function nabcContextAt(tree: TSTree, _doc: string, pos: number): NabcContext {
+  let node: TSNode | null = tree.rootNode.descendantForIndex(pos);
+  while (node) {
+    if (NABC_KINDS.has(node.type))
+      return { inNabc: true, tokenFrom: node.startIndex, tokenTo: node.endIndex };
+    node = node.parent;
   }
-  return { inNabc: true, tokenFrom: nabc.startIndex, tokenTo: nabc.endIndex };
+  return { inNabc: false, tokenFrom: pos, tokenTo: pos };
 }
 
 /**

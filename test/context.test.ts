@@ -37,4 +37,11 @@ describe("context", () => {
     const tree = parser.parse(DOC);
     expect(typeof nodeKindAt(tree!, DOC.indexOf("vi"))).toBe("string");
   });
+  it("detecta NABC já no PRIMEIRO byte do token (regressão off-by-one)", () => {
+    const tree = parser.parse(DOC);
+    const firstByte = DOC.indexOf("vi"); // exatamente o startIndex do token nabc
+    const ctx = nabcContextAt(tree!, DOC, firstByte);
+    expect(ctx.inNabc).toBe(true);
+    expect(DOC.slice(ctx.tokenFrom, ctx.tokenTo)).toContain("vi");
+  });
 });
