@@ -16,6 +16,17 @@
         padding: 2px 10px;
         white-space: pre;
       }
+
+      /* F2 — paleta de neumas, tooltips e régua de pauta */
+      .neume-palette { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); width: 520px; max-height: 60vh; background: #fbf7ee; color: #2b2b2b; border: 1px solid #b8a; box-shadow: 0 8px 30px rgba(0,0,0,.25); display: flex; flex-direction: column; z-index: 50; font-family: serif; }
+      .neume-palette input { padding: 10px; border: none; border-bottom: 1px solid #ccc; font-size: 15px; background: transparent; }
+      .neume-palette-list { overflow: auto; }
+      .neume-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; cursor: pointer; }
+      .neume-row.sel, .neume-row:hover { background: #efe7d3; }
+      .neume-row svg, .neume-tooltip svg { color: #1a1a1a; }
+      .neume-tooltip, .gabc-tooltip { max-width: 320px; padding: 8px 10px; font-family: serif; background: #fbf7ee; color: #222; }
+      .staff-legend { padding: 4px 10px; font-family: serif; font-size: 13px; border-top: 1px solid #ccc; background: #f4efe2; }
+      .staff-legend .legend-cell { margin-right: 8px; white-space: nowrap; }
     </style>
   </head>
   <body>

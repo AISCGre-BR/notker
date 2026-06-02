@@ -1,4 +1,5 @@
 import { EditorView } from "@codemirror/view";
+import { Compartment } from "@codemirror/state";
 import { createEditor, externalLinter } from "./editor/editor";
 import { highlightTheme } from "./editor/theme";
 import { LspClient } from "./lsp/client";
@@ -10,6 +11,14 @@ import { openGabc, saveAsGabc } from "./files/file-io";
 import type { Diagnostic } from "@codemirror/lint";
 import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
+import { loadNeumeDb } from "./neume/db";
+import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
+import { mergeEntry, addName, mergeOverlays } from "./neume/overlay";
+import { NeumeSearch } from "./neume/search";
+import { neumeExtensions } from "./neume/index";
+import { gabcAssistExtensions } from "./gabc/index";
+import type { Overlay, EffectiveEntry } from "./neume/types";
+import type { Tree } from "web-tree-sitter";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -34,9 +43,11 @@ async function boot() {
   // Highlighter é opcional: uma falha de carga do WASM não pode impedir o editor
   // de montar. Reportamos o resultado no rodapé de status.
   let highlightStatus = "realce: ativo";
+  let getTree: () => Tree | null = () => null;
   try {
-    const highlighter = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
-    extraExtensions.push(highlighter);
+    const ts = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
+    extraExtensions.push(ts.extension);
+    getTree = ts.getTree;
   } catch (err) {
     highlightStatus = "realce: FALHOU — " + String(err);
     console.error("[notker] falha ao carregar highlighter WASM:", err);
@@ -50,6 +61,10 @@ async function boot() {
     externalLinter(() => diagnostics),
     EditorView.updateListener.of((u) => { if (u.docChanged) onDocChange(); }),
   );
+
+  // Compartment para injetar extensões F2 após o carregamento assíncrono do db.
+  const neumeCompartment = new Compartment();
+  extraExtensions.push(neumeCompartment.of([]));
 
   const view = createEditor(app, "name: Novo;\n%%\n(c4) ", extraExtensions);
 
@@ -72,7 +87,40 @@ async function boot() {
   });
   onDocChange = sync;
 
-  setStatus(highlightStatus + "  ·  LSP: conectado  ·  Ctrl+O abrir · Ctrl+S salvar · Ctrl+Shift+F formatar");
+  setStatus(highlightStatus + "  ·  LSP: conectado  ·  Ctrl+O abrir · Ctrl+S salvar · Ctrl+Shift+F formatar · Ctrl+Space busca · Ctrl+Alt+L régua · Ctrl+Alt+E/I overlay");
+
+  // Variáveis de overlay e reindex hoistadas para serem acessíveis no handler de teclado.
+  let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
+  let reindex = () => {};
+
+  // Carrega db de neumas e reconfigura o compartment F2.
+  try {
+    const db = await loadNeumeDb();
+    overlay = await loadUserOverlay();
+    const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
+    let searchInst = new NeumeSearch(effective());
+    reindex = () => { searchInst = new NeumeSearch(effective()); };
+    const byNabc = new Map(db.all().map((e) => [e.nabc, e] as const));
+    const rt = {
+      getTree,
+      search: () => searchInst,
+      lookupByNabc: (nabc: string) => {
+        const base = byNabc.get(nabc);
+        return base ? mergeEntry(base, overlay.entries[base.id]) : undefined;
+      },
+      onAddName: async (id: string) => {
+        const name = window.prompt("Novo nome para este neuma:");
+        if (!name) return;
+        overlay = addName(overlay, id, name);
+        await saveUserOverlay(overlay);
+        reindex();
+      },
+    };
+    view.dispatch({ effects: neumeCompartment.reconfigure([...neumeExtensions(rt), ...gabcAssistExtensions(getTree)]) });
+  } catch (err) {
+    console.error("[notker] falha ao carregar neume-db (F2):", err);
+    setStatus("neumas: indisponível — " + String(err));
+  }
 
   /** Substitui todo o conteúdo do editor (usado ao abrir arquivo). */
   function replaceDoc(text: string): void {
@@ -113,6 +161,30 @@ async function boot() {
       } catch (err) {
         setStatus("Ctrl+Shift+F ERRO: " + String(err));
         console.error("[notker] erro ao formatar:", err);
+      }
+    }
+    if (e.ctrlKey && e.altKey && (e.key === "e" || e.key === "E")) {
+      e.preventDefault();
+      try {
+        await exportOverlay(overlay);
+        setStatus("overlay exportado");
+      } catch (err) {
+        setStatus("Ctrl+Alt+E ERRO: " + String(err));
+        console.error("[notker] erro ao exportar overlay:", err);
+      }
+    }
+    if (e.ctrlKey && e.altKey && (e.key === "i" || e.key === "I")) {
+      e.preventDefault();
+      try {
+        const imported = await importOverlay();
+        if (!imported) { setStatus("importar: cancelado"); return; }
+        overlay = mergeOverlays(overlay, imported);
+        await saveUserOverlay(overlay);
+        reindex();
+        setStatus("overlay importado");
+      } catch (err) {
+        setStatus("Ctrl+Alt+I ERRO: " + String(err));
+        console.error("[notker] erro ao importar overlay:", err);
       }
     }
   });

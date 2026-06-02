@@ -24,6 +24,22 @@ Notker se apoia em projetos da comunidade, a quem agradecemos:
 - **Projetos utilizados:** Laércio Benedito Savali de Sousa — AISCGre Brasil; Giovanni Del Chiaro — AISCGre Brasil
 - **Ideias e contribuições:** Danillo Del Chiaro — AISCGre Brasil
 
+## Busca de neumas (F2)
+
+O `neume-db.json` é gerado das fontes do Gregorio:
+
+```bash
+pip install 'fonttools==4.59.0'   # uma vez
+npm run neume                      # extrai glifos + gera o db (precisa do wasm: npm run grammar)
+```
+
+Atalhos: `Ctrl+Space` busca de neumas · `Ctrl+Alt+L` régua de altura na pauta · `Ctrl+Alt+E`/`Ctrl+Alt+I` exportar/importar nomes.
+
+### Créditos adicionais (F2)
+
+- Fontes `gregall`/`grelaon` e a referência NABC (`GregorioNabcRef`, `gregoriotex-nabc.lua`): **The Gregorio Project** — GPLv3 com exceção de fonte.
+- Tabela semiológica / letras significativas: **Dom Eugène Cardine**.
+
 ## Licença
 
 GPL-3.0-only. Veja [LICENSE](LICENSE).

@@ -7,8 +7,8 @@
  * Usage:
  *   import runtimeWasmUrl from "../../src/assets/tree-sitter.wasm?url";
  *   import grammarWasmUrl from "../../src/assets/tree-sitter-gregorio.wasm?url";
- *   const ext = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
- *   // add ext to EditorView extensions
+ *   const { extension, getTree } = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
+ *   // add extension to EditorView extensions; call getTree() to read the current parse tree
  */
 
 import {
@@ -17,8 +17,8 @@ import {
   type DecorationSet,
   type EditorView,
 } from "@codemirror/view";
-import { RangeSetBuilder } from "@codemirror/state";
-import { Parser, Language } from "web-tree-sitter";
+import { type Extension, RangeSetBuilder } from "@codemirror/state";
+import { Parser, Language, type Tree } from "web-tree-sitter";
 
 /**
  * Map of tree-sitter node type names → CodeMirror CSS mark class names.
@@ -151,13 +151,15 @@ function buildDecorations(root: { type: string; startIndex: number; endIndex: nu
 export async function makeTreeSitterHighlighter(
   runtimeWasmUrl: string,
   grammarWasmUrl: string
-) {
+): Promise<{ extension: Extension; getTree: () => Tree | null }> {
   await Parser.init({ locateFile: () => runtimeWasmUrl });
   const lang = await Language.load(grammarWasmUrl);
   const parser = new Parser();
   parser.setLanguage(lang);
 
-  return ViewPlugin.fromClass(
+  let lastTree: Tree | null = null;
+
+  const extension = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
 
@@ -174,12 +176,15 @@ export async function makeTreeSitterHighlighter(
       build(view: EditorView): DecorationSet {
         const text = view.state.doc.toString();
         const tree = parser.parse(text);
+        lastTree = tree;
         if (!tree) return Decoration.none;
         return buildDecorations(tree.rootNode);
       }
     },
     { decorations: (v) => v.decorations }
   );
+
+  return { extension, getTree: () => lastTree };
 }
 
 /** Exported for testing: build decorations directly from source text. */
