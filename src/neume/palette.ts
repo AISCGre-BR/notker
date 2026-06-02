@@ -55,18 +55,28 @@ export function neumePalette(deps: PaletteDeps) {
         const row = document.createElement("div");
         row.className = "neume-row" + (i === sel ? " sel" : "");
 
-        // Thumbnails lado a lado
+        // Células: [miniatura + rótulo de família] │ [miniatura + rótulo de família]
         const thumbs = document.createElement("div");
         thumbs.style.cssText = "display:flex;align-items:center;gap:4px;";
-        g.entries.forEach((e) => thumbs.appendChild(glyphSvgEl(e.svg, 24)));
+        g.entries.forEach((e, ei) => {
+          if (ei > 0) {
+            const sep = document.createElement("span");
+            sep.className = "neume-fam-sep";
+            thumbs.appendChild(sep);
+          }
+          const cell = document.createElement("div");
+          cell.className = "neume-fam-cell";
+          cell.appendChild(glyphSvgEl(e.svg, 24));
+          const cap = document.createElement("span");
+          cap.textContent = e.family === "stgall" ? "St. Gall" : "Laon";
+          cell.appendChild(cap);
+          thumbs.appendChild(cell);
+        });
         row.appendChild(thumbs);
 
-        // Label: Nome · nabc · família(s)
-        const familyLabel = g.entries
-          .map((e) => (e.family === "stgall" ? "St. Gall" : "Laon"))
-          .join(" / ");
+        // Label: Nome · nabc
         const lbl = document.createElement("span");
-        lbl.textContent = `${g.entries[0].displayNames[0]}  ·  ${g.nabc}  ·  ${familyLabel}`;
+        lbl.textContent = `${g.entries[0].displayNames[0]}  ·  ${g.nabc}`;
         row.appendChild(lbl);
 
         row.onclick = () => insertNabc(g.nabc);
