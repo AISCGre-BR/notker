@@ -67,13 +67,10 @@ export function neumePalette(deps: PaletteDeps) {
     render();
   }
 
-  // Vários atalhos: Ctrl+Space (padrão do spec) costuma ser capturado pelo
-  // IME no Linux (ibus/GNOME); F2 e Alt+N são alternativas à prova de IME/WM.
   const openRun = (v: EditorView): boolean => { open(v); return true; };
   return keymap.of([
-    { key: "Ctrl-Space", run: openRun },   // padrão do spec; no Linux o ibus costuma capturá-lo
-    { key: "F2", run: openRun },            // confiável (WM/IME não capturam F-keys)
-    { key: "Ctrl-Shift-p", run: openRun },  // estilo command-palette, confiável no webkit
-    { key: "Alt-n", run: openRun },         // pode ser comido pelo mnemônico GTK em alguns ambientes
+    { key: "Mod-Shift-p", run: openRun },  // Cmd/Ctrl+Shift+P — cross-platform "command palette"
+    { key: "F2", run: openRun },           // alternativa rápida
+    { key: "Ctrl-Space", run: openRun },   // padrão do spec (capturado pelo IME no Linux)
   ]);
 }

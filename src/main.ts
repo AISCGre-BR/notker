@@ -17,7 +17,7 @@ import { mergeEntry, addName, mergeOverlays } from "./neume/overlay";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
 import { gabcAssistExtensions } from "./gabc/index";
-import type { Overlay, EffectiveEntry } from "./neume/types";
+import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
@@ -89,9 +89,24 @@ async function boot() {
 
   setStatus(highlightStatus + "  ·  LSP: conectado  ·  Ctrl+O abrir · Ctrl+S salvar · Ctrl+Shift+F formatar · F2 busca · Ctrl+Alt+L régua · Ctrl+Alt+E/I overlay");
 
-  // Variáveis de overlay e reindex hoistadas para serem acessíveis no handler de teclado.
+  // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
+  let activeFamily: Family = "stgall";
+
+  function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
+  function updateFamilyIndicator(): void {
+    const el = document.querySelector("#family");
+    if (el) {
+      el.textContent = "✠ " + familyLabel(activeFamily);
+      (el as HTMLElement).title = "Família ativa (clique ou Ctrl/Cmd+Shift+G para alternar)";
+    }
+  }
+  function toggleFamily(): void {
+    activeFamily = activeFamily === "stgall" ? "laon" : "stgall";
+    updateFamilyIndicator();
+    reindex();
+  }
 
   // Carrega db de neumas e reconfigura o compartment F2.
   try {
@@ -101,16 +116,21 @@ async function boot() {
     try { overlay = await loadUserOverlay(); }
     catch (e) { console.warn("[notker] overlay de nomes indisponível (usando vazio):", e); }
     const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
-    let searchInst = new NeumeSearch(effective());
-    reindex = () => { searchInst = new NeumeSearch(effective()); };
-    const byNabc = new Map(db.all().map((e) => [e.nabc, e] as const));
+    let searchInst = new NeumeSearch(effective(), activeFamily);
+    reindex = () => { searchInst = new NeumeSearch(effective(), activeFamily); };
+    // Agrupamento por nabc: múltiplas entradas (famílias diferentes) podem compartilhar o mesmo código.
+    const byNabc = new Map<string, import("./neume/types").NeumeEntry[]>();
+    for (const e of db.all()) {
+      const arr = byNabc.get(e.nabc) ?? [];
+      arr.push(e);
+      byNabc.set(e.nabc, arr);
+    }
     const rt = {
       getTree,
       search: () => searchInst,
-      lookupByNabc: (nabc: string) => {
-        const base = byNabc.get(nabc);
-        return base ? mergeEntry(base, overlay.entries[base.id]) : undefined;
-      },
+      lookupByNabc: (nabc: string): EffectiveEntry[] =>
+        (byNabc.get(nabc) ?? []).map((e) => mergeEntry(e, overlay.entries[e.id])),
+      activeFamily: () => activeFamily,
       onAddName: async (id: string) => {
         const name = window.prompt("Novo nome para este neuma:");
         if (!name) return;
@@ -121,6 +141,8 @@ async function boot() {
       },
     };
     view.dispatch({ effects: neumeCompartment.reconfigure([...neumeExtensions(rt), ...gabcAssistExtensions(getTree)]) });
+    updateFamilyIndicator();
+    document.querySelector("#family")?.addEventListener("click", toggleFamily);
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
     setStatus("neumas: indisponível — " + String(err));
@@ -190,6 +212,10 @@ async function boot() {
         setStatus("Ctrl+Alt+I ERRO: " + String(err));
         console.error("[notker] erro ao importar overlay:", err);
       }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "g" || e.key === "G")) {
+      e.preventDefault();
+      toggleFamily();
     }
   });
 }

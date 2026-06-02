@@ -7,16 +7,6 @@
       html, body { margin: 0; height: 100%; }
       body { display: flex; flex-direction: column; font-family: system-ui, sans-serif; }
       #app { flex: 1 1 auto; overflow: auto; }
-      #status {
-        flex: 0 0 auto;
-        font: 12px/1.6 ui-monospace, monospace;
-        color: #555;
-        background: #f3f1ec;
-        border-top: 1px solid #d8d3c8;
-        padding: 2px 10px;
-        white-space: pre;
-      }
-
       /* F2 — paleta de neumas, tooltips e régua de pauta */
       .neume-palette { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); width: 520px; max-height: 60vh; background: #fbf7ee; color: #2b2b2b; border: 1px solid #b8a; box-shadow: 0 8px 30px rgba(0,0,0,.25); display: flex; flex-direction: column; z-index: 50; font-family: serif; }
       .neume-palette input { padding: 10px; border: none; border-bottom: 1px solid #ccc; font-size: 15px; background: transparent; }
@@ -27,11 +17,40 @@
       .neume-tooltip, .gabc-tooltip { max-width: 320px; padding: 8px 10px; font-family: serif; background: #fbf7ee; color: #222; }
       .staff-legend { padding: 4px 10px; font-family: serif; font-size: 13px; border-top: 1px solid #ccc; background: #f4efe2; }
       .staff-legend .legend-cell { margin-right: 8px; white-space: nowrap; }
+      #footer-bar {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: stretch;
+        background: #f3f1ec;
+        border-top: 1px solid #d8d3c8;
+      }
+      #status {
+        flex: 1 1 auto;
+        font: 12px/1.6 ui-monospace, monospace;
+        color: #555;
+        padding: 2px 10px;
+        white-space: pre;
+        border: none;
+      }
+      #family {
+        flex: 0 0 auto;
+        font: 12px/1.6 serif;
+        color: #4a3a28;
+        padding: 2px 10px;
+        cursor: pointer;
+        border-left: 1px solid #d8d3c8;
+        white-space: nowrap;
+        user-select: none;
+      }
+      #family:hover { text-decoration: underline; background: #ede9de; }
     </style>
   </head>
   <body>
     <div id="app"></div>
-    <footer id="status">pronto</footer>
+    <div id="footer-bar">
+      <span id="status">pronto</span>
+      <span id="family" title="Família ativa (clique para alternar)">✠ St. Gall</span>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
