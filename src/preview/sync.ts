@@ -8,13 +8,16 @@ export function resolveEditorToSyllable(map: SyllableSource[], offset: number): 
   return syllableAtOffset(map, offset)?.syllableIndex ?? null;
 }
 
-/** Liga preview→editor: clique numa sílaba posiciona o cursor no trecho do fonte. */
+/** Liga preview→editor: clique numa sílaba posiciona o cursor no fonte E realça a
+ *  própria sílaba na partitura (highlight nos dois lados). */
 export function installSync(view: EditorView, panel: PreviewPanel): void {
   panel.onSyllable((n) => {
     const src = sourceOfSyllable(panel.sourceMap(), n);
     if (!src) return;
     view.dispatch({ selection: { anchor: src.from, head: src.to } });
     view.focus();
+    const svg = panel.svgEl();
+    if (svg) highlightSyllable(svg, n);   // realça também no preview
   });
 }
 

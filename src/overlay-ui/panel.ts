@@ -5,6 +5,7 @@ import { hasConflict, promoteToDefault } from "./conflict";
 export interface OverlayPanelOpts {
   entries: () => EffectiveEntry[];
   onSave: (o: Overlay) => void;
+  onClose?: () => void;
 }
 export interface OverlayPanel {
   open(): void; close(): void;
@@ -21,6 +22,23 @@ export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): O
     host.innerHTML = "";
     const root = document.createElement("div");
     root.className = "overlay-panel";
+
+    const header = document.createElement("div");
+    header.className = "overlay-header";
+    const title = document.createElement("span");
+    title.className = "overlay-title";
+    title.textContent = "Nomes de neumas";
+    header.appendChild(title);
+    if (opts.onClose) {
+      const close = document.createElement("button");
+      close.className = "overlay-close";
+      close.textContent = "×";
+      close.title = "Fechar";
+      close.addEventListener("click", () => opts.onClose!());
+      header.appendChild(close);
+    }
+    root.appendChild(header);
+
     for (const e of opts.entries()) {
       const row = document.createElement("div");
       row.className = "overlay-row";

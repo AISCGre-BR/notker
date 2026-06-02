@@ -252,6 +252,9 @@ async function boot() {
     },
     openOverlayPanel: () => {
       const host = document.querySelector<HTMLElement>("#overlay-host")!;
+      const closePanel = () => { host.style.display = "none"; host.innerHTML = ""; };
+      // Toggle: se já está aberto, fecha.
+      if (host.style.display === "block") { closePanel(); return; }
       host.style.display = "block";
       const op = createOverlayPanel(host, {
         entries: effectiveRef,
@@ -259,8 +262,9 @@ async function boot() {
           overlay = mergeOverlays(overlay, o);
           await saveUserOverlay(overlay);
           reindex();
-          host.style.display = "none";
+          closePanel();
         },
+        onClose: closePanel,
       });
       op.open();
     },

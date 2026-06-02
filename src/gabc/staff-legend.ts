@@ -21,10 +21,15 @@ function legendPanel(view: EditorView): Panel {
     const tree = treeGetter();
     const doc = view.state.doc.toString();
     const pos = view.state.selection.main.head;
-    const clef = tree ? activeClefAt(tree as any, doc, pos) : "c4";
+    const clef = (tree ? activeClefAt(tree as any, doc, pos) : "c4") ?? "c4";
     const letters = "abcdefghijklm".split("");
-    dom.innerHTML = `<span class="legend-clef">clave ${clef ?? "c4"}:</span> ` +
-      letters.map((l) => `<span class="legend-cell"><b>${l}</b> ${pitchName(l, clef)}</span>`).join(" ");
+    dom.innerHTML =
+      `<span class="legend-clef" title="clave ativa">✛ ${clef}</span>` +
+      `<span class="legend-cells">` +
+      letters
+        .map((l) => `<span class="legend-cell"><b>${l}</b><i>${pitchName(l, clef)}</i></span>`)
+        .join("") +
+      `</span>`;
   };
   draw();
   return { dom, update: () => draw() };

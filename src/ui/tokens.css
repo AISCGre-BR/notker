@@ -12,12 +12,45 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .toolbar-btn { font: 13px var(--font); color: var(--ink-soft); background: transparent;
   border: none; padding: 6px 12px; cursor: pointer; }
 .toolbar-btn:hover { color: var(--rubric); background: var(--cream-deep); }
-/* preview */
+/* preview — scroll horizontal E vertical; o SVG mantém o tamanho natural */
 #preview { background: var(--surface); overflow: auto; }
+#preview svg { display: block; max-width: none; }
 /* divisor redimensionável editor|preview (resize via arraste; orientação alternável) */
 .split-gutter { background: var(--rule); }
 .split-gutter:hover { background: var(--rubric-soft); }
 .hl-strong [fill], .hl-strong { fill: var(--rubric) !important; }
+
+/* régua da pauta (letra GABC ↔ altura), redesenhada */
+.staff-legend {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 12px; font-family: var(--font);
+  border-top: 1px solid var(--rule); background: var(--cream-deep);
+  overflow-x: auto; white-space: nowrap;
+}
+.staff-legend .legend-clef {
+  font-weight: 600; color: var(--rubric); font-size: 13px;
+  padding: 2px 8px; border: 1px solid var(--rule); background: var(--surface);
+}
+.staff-legend .legend-cells { display: inline-flex; gap: 10px; }
+.staff-legend .legend-cell {
+  display: inline-flex; flex-direction: column; align-items: center;
+  min-width: 22px; line-height: 1.2;
+}
+.staff-legend .legend-cell b { font-size: 14px; color: var(--ink); font-weight: 600; }
+.staff-legend .legend-cell i { font-size: 11px; color: var(--ink-muted); font-style: normal; }
+
+/* overlay — cabeçalho com título e botão fechar */
+.overlay-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-bottom: 1px solid var(--rule);
+  background: var(--cream-deep);
+}
+.overlay-title { font-weight: 600; color: var(--ink); }
+.overlay-close {
+  font: 18px/1 var(--font); color: var(--ink-muted); background: transparent;
+  border: none; cursor: pointer; padding: 0 6px;
+}
+.overlay-close:hover { color: var(--rubric); }
 /* overlay */
 .overlay-panel { background: var(--surface); border: 1px solid var(--rule); font-family: var(--font); }
 .overlay-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px;
