@@ -11,7 +11,7 @@ describe("painel de preview", () => {
     expect(host.querySelector("svg")).toBeNull();
     await vi.advanceTimersByTimeAsync(250);
     expect(host.querySelector("svg")).not.toBeNull();
-    expect(host.querySelectorAll('[class*="syllable-"]').length).toBe(3);
+    expect(host.querySelectorAll('[class*="syllable-"]').length).toBe(2); // clave não numerada
     vi.useRealTimers();
   });
   it("expõe sourceMap e svgEl; clique numa sílaba dispara onSyllable(N)", async () => {
@@ -20,9 +20,9 @@ describe("painel de preview", () => {
     const panel = createPreviewPanel(host, new FakeEngine(), { debounceMs: 10 });
     const seen: number[] = [];
     panel.onSyllable((n) => seen.push(n));
-    panel.update("(c4) a(f)");
+    panel.update("(c4) a(f) b(g)");
     await vi.advanceTimersByTimeAsync(10);
-    expect(panel.sourceMap().length).toBe(2);
+    expect(panel.sourceMap().length).toBe(3); // clave + 2 sílabas reais
     (host.querySelector(".syllable-2") as HTMLElement).dispatchEvent(
       new MouseEvent("click", { bubbles: true }),
     );
