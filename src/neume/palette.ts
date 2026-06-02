@@ -71,8 +71,9 @@ export function neumePalette(deps: PaletteDeps) {
   // IME no Linux (ibus/GNOME); F2 e Alt+N são alternativas à prova de IME/WM.
   const openRun = (v: EditorView): boolean => { open(v); return true; };
   return keymap.of([
-    { key: "Ctrl-Space", run: openRun },
-    { key: "F2", run: openRun },
-    { key: "Alt-n", run: openRun },
+    { key: "Ctrl-Space", run: openRun },   // padrão do spec; no Linux o ibus costuma capturá-lo
+    { key: "F2", run: openRun },            // confiável (WM/IME não capturam F-keys)
+    { key: "Ctrl-Shift-p", run: openRun },  // estilo command-palette, confiável no webkit
+    { key: "Alt-n", run: openRun },         // pode ser comido pelo mnemônico GTK em alguns ambientes
   ]);
 }

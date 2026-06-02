@@ -87,7 +87,7 @@ async function boot() {
   });
   onDocChange = sync;
 
-  setStatus(highlightStatus + "  ·  LSP: conectado  ·  Ctrl+O abrir · Ctrl+S salvar · Ctrl+Shift+F formatar · Ctrl+Space busca · Ctrl+Alt+L régua · Ctrl+Alt+E/I overlay");
+  setStatus(highlightStatus + "  ·  LSP: conectado  ·  Ctrl+O abrir · Ctrl+S salvar · Ctrl+Shift+F formatar · F2 busca · Ctrl+Alt+L régua · Ctrl+Alt+E/I overlay");
 
   // Variáveis de overlay e reindex hoistadas para serem acessíveis no handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
