@@ -14,6 +14,7 @@ export interface PaletteDeps {
 
 export function neumePalette(deps: PaletteDeps) {
   function open(view: EditorView) {
+    if (document.querySelector(".neume-palette")) return; // já aberta
     const root = document.createElement("div");
     root.className = "neume-palette";
     const input = document.createElement("input");
@@ -62,6 +63,7 @@ export function neumePalette(deps: PaletteDeps) {
       else if (ev.key === "Enter") { if (results[sel]) insert(results[sel]); ev.preventDefault(); }
       else if (ev.ctrlKey && ev.key === "n") { if (results[sel]) deps.onAddName(results[sel].id); ev.preventDefault(); }
     });
+    input.addEventListener("blur", () => { setTimeout(() => { if (!root.contains(document.activeElement)) close(); }, 150); });
     render();
   }
 
