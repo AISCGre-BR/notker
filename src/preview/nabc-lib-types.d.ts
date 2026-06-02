@@ -6,6 +6,7 @@ declare module "@testneumz/nabc-lib" {
   export class ChantContext {
     nabcLines: number;
     nabcMode: "gall" | "laon";
+    lineWidthPx: number;
   }
   export class GregorioScore {
     constructor(ctx: ChantContext);

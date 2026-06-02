@@ -34,7 +34,7 @@ export function syllableSpans(doc: string): SyllableSource[] {
 
 export class NabcLibEngine implements PreviewEngine {
   readonly id = "nabc-lib";
-  async render(doc: string): Promise<RenderResult> {
+  async render(doc: string, opts?: { widthPx?: number }): Promise<RenderResult> {
     const [lib, fonts] = await Promise.all([
       import("@testneumz/nabc-lib"),
       import("./nabc-fonts"),
@@ -44,6 +44,8 @@ export class NabcLibEngine implements PreviewEngine {
     await fonts.ensureChantFonts();
     const container = document.createElement("div");
     const ctx = new ChantContext();
+    // Largura de linha = largura útil do painel (preview responsivo); fallback 800.
+    if (opts?.widthPx && opts.widthPx > 120) ctx.lineWidthPx = Math.round(opts.widthPx);
     const score = new GregorioScore(ctx);
     // O nabc-lib espera APENAS o corpo da partitura (depois do `%%`); os cabeçalhos
     // (name/mode/nabc-lines/…) são metadados e, se passados, são renderizados como

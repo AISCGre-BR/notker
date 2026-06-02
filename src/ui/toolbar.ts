@@ -5,6 +5,13 @@ export interface ToolbarItem { id: string; label: string; title?: string; }
 export function createToolbar(host: HTMLElement, commands: Commands, items: ToolbarItem[]): void {
   const bar = document.createElement("div");
   bar.className = "toolbar";
+
+  const brand = document.createElement("span");
+  brand.className = "toolbar-brand";
+  brand.textContent = "Notker";
+  brand.title = "Notker — editor de canto gregoriano";
+  bar.appendChild(brand);
+
   for (const it of items) {
     const b = document.createElement("button");
     b.className = "toolbar-btn";

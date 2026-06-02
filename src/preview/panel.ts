@@ -23,9 +23,12 @@ export function createPreviewPanel(
 ): PreviewPanel {
   let map: SyllableSource[] = [];
   let cb: ((n: number) => void) | null = null;
+  let lastDoc = "";
 
   async function doRender(doc: string) {
-    const r = await engine.render(doc);
+    // Largura útil da prancha (descontando padding ~22px de cada lado + moldura).
+    const inner = host.clientWidth ? host.clientWidth - 48 : 0;
+    const r = await engine.render(doc, inner > 120 ? { widthPx: inner } : undefined);
     map = r.sourceMap;
     host.innerHTML = r.svg;
     host.querySelector("svg")?.addEventListener("click", (ev) => {
@@ -36,11 +39,18 @@ export function createPreviewPanel(
   }
   const render = debounce((doc: string) => { void doRender(doc); }, opts.debounceMs);
 
+  // Re-renderiza ao redimensionar o painel (preview responsivo).
+  let ro: ResizeObserver | null = null;
+  if (typeof ResizeObserver !== "undefined") {
+    ro = new ResizeObserver(() => { if (lastDoc) render(lastDoc); });
+    ro.observe(host);
+  }
+
   return {
-    update: (doc) => render(doc),
+    update: (doc) => { lastDoc = doc; render(doc); },
     sourceMap: () => map,
     svgEl: () => host.querySelector("svg"),
     onSyllable: (fn) => { cb = fn; },
-    destroy: () => render.cancel(),
+    destroy: () => { render.cancel(); ro?.disconnect(); },
   };
 }

@@ -4,9 +4,10 @@ export interface SyllableSource {
   to: number;             // offset final (exclusivo)
 }
 export interface RenderResult { svg: string; sourceMap: SyllableSource[]; }
+export interface RenderOptions { widthPx?: number; }
 export interface PreviewEngine {
   readonly id: string;
-  render(doc: string): Promise<RenderResult>;
+  render(doc: string, opts?: RenderOptions): Promise<RenderResult>;
 }
 
 // Reusa a MESMA numeração clave-ciente do motor real, p/ que o FakeEngine reflita
