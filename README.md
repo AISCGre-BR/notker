@@ -40,6 +40,17 @@ Atalhos: `Ctrl+Space` busca de neumas · `Ctrl+Alt+L` régua de altura na pauta 
 - Fontes `gregall`/`grelaon` e a referência NABC (`GregorioNabcRef`, `gregoriotex-nabc.lua`): **The Gregorio Project** — GPLv3 com exceção de fonte.
 - Tabela semiológica / letras significativas: **Dom Eugène Cardine**.
 
+## Instalação (builds não assinadas)
+
+As builds de release ainda não são assinadas/notarizadas (alpha).
+
+- **macOS** — apps baixados são marcados como "danificados" pelo Gatekeeper (especialmente no Apple Silicon). Arraste o Notker para `/Applications` e rode uma vez:
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/Notker.app
+  ```
+  Depois é só abrir. O comando remove o atributo de quarentena — é o único passo que funciona de forma confiável em arm64.
+- **Windows** — SmartScreen → "Mais informações" → "Executar assim mesmo".
+
 ## Licença
 
 GPL-3.0-only. Veja [LICENSE](LICENSE).

@@ -16,10 +16,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14, label: macos-arm, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
-          - { os: macos-13, label: macos-intel, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
-          - { os: ubuntu-22.04, label: linux, glob: "src-tauri/target/release/bundle/appimage/*.AppImage" }
-          - { os: windows-latest, label: windows, glob: "src-tauri/target/release/bundle/nsis/*-setup.exe" }
+          - { os: macos-14, label: macos-arm, bundles: dmg, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
+          - { os: macos-13, label: macos-intel, bundles: dmg, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
+          - { os: ubuntu-22.04, label: linux, bundles: appimage, glob: "src-tauri/target/release/bundle/appimage/*.AppImage" }
+          - { os: windows-latest, label: windows, bundles: nsis, glob: "src-tauri/target/release/bundle/nsis/*-setup.exe" }
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +50,7 @@ jobs:
       # Os assets portáveis (wasm + neume-db.json) são versionados; o frontend
       # (beforeBuildCommand: npm run build) compila direto. tauri build empacota nativo.
       - name: Build + bundle
-        run: npx tauri build
+        run: npx tauri build --bundles ${{ matrix.bundles }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -86,4 +86,12 @@ jobs:
             ## Downloads
 
             - macOS Apple Silicon: `.dmg` (arm64) · macOS Intel: `.dmg` (x64) · Linux: `.AppImage` · Windows: `.exe`
-            - _Builds não assinadas. macOS: Ctrl+clique → Abrir. Windows: SmartScreen → Executar assim mesmo._
+
+            **Builds não assinadas.**
+
+            - **macOS** — o Gatekeeper marca apps baixados como "danificados" (sobretudo no Apple Silicon). Após arrastar o Notker para `/Applications`, rode uma vez no Terminal:
+              ```
+              xattr -dr com.apple.quarantine /Applications/Notker.app
+              ```
+              Depois abra normalmente. (Ctrl+clique → Abrir só funciona em alguns casos; o comando acima resolve sempre.)
+            - **Windows** — SmartScreen → "Mais informações" → "Executar assim mesmo".

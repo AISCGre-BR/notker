@@ -16,6 +16,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/gregorio-lsp"]
+    "externalBin": ["binaries/gregorio-lsp"],
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "10.15"
+    }
   }
 }
