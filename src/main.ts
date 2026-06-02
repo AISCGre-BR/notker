@@ -22,6 +22,10 @@ import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
 import { createCommands } from "./ui/commands";
 import { createToolbar } from "./ui/toolbar";
+import { NabcLibEngine } from "./preview/nabc-lib";
+import { createPreviewPanel } from "./preview/panel";
+import { installSync, syncFromCursor } from "./preview/sync";
+import { createOverlayPanel } from "./overlay-ui/panel";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -92,6 +96,22 @@ async function boot() {
 
   setStatus(highlightStatus + "  ·  LSP: conectado");
 
+  // effectiveRef: hoistado para fora do bloco F2 para que os comandos o alcancem.
+  let effectiveRef: () => EffectiveEntry[] = () => [];
+
+  // Wiring do preview ao vivo (após onDocChange = sync, para que o wrap preserve o LSP sync).
+  const engine = new NabcLibEngine();
+  const previewHost = document.querySelector<HTMLElement>("#preview")!;
+  const panel = createPreviewPanel(previewHost, engine, { debounceMs: 250 });
+  installSync(view, panel);
+  panel.update(view.state.doc.toString());
+  // Encadeia no onDocChange existente (que agora vale sync / LSP didChange) sem substituí-lo.
+  const prevOnDocChange = onDocChange;
+  onDocChange = () => { prevOnDocChange(); panel.update(view.state.doc.toString()); };
+  // Realce de sílaba segue o cursor.
+  view.dom.addEventListener("keyup", () => syncFromCursor(view, panel));
+  view.dom.addEventListener("mouseup", () => syncFromCursor(view, panel));
+
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
@@ -119,6 +139,7 @@ async function boot() {
     try { overlay = await loadUserOverlay(); }
     catch (e) { console.warn("[notker] overlay de nomes indisponível (usando vazio):", e); }
     const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
+    effectiveRef = effective;
     let searchInst = new NeumeSearch(effective(), activeFamily);
     reindex = () => { searchInst = new NeumeSearch(effective(), activeFamily); };
     // Agrupamento por nabc: múltiplas entradas (famílias diferentes) podem compartilhar o mesmo código.
@@ -212,10 +233,29 @@ async function boot() {
       }
     },
     toggleFamily: () => { toggleFamily(); },
-    // preenchido na Task 12/14
-    openSearch: () => {},
-    openOverlayPanel: () => {},
-    togglePreview: () => {},
+    // palette.ts não exporta função open isolada; openRun é interno ao keymap.
+    // Estratégia: focar o editor e disparar KeyboardEvent "F2" no contentDOM.
+    openSearch: () => {
+      view.focus();
+      view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true }));
+    },
+    openOverlayPanel: () => {
+      const host = document.querySelector<HTMLElement>("#overlay-host")!;
+      host.style.display = "block";
+      const op = createOverlayPanel(host, {
+        entries: effectiveRef,
+        onSave: async (o) => {
+          overlay = mergeOverlays(overlay, o);
+          await saveUserOverlay(overlay);
+          reindex();
+          host.style.display = "none";
+        },
+      });
+      op.open();
+    },
+    togglePreview: () => {
+      previewHost.style.display = previewHost.style.display === "none" ? "" : "none";
+    },
   });
 
   createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [

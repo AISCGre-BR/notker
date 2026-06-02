@@ -55,11 +55,15 @@
   </head>
   <body>
     <div id="toolbar"></div>
-    <div id="app"></div>
+    <div id="workspace" style="flex:1 1 auto; display:flex; min-height:0;">
+      <div id="app" style="flex:1 1 0; overflow:auto;"></div>
+      <div id="preview" style="flex:1 1 0; overflow:auto;"></div>
+    </div>
     <div id="footer-bar">
       <span id="status">pronto</span>
       <span id="family" title="Família ativa (clique para alternar)">✠ St. Gall</span>
     </div>
+    <div id="overlay-host" style="position:fixed; top:0; right:0; width:420px; max-height:100vh; overflow:auto; z-index:60; display:none;"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
