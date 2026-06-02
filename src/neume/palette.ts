@@ -12,6 +12,23 @@ export interface PaletteDeps {
   onAddName: (id: string) => void;
 }
 
+/** Grupo de entradas com o mesmo código NABC (St. Gall e/ou Laon). */
+interface NabcGroup {
+  nabc: string;
+  entries: EffectiveEntry[];
+}
+
+/** Agrupa uma lista plana de entradas por nabc, preservando a ordem de primeira aparição. */
+function groupByNabc(flat: EffectiveEntry[]): NabcGroup[] {
+  const map = new Map<string, EffectiveEntry[]>();
+  const order: string[] = [];
+  for (const e of flat) {
+    if (!map.has(e.nabc)) { map.set(e.nabc, []); order.push(e.nabc); }
+    map.get(e.nabc)!.push(e);
+  }
+  return order.map((nabc) => ({ nabc, entries: map.get(nabc)! }));
+}
+
 export function neumePalette(deps: PaletteDeps) {
   function open(view: EditorView) {
     if (document.querySelector(".neume-palette")) return; // já aberta
@@ -25,32 +42,44 @@ export function neumePalette(deps: PaletteDeps) {
     (view.dom.closest("body") ?? document.body).appendChild(root);
     input.focus();
 
-    let results: EffectiveEntry[] = [];
+    let groups: NabcGroup[] = [];
     let sel = 0;
     const placement: Placement = "outside";
 
     const render = () => {
-      results = deps.search().query(input.value, 60);
-      sel = Math.min(sel, Math.max(0, results.length - 1));
+      const flat = deps.search().query(input.value, 120);
+      groups = groupByNabc(flat);
+      sel = Math.min(sel, Math.max(0, groups.length - 1));
       list.innerHTML = "";
-      results.forEach((e, i) => {
+      groups.forEach((g, i) => {
         const row = document.createElement("div");
         row.className = "neume-row" + (i === sel ? " sel" : "");
-        row.appendChild(glyphSvgEl(e.svg, 24));
+
+        // Thumbnails lado a lado
+        const thumbs = document.createElement("div");
+        thumbs.style.cssText = "display:flex;align-items:center;gap:4px;";
+        g.entries.forEach((e) => thumbs.appendChild(glyphSvgEl(e.svg, 24)));
+        row.appendChild(thumbs);
+
+        // Label: Nome · nabc · família(s)
+        const familyLabel = g.entries
+          .map((e) => (e.family === "stgall" ? "St. Gall" : "Laon"))
+          .join(" / ");
         const lbl = document.createElement("span");
-        lbl.textContent = `${e.displayNames[0]}  ·  ${e.nabc}  ·  ${e.family}`;
+        lbl.textContent = `${g.entries[0].displayNames[0]}  ·  ${g.nabc}  ·  ${familyLabel}`;
         row.appendChild(lbl);
-        row.onclick = () => insert(e);
+
+        row.onclick = () => insertNabc(g.nabc);
         list.appendChild(row);
       });
     };
     const close = () => root.remove();
-    const insert = (e: EffectiveEntry) => {
+    const insertNabc = (nabc: string) => {
       const pos = view.state.selection.main.head;
       const doc = view.state.doc.toString();
       const tree = deps.getTree();
       const ctx = tree ? nabcContextAt(tree as any, doc, pos) : { inNabc: false, tokenFrom: pos, tokenTo: pos };
-      const ins = computeInsertion(ctx, e.nabc, pos, placement);
+      const ins = computeInsertion(ctx, nabc, pos, placement);
       view.dispatch({ changes: { from: ins.from, to: ins.to, insert: ins.insert } });
       close(); view.focus();
     };
@@ -58,10 +87,15 @@ export function neumePalette(deps: PaletteDeps) {
     input.addEventListener("input", render);
     input.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") { close(); view.focus(); }
-      else if (ev.key === "ArrowDown") { sel = Math.min(sel + 1, results.length - 1); render(); ev.preventDefault(); }
+      else if (ev.key === "ArrowDown") { sel = Math.min(sel + 1, groups.length - 1); render(); ev.preventDefault(); }
       else if (ev.key === "ArrowUp") { sel = Math.max(sel - 1, 0); render(); ev.preventDefault(); }
-      else if (ev.key === "Enter") { if (results[sel]) insert(results[sel]); ev.preventDefault(); }
-      else if (ev.ctrlKey && ev.key === "n") { if (results[sel]) deps.onAddName(results[sel].id); ev.preventDefault(); }
+      else if (ev.key === "Enter") { if (groups[sel]) insertNabc(groups[sel].nabc); ev.preventDefault(); }
+      else if (ev.ctrlKey && ev.key === "n") {
+        if (groups[sel]) {
+          groups[sel].entries.forEach((e) => deps.onAddName(e.id));
+        }
+        ev.preventDefault();
+      }
     });
     input.addEventListener("blur", () => { setTimeout(() => { if (!root.contains(document.activeElement)) close(); }, 150); });
     render();
