@@ -8,6 +8,7 @@ describe("registro de comandos", () => {
       openFile, saveFile: vi.fn(), format: vi.fn(), exportOverlay: vi.fn(),
       importOverlay: vi.fn(), toggleFamily: vi.fn(), openSearch: vi.fn(),
       openOverlayPanel: vi.fn(), togglePreview: vi.fn(), toggleSplit: vi.fn(),
+      toggleLegend: vi.fn(),
     });
     expect(cmds.ids()).toContain("openFile");
     await cmds.run("openFile");

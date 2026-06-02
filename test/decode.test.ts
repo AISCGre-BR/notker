@@ -1,6 +1,33 @@
 // test/decode.test.ts
 import { describe, it, expect } from "vitest";
-import { decodeGlyph } from "../src/neume/decode";
+import { decodeGlyph, describeToken } from "../src/neume/decode";
+
+describe("describeToken (decodifica qualquer composto)", () => {
+  it("tractulus com letra significativa: tahglsi9", () => {
+    const d = describeToken("tahglsi9");
+    expect(d.base).toBe("ta");
+    expect(d.baseName).toBe("tractulus");
+    expect(d.isKnownBase).toBe(true);
+    expect(d.letters).toEqual(["i"]);
+  });
+  it("virga com letra: vihhlse1", () => {
+    const d = describeToken("vihhlse1");
+    expect(d.base).toBe("vi");
+    expect(d.baseName).toBe("virga");
+    expect(d.letters).toEqual(["e"]);
+  });
+  it("clivis com modificador, sem letra: cl-hh", () => {
+    const d = describeToken("cl-hh");
+    expect(d.baseName).toBe("clivis");
+    expect(d.letters).toEqual([]);
+  });
+  it("ignora o | inicial", () => {
+    expect(describeToken("|vi").base).toBe("vi");
+  });
+  it("base desconhecida marca isKnownBase=false", () => {
+    expect(describeToken("zz").isKnownBase).toBe(false);
+  });
+});
 
 const annot = {} as Record<string, { pt?: string[]; meaning?: string }>;
 

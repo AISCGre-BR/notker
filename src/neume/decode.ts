@@ -10,6 +10,29 @@ function extractLetters(rest: string): string[] {
   return rest.match(/l[st][a-z]*\d*/g) ?? [];
 }
 
+export interface TokenDescription {
+  base: string;          // código-base (2 letras)
+  baseName: string;      // nome humano (KIND_NAMES) ou o próprio base
+  isKnownBase: boolean;  // base ∈ NEUME_KINDS
+  letters: string[];     // letras significativas decodificadas (ex.: "lsi9" → "i")
+  rest: string;          // tudo após o base
+}
+
+/** Decodifica QUALQUER token NABC em base + nome + letras significativas, mesmo
+ *  quando o token composto inteiro não existe no catálogo. Usado pelo hover para
+ *  sempre identificar ao menos o neuma-base e os modificadores. */
+export function describeToken(token: string): TokenDescription {
+  const t = token.replace(/^\|/, "").trim();
+  const base = t.slice(0, 2);
+  const rest = t.slice(2);
+  const isKnownBase = NEUME_KINDS.has(base);
+  const baseName = isKnownBase ? (KIND_NAMES[base] ?? base) : base;
+  const letters = extractLetters(rest).map((l) =>
+    l.replace(/^l[st]/, "").replace(/\d+$/, ""),
+  );
+  return { base, baseName, isKnownBase, letters, rest };
+}
+
 /** Termos de busca derivados dos modificadores NABC (GregorioNabcRef:270-271,528). */
 function modifierTerms(rest: string): string[] {
   const out: string[] = [];

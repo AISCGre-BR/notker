@@ -4,6 +4,7 @@ import type { Tree } from "web-tree-sitter";
 import { nabcContextAt, outermostNabcAt, nabcPartsAt } from "../editor/context";
 import type { EffectiveEntry, Family } from "./types";
 import { glyphSvgEl } from "./render";
+import { describeToken } from "./decode";
 
 function familyLabel(f: Family): string {
   return f === "stgall" ? "St. Gall" : "Laon";
@@ -58,7 +59,26 @@ export function nabcHover(
 
         // ── Cabeçalho: neuma composto inteiro ──────────────────────────────
         if (sorted.length === 0) {
-          dom.textContent = `NABC: ${token}`;
+          // Token composto fora do catálogo: decodifica base + letras significativas
+          // e mostra ao menos o neuma-base (com imagem, se o base existir no catálogo).
+          const desc = describeToken(token);
+          const baseEntries = desc.isKnownBase ? lookupByNabc(desc.base) : [];
+          const baseSorted = baseEntries.slice().sort(
+            (a, b) => Number(b.family === af) - Number(a.family === af),
+          );
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px;";
+          if (baseSorted.length > 0) row.appendChild(glyphSvgEl(baseSorted[0].svg, 32));
+          const info = document.createElement("div");
+          const fam = baseSorted.length > 0
+            ? ` · <em>${familyLabel(baseSorted[0].family as Family)}</em>` : "";
+          info.innerHTML =
+            `<strong>${desc.baseName}</strong>${fam}` +
+            `<br><small>composto: <code>${token}</code></small>` +
+            (desc.letters.length
+              ? `<br><small>letra significativa: <b>${desc.letters.join(", ")}</b></small>` : "");
+          row.appendChild(info);
+          dom.appendChild(row);
         } else {
           for (const entry of sorted) {
             const row = document.createElement("div");

@@ -27,6 +27,7 @@ import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
 import { createOverlayPanel } from "./overlay-ui/panel";
 import { createSplit, type Split } from "./ui/split";
+import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -172,7 +173,7 @@ async function boot() {
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   try {
     const engine = new NabcLibEngine();
-    const panel = createPreviewPanel(previewHost, engine, { debounceMs: 250 });
+    const panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
@@ -267,6 +268,9 @@ async function boot() {
       previewHost.style.display = previewHost.style.display === "none" ? "" : "none";
     },
     toggleSplit: () => { split.toggle(); },
+    toggleLegend: () => {
+      view.dispatch({ effects: toggleLegend.of(!view.state.field(legendVisible)) });
+    },
   });
 
   createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
@@ -275,6 +279,7 @@ async function boot() {
     { id: "format", label: "Formatar", title: "Ctrl+Shift+F" },
     { id: "openSearch", label: "Buscar", title: "F2" },
     { id: "openOverlayPanel", label: "Overlay", title: "Ctrl+Alt+E/I" },
+    { id: "toggleLegend", label: "Régua", title: "Ctrl+Alt+L — letra↔altura na pauta" },
     { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
     { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
     { id: "toggleSplit", label: "Dividir", title: "alternar lado-a-lado / empilhado" },
