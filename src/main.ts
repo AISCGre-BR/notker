@@ -11,7 +11,7 @@ import { openGabc, saveAsGabc } from "./files/file-io";
 import type { Diagnostic } from "@codemirror/lint";
 import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
-import { loadNeumeDb } from "./neume/db";
+import { loadNeumeDb } from "./neume/db-load";
 import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
 import { mergeEntry, addName, mergeOverlays } from "./neume/overlay";
 import { NeumeSearch } from "./neume/search";

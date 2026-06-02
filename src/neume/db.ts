@@ -9,9 +9,3 @@ export class NeumeDatabase {
   all(): NeumeEntry[] { return this.db.entries; }
   byId(id: string): NeumeEntry | undefined { return this.byIdMap.get(id); }
 }
-
-/** Carrega o asset gerado (Vite resolve o JSON como módulo). */
-export async function loadNeumeDb(): Promise<NeumeDatabase> {
-  const db = (await import("../assets/neume-db.json")).default as unknown as NeumeDb;
-  return new NeumeDatabase(db);
-}
