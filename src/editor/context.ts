@@ -155,18 +155,27 @@ export function nabcContextAt(tree: TSTree, _doc: string, pos: number): NabcCont
 }
 
 /**
+ * Índice logo após o `|` da nota atual (início do conteúdo NABC), ou -1 se
+ * `pos` não está num campo NABC.
+ *
+ * Funciona com NABC incompleto durante a digitação (não depende do parse).
+ */
+export function nabcFieldStart(text: string, pos: number): number {
+  for (let i = pos - 1; i >= 0; i--) {
+    const c = text[i];
+    if (c === ")" || c === "\n" || c === "(") return -1; // nota fechada / início sem | / fora
+    if (c === "|") return i + 1;                          // conteúdo NABC começa após o |
+  }
+  return -1;
+}
+
+/**
  * Heurística textual: o offset `pos` está na porção NABC de uma nota gabc,
  * isto é, após um `|` dentro de `(...)` ainda não fechado? Funciona mesmo com
  * NABC incompleto durante a digitação (não depende do parse).
  */
 export function inNabcTextual(text: string, pos: number): boolean {
-  for (let i = pos - 1; i >= 0; i--) {
-    const c = text[i];
-    if (c === ")" || c === "\n") return false; // nota fechada / fora
-    if (c === "(") return false;               // início da nota sem ter visto |
-    if (c === "|") return true;                // há um | entre o ( e o cursor
-  }
-  return false;
+  return nabcFieldStart(text, pos) !== -1;
 }
 
 /**
