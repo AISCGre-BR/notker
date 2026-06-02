@@ -96,7 +96,10 @@ async function boot() {
   // Carrega db de neumas e reconfigura o compartment F2.
   try {
     const db = await loadNeumeDb();
-    overlay = await loadUserOverlay();
+    // Overlay é OPCIONAL: uma falha (ex.: permissão de fs ausente) não pode
+    // impedir a injeção das extensões F2 (paleta/hover/completion/régua).
+    try { overlay = await loadUserOverlay(); }
+    catch (e) { console.warn("[notker] overlay de nomes indisponível (usando vazio):", e); }
     const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
     let searchInst = new NeumeSearch(effective());
     reindex = () => { searchInst = new NeumeSearch(effective()); };
@@ -112,8 +115,9 @@ async function boot() {
         const name = window.prompt("Novo nome para este neuma:");
         if (!name) return;
         overlay = addName(overlay, id, name);
-        await saveUserOverlay(overlay);
         reindex();
+        try { await saveUserOverlay(overlay); setStatus("nome adicionado: " + name); }
+        catch (e) { setStatus("nome adicionado (não persistido): " + String(e)); }
       },
     };
     view.dispatch({ effects: neumeCompartment.reconfigure([...neumeExtensions(rt), ...gabcAssistExtensions(getTree)]) });
