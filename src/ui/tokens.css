@@ -1,0 +1,25 @@
+/* src/ui/tokens.css — herdado de site-oficial/.../tokens.css */
+:root {
+  --cream: #f6f1e7; --cream-deep: #ece3d0; --surface: #fdfcf9;
+  --ink: #222222; --ink-soft: #3d342a; --ink-muted: #7a6a58;
+  --rule: #d4c7ae; --rule-soft: #e5dcc6;
+  --rubric: #a02531; --rubric-soft: #b93744;
+  --font: "Source Serif 4", "Charter", "Iowan Old Style", Georgia, serif;
+}
+body { font-family: var(--font); color: var(--ink); background: var(--cream); }
+.toolbar { display: flex; gap: 2px; align-items: stretch;
+  background: var(--cream); border-bottom: 1px solid var(--rule); }
+.toolbar-btn { font: 13px var(--font); color: var(--ink-soft); background: transparent;
+  border: none; padding: 6px 12px; cursor: pointer; }
+.toolbar-btn:hover { color: var(--rubric); background: var(--cream-deep); }
+/* preview */
+#preview { background: var(--surface); border-left: 1px solid var(--rule); overflow: auto; }
+.hl-strong [fill], .hl-strong { fill: var(--rubric) !important; }
+/* overlay */
+.overlay-panel { background: var(--surface); border: 1px solid var(--rule); font-family: var(--font); }
+.overlay-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  border-bottom: 1px solid var(--rule-soft); }
+.overlay-conflict { color: var(--rubric); }
+.overlay-save { font: 13px var(--font); color: var(--cream); background: var(--rubric);
+  border: 1px solid var(--rubric); padding: 6px 14px; cursor: pointer; }
+.overlay-save:hover { background: var(--rubric-soft); }

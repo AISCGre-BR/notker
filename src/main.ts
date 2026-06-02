@@ -1,3 +1,4 @@
+import "./ui/tokens.css";
 import { EditorView } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
 import { createEditor, externalLinter } from "./editor/editor";
