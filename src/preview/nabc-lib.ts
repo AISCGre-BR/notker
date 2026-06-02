@@ -35,11 +35,22 @@ export function syllableSpans(doc: string): SyllableSource[] {
 export class NabcLibEngine implements PreviewEngine {
   readonly id = "nabc-lib";
   async render(doc: string): Promise<RenderResult> {
-    const { ChantContext, GregorioScore, GregorianChantSVGRenderer } = await import("@testneumz/nabc-lib");
+    const [lib, fonts] = await Promise.all([
+      import("@testneumz/nabc-lib"),
+      import("./nabc-fonts"),
+    ]);
+    const { ChantContext, GregorioScore, GregorianChantSVGRenderer } = lib;
+    // As fontes precisam estar no document.fonts ANTES de medir/renderizar (ver nabc-fonts.ts).
+    await fonts.ensureChantFonts();
     const container = document.createElement("div");
     const ctx = new ChantContext();
     const score = new GregorioScore(ctx);
-    score.interprete(doc);
+    // O nabc-lib espera APENAS o corpo da partitura (depois do `%%`); os cabeçalhos
+    // (name/mode/nabc-lines/…) são metadados e, se passados, são renderizados como
+    // texto cantado. Os offsets do source-map seguem referenciando o doc completo.
+    const sep = doc.indexOf("%%");
+    const body = sep >= 0 ? doc.slice(sep + 2) : doc;
+    score.interprete(body);
     score.determineElements();
     const renderer = new GregorianChantSVGRenderer(container);
     renderer.renderSvg(score);
