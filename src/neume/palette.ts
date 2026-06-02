@@ -1,6 +1,7 @@
 import { type EditorView, keymap } from "@codemirror/view";
+import { startCompletion } from "@codemirror/autocomplete";
 import type { Tree } from "web-tree-sitter";
-import { nabcContextAt } from "../editor/context";
+import { nabcContextAt, inNabcTextual } from "../editor/context";
 import { computeInsertion, type Placement } from "./insert";
 import { glyphSvgEl } from "./render";
 import type { NeumeSearch } from "./search";
@@ -111,7 +112,12 @@ export function neumePalette(deps: PaletteDeps) {
     render();
   }
 
-  const openRun = (v: EditorView): boolean => { open(v); return true; };
+  const openRun = (v: EditorView): boolean => {
+    const pos = v.state.selection.main.head;
+    if (inNabcTextual(v.state.doc.toString(), pos)) { startCompletion(v); return true; }
+    open(v);
+    return true;
+  };
   return keymap.of([
     { key: "Mod-Shift-p", run: openRun },  // Cmd/Ctrl+Shift+P — cross-platform "command palette"
     { key: "F2", run: openRun },           // alternativa rápida
