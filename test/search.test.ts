@@ -44,4 +44,12 @@ describe("NeumeSearch", () => {
     const items = [eff("stgall:pe-su2", "pes", ["pes", "subpunctis", "subbipunctis"])];
     expect(new NeumeSearch(items).query("pes subbipunctis").length).toBe(1);
   });
+  it("família ativa vem primeiro com score igual (sem esconder a outra)", () => {
+    const stg = { ...eff("stgall:vi", "virga", ["virga", "vi"]) };
+    const lao = { ...eff("stgall:vi", "virga", ["virga", "vi"]), id: "laon:vi", family: "laon" as const };
+    const s = new NeumeSearch([lao, stg], "stgall"); // laon listado primeiro na entrada
+    const r = s.query("virga");
+    expect(r.length).toBe(2);            // nada escondido
+    expect(r[0].family).toBe("stgall");  // ativa primeiro mesmo entrando depois
+  });
 });

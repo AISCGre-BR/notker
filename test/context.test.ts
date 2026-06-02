@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { existsSync } from "node:fs";
 import { Parser, Language } from "web-tree-sitter";
 import { resolve } from "node:path";
-import { nabcContextAt, nodeKindAt, activeClefAt } from "../src/editor/context";
+import { nabcContextAt, nodeKindAt, activeClefAt, outermostNabcAt } from "../src/editor/context";
 
 const RUNTIME_WASM = resolve(__dirname, "../src/assets/tree-sitter.wasm");
 const GRAMMAR_WASM = resolve(__dirname, "../src/assets/tree-sitter-gregorio.wasm");
@@ -46,5 +46,19 @@ describe.skipIf(!wasmPresent)("context", () => {
     const ctx = nabcContextAt(tree!, DOC, firstByte);
     expect(ctx.inNabc).toBe(true);
     expect(DOC.slice(ctx.tokenFrom, ctx.tokenTo)).toContain("vi");
+  });
+  it("outermostNabcAt cobre pelo menos o mesmo range que o innermost", () => {
+    const tree = parser.parse(DOC);
+    const pos = DOC.indexOf("vi") + 1;
+    const inner = nabcContextAt(tree!, DOC, pos);
+    const outer = outermostNabcAt(tree!, DOC, pos);
+    expect(outer.inNabc).toBe(true);
+    expect(outer.tokenFrom).toBeLessThanOrEqual(inner.tokenFrom);
+    expect(outer.tokenTo).toBeGreaterThanOrEqual(inner.tokenTo);
+    expect(DOC.slice(outer.tokenFrom, outer.tokenTo)).toContain("vi");
+  });
+  it("outermostNabcAt fora de NABC retorna inNabc=false", () => {
+    const tree = parser.parse(DOC);
+    expect(outermostNabcAt(tree!, DOC, DOC.indexOf("Pó")).inNabc).toBe(false);
   });
 });

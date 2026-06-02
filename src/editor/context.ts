@@ -65,6 +65,20 @@ export function nodeKindAt(tree: TSTree, pos: number): string {
 }
 
 /**
+ * Range do nó NABC mais EXTERNO sob `pos` (o neuma inteiro, p/ hover de compostos).
+ */
+export function outermostNabcAt(tree: TSTree, _doc: string, pos: number): NabcContext {
+  let node: TSNode | null = tree.rootNode.descendantForIndex(pos);
+  let outer: TSNode | null = null;
+  while (node) {
+    if (NABC_KINDS.has(node.type)) outer = node;
+    node = node.parent;
+  }
+  if (!outer) return { inNabc: false, tokenFrom: pos, tokenTo: pos };
+  return { inNabc: true, tokenFrom: outer.startIndex, tokenTo: outer.endIndex };
+}
+
+/**
  * Informa se `pos` está dentro de uma anotação NABC e, caso positivo,
  * o intervalo [tokenFrom, tokenTo) do nó NABC mais próximo.
  */

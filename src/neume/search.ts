@@ -1,5 +1,5 @@
 // src/neume/search.ts
-import type { EffectiveEntry } from "./types";
+import type { EffectiveEntry, Family } from "./types";
 
 const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -22,7 +22,7 @@ function scoreTerm(term: string, q: string): number {
 
 export class NeumeSearch {
   private items: EffectiveEntry[];
-  constructor(items: EffectiveEntry[]) {
+  constructor(items: EffectiveEntry[], private activeFamily?: Family) {
     this.items = items.filter((e) => !e.hidden);
   }
   query(raw: string, limit = 200): EffectiveEntry[] {
@@ -41,7 +41,11 @@ export class NeumeSearch {
       }
       if (ok) scored.push({ e, s: total });
     }
-    scored.sort((a, b) => b.s - a.s || a.e.id.localeCompare(b.e.id));
+    const af = this.activeFamily;
+    scored.sort((a, b) =>
+      b.s - a.s ||
+      (af ? (Number(b.e.family === af) - Number(a.e.family === af)) : 0) ||
+      a.e.id.localeCompare(b.e.id));
     return scored.slice(0, limit).map((x) => x.e);
   }
 }
