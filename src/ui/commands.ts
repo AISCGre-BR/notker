@@ -8,6 +8,7 @@ export interface CommandHandlers {
   openSearch: () => void | Promise<void>;
   openOverlayPanel: () => void | Promise<void>;
   togglePreview: () => void | Promise<void>;
+  toggleSplit: () => void | Promise<void>;
 }
 export type CommandId = keyof CommandHandlers;
 

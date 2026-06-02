@@ -26,6 +26,7 @@ import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
 import { createOverlayPanel } from "./overlay-ui/panel";
+import { createSplit, type Split } from "./ui/split";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -99,19 +100,6 @@ async function boot() {
   // effectiveRef: hoistado para fora do bloco F2 para que os comandos o alcancem.
   let effectiveRef: () => EffectiveEntry[] = () => [];
 
-  // Wiring do preview ao vivo (após onDocChange = sync, para que o wrap preserve o LSP sync).
-  const engine = new NabcLibEngine();
-  const previewHost = document.querySelector<HTMLElement>("#preview")!;
-  const panel = createPreviewPanel(previewHost, engine, { debounceMs: 250 });
-  installSync(view, panel);
-  panel.update(view.state.doc.toString());
-  // Encadeia no onDocChange existente (que agora vale sync / LSP didChange) sem substituí-lo.
-  const prevOnDocChange = onDocChange;
-  onDocChange = () => { prevOnDocChange(); panel.update(view.state.doc.toString()); };
-  // Realce de sílaba segue o cursor.
-  view.dom.addEventListener("keyup", () => syncFromCursor(view, panel));
-  view.dom.addEventListener("mouseup", () => syncFromCursor(view, panel));
-
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
@@ -175,6 +163,28 @@ async function boot() {
   /** Substitui todo o conteúdo do editor (usado ao abrir arquivo). */
   function replaceDoc(text: string): void {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+  }
+
+  // Preview ao vivo + divisor redimensionável. Fica DEPOIS do bloco F2 e dentro de
+  // try/catch para que as assistências (hover/completion/paleta) carreguem sempre,
+  // mesmo que o motor de preview (webview-only) falhe.
+  const previewHost = document.querySelector<HTMLElement>("#preview")!;
+  let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
+  try {
+    const engine = new NabcLibEngine();
+    const panel = createPreviewPanel(previewHost, engine, { debounceMs: 250 });
+    installSync(view, panel);
+    panel.update(view.state.doc.toString());
+    // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
+    const prevOnDocChange = onDocChange;
+    onDocChange = () => { prevOnDocChange(); panel.update(view.state.doc.toString()); };
+    // Realce de sílaba segue o cursor.
+    view.dom.addEventListener("keyup", () => syncFromCursor(view, panel));
+    view.dom.addEventListener("mouseup", () => syncFromCursor(view, panel));
+    const workspace = document.querySelector<HTMLElement>("#workspace")!;
+    split = createSplit(workspace, app, previewHost, "horizontal");
+  } catch (err) {
+    console.error("[notker] preview ao vivo indisponível:", err);
   }
 
   const commands = createCommands({
@@ -256,6 +266,7 @@ async function boot() {
     togglePreview: () => {
       previewHost.style.display = previewHost.style.display === "none" ? "" : "none";
     },
+    toggleSplit: () => { split.toggle(); },
   });
 
   createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
@@ -265,7 +276,8 @@ async function boot() {
     { id: "openSearch", label: "Buscar", title: "F2" },
     { id: "openOverlayPanel", label: "Overlay", title: "Ctrl+Alt+E/I" },
     { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
-    { id: "togglePreview", label: "Preview" },
+    { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
+    { id: "toggleSplit", label: "Dividir", title: "alternar lado-a-lado / empilhado" },
   ]);
 
   window.addEventListener("keydown", (e) => {

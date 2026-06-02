@@ -13,7 +13,10 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   border: none; padding: 6px 12px; cursor: pointer; }
 .toolbar-btn:hover { color: var(--rubric); background: var(--cream-deep); }
 /* preview */
-#preview { background: var(--surface); border-left: 1px solid var(--rule); overflow: auto; }
+#preview { background: var(--surface); overflow: auto; }
+/* divisor redimensionável editor|preview (resize via arraste; orientação alternável) */
+.split-gutter { background: var(--rule); }
+.split-gutter:hover { background: var(--rubric-soft); }
 .hl-strong [fill], .hl-strong { fill: var(--rubric) !important; }
 /* overlay */
 .overlay-panel { background: var(--surface); border: 1px solid var(--rule); font-family: var(--font); }
