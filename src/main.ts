@@ -19,6 +19,7 @@ import { neumeExtensions } from "./neume/index";
 import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
+import { createCommands } from "./ui/commands";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -153,9 +154,8 @@ async function boot() {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
   }
 
-  window.addEventListener("keydown", async (e) => {
-    if (e.ctrlKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
-      e.preventDefault();
+  const commands = createCommands({
+    openFile: async () => {
       try {
         setStatus("Ctrl+O: abrindo diálogo…");
         const r = await openGabc();
@@ -166,9 +166,8 @@ async function boot() {
         setStatus("Ctrl+O ERRO: " + String(err));
         console.error("[notker] erro ao abrir:", err);
       }
-    }
-    if (e.ctrlKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
-      e.preventDefault();
+    },
+    saveFile: async () => {
       try {
         setStatus("Ctrl+S: salvando…");
         const p = await saveAsGabc(view.state.doc.toString());
@@ -177,9 +176,8 @@ async function boot() {
         setStatus("Ctrl+S ERRO: " + String(err));
         console.error("[notker] erro ao salvar:", err);
       }
-    }
-    if (e.ctrlKey && e.shiftKey && (e.key === "F" || e.key === "f")) {
-      e.preventDefault();
+    },
+    format: async () => {
       try {
         const f = await formatDocument(client, URI, view.state.doc);
         if (f != null) { replaceDoc(f); setStatus("formatado"); }
@@ -188,9 +186,8 @@ async function boot() {
         setStatus("Ctrl+Shift+F ERRO: " + String(err));
         console.error("[notker] erro ao formatar:", err);
       }
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "e" || e.key === "E")) {
-      e.preventDefault();
+    },
+    exportOverlay: async () => {
       try {
         await exportOverlay(overlay);
         setStatus("overlay exportado");
@@ -198,9 +195,8 @@ async function boot() {
         setStatus("Ctrl+Alt+E ERRO: " + String(err));
         console.error("[notker] erro ao exportar overlay:", err);
       }
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "i" || e.key === "I")) {
-      e.preventDefault();
+    },
+    importOverlay: async () => {
       try {
         const imported = await importOverlay();
         if (!imported) { setStatus("importar: cancelado"); return; }
@@ -212,10 +208,38 @@ async function boot() {
         setStatus("Ctrl+Alt+I ERRO: " + String(err));
         console.error("[notker] erro ao importar overlay:", err);
       }
+    },
+    toggleFamily: () => { toggleFamily(); },
+    // preenchido na Task 12/14
+    openSearch: () => {},
+    openOverlayPanel: () => {},
+    togglePreview: () => {},
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
+      e.preventDefault();
+      void commands.run("openFile");
+    }
+    if (e.ctrlKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+      e.preventDefault();
+      void commands.run("saveFile");
+    }
+    if (e.ctrlKey && e.shiftKey && (e.key === "F" || e.key === "f")) {
+      e.preventDefault();
+      void commands.run("format");
+    }
+    if (e.ctrlKey && e.altKey && (e.key === "e" || e.key === "E")) {
+      e.preventDefault();
+      void commands.run("exportOverlay");
+    }
+    if (e.ctrlKey && e.altKey && (e.key === "i" || e.key === "I")) {
+      e.preventDefault();
+      void commands.run("importOverlay");
     }
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "g" || e.key === "G")) {
       e.preventDefault();
-      toggleFamily();
+      void commands.run("toggleFamily");
     }
   });
 }
