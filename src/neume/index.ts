@@ -16,7 +16,7 @@ export interface NeumeRuntime {
 export function neumeExtensions(rt: NeumeRuntime): Extension[] {
   return [
     nabcHover(rt.getTree, rt.lookupByNabc, rt.activeFamily),
-    nabcCompletion(rt.getTree, rt.search),
+    nabcCompletion(rt.search),
     neumePalette({ getTree: rt.getTree, search: rt.search, onAddName: rt.onAddName }),
   ];
 }

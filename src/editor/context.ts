@@ -155,6 +155,21 @@ export function nabcContextAt(tree: TSTree, _doc: string, pos: number): NabcCont
 }
 
 /**
+ * Heurística textual: o offset `pos` está na porção NABC de uma nota gabc,
+ * isto é, após um `|` dentro de `(...)` ainda não fechado? Funciona mesmo com
+ * NABC incompleto durante a digitação (não depende do parse).
+ */
+export function inNabcTextual(text: string, pos: number): boolean {
+  for (let i = pos - 1; i >= 0; i--) {
+    const c = text[i];
+    if (c === ")" || c === "\n") return false; // nota fechada / fora
+    if (c === "(") return false;               // início da nota sem ter visto |
+    if (c === "|") return true;                // há um | entre o ( e o cursor
+  }
+  return false;
+}
+
+/**
  * Texto da clave ativa imediatamente à esquerda de `pos`.
  * Exemplos de retorno: `"c4"`, `"f3"`.
  * Retorna `null` se não houver clave à esquerda.
