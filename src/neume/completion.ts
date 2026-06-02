@@ -1,8 +1,8 @@
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
-import { keymap } from "@codemirror/view";
+import { keymap, type EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
-import { nabcFieldStart } from "../editor/context";
+import { nabcFieldStart, inNabcTextual } from "../editor/context";
 import { glyphSvgEl } from "./render";
 import type { NeumeSearch } from "./search";
 import { composeFromField, setCompose } from "./compose-state";
@@ -44,6 +44,15 @@ export function nabcCompletion(search: () => NeumeSearch): Extension[] {
         return { from, filter: false, options };
       }],
     }),
-    keymap.of([{ key: "Tab", run: acceptCompletion }]),
+    // Tab: aceita a sugestão se o popup estiver aberto. DENTRO de um campo NABC,
+    // consome o Tab mesmo sem popup (retorna true) para o foco NÃO sair do editor;
+    // FORA do NABC, deixa o Tab seguir o comportamento normal (retorna false).
+    keymap.of([{
+      key: "Tab",
+      run: (v: EditorView): boolean => {
+        if (acceptCompletion(v)) return true;
+        return inNabcTextual(v.state.doc.toString(), v.state.selection.main.head);
+      },
+    }]),
   ];
 }
