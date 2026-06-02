@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { existsSync } from "node:fs";
 import { Parser, Language } from "web-tree-sitter";
 import { resolve } from "node:path";
-import { nabcContextAt, nodeKindAt, activeClefAt, outermostNabcAt } from "../src/editor/context";
+import { nabcContextAt, nodeKindAt, activeClefAt, outermostNabcAt, nabcPartsAt } from "../src/editor/context";
 
 const RUNTIME_WASM = resolve(__dirname, "../src/assets/tree-sitter.wasm");
 const GRAMMAR_WASM = resolve(__dirname, "../src/assets/tree-sitter-gregorio.wasm");
@@ -60,5 +60,16 @@ describe.skipIf(!wasmPresent)("context", () => {
   it("outermostNabcAt fora de NABC retorna inNabc=false", () => {
     const tree = parser.parse(DOC);
     expect(outermostNabcAt(tree!, DOC, DOC.indexOf("Pó")).inNabc).toBe(false);
+  });
+  it("nabcPartsAt devolve ao menos uma parte para um neuma simples", () => {
+    const tree = parser.parse(DOC);
+    const parts = nabcPartsAt(tree!, DOC, DOC.indexOf("vi") + 1);
+    expect(parts.length).toBeGreaterThanOrEqual(1);
+    const joined = parts.map((p) => DOC.slice(p.from, p.to)).join("");
+    expect(joined).toContain("vi");
+  });
+  it("nabcPartsAt fora de NABC retorna vazio", () => {
+    const tree = parser.parse(DOC);
+    expect(nabcPartsAt(tree!, DOC, DOC.indexOf("Pó")).length).toBe(0);
   });
 });

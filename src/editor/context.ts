@@ -79,6 +79,68 @@ export function outermostNabcAt(tree: TSTree, _doc: string, pos: number): NabcCo
 }
 
 /**
+ * Retorna os intervalos das partes elementares (folhas) do neuma NABC mais
+ * externo sob `pos`.
+ *
+ * "Parte elementar" = nó `nabc_glyph_descriptor` que NÃO contém outro
+ * `nabc_glyph_descriptor` descendente (i.e., é folha na hierarquia de glifos).
+ *
+ * Se nenhum `nabc_glyph_descriptor` for encontrado na subárvore, retorna o
+ * intervalo do nó externo como parte única (edge case).
+ * Retorna `[]` se a posição não estiver dentro de NABC.
+ */
+export function nabcPartsAt(
+  tree: TSTree,
+  doc: string,
+  pos: number
+): { from: number; to: number }[] {
+  // Encontra o nó NABC mais externo (mesmo padrão de outermostNabcAt).
+  let node: TSNode | null = tree.rootNode.descendantForIndex(pos);
+  let outer: TSNode | null = null;
+  while (node) {
+    if (NABC_KINDS.has(node.type)) outer = node;
+    node = node.parent;
+  }
+  if (!outer) return [];
+
+  // Verifica recursivamente se um nó tem algum descendente nabc_glyph_descriptor.
+  function hasGlyphDescendant(n: TSNode): boolean {
+    for (let i = 0; i < n.childCount; i++) {
+      const c = n.child(i);
+      if (!c) continue;
+      if (c.type === "nabc_glyph_descriptor") return true;
+      if (hasGlyphDescendant(c)) return true;
+    }
+    return false;
+  }
+
+  // Coleta recursivamente os nabc_glyph_descriptor folha (sem descend. glyph).
+  const parts: { from: number; to: number }[] = [];
+  function collect(n: TSNode): void {
+    if (n.type === "nabc_glyph_descriptor") {
+      if (!hasGlyphDescendant(n)) {
+        parts.push({ from: n.startIndex, to: n.endIndex });
+        return; // Não desce mais
+      }
+      // Se tem filho glyph_descriptor, desce para coletar os filhos folha.
+    }
+    for (let i = 0; i < n.childCount; i++) {
+      const c = n.child(i);
+      if (c) collect(c);
+    }
+  }
+  collect(outer);
+
+  // Edge: sem partes encontradas → retorna o nó externo como parte única.
+  if (parts.length === 0) {
+    return [{ from: outer.startIndex, to: outer.endIndex }];
+  }
+
+  // Garante ordem por posição.
+  return parts.sort((a, b) => a.from - b.from);
+}
+
+/**
  * Informa se `pos` está dentro de uma anotação NABC e, caso positivo,
  * o intervalo [tokenFrom, tokenTo) do nó NABC mais próximo.
  */
