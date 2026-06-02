@@ -67,5 +67,12 @@ export function neumePalette(deps: PaletteDeps) {
     render();
   }
 
-  return keymap.of([{ key: "Ctrl-Space", run: (v) => { open(v); return true; } }]);
+  // Vários atalhos: Ctrl+Space (padrão do spec) costuma ser capturado pelo
+  // IME no Linux (ibus/GNOME); F2 e Alt+N são alternativas à prova de IME/WM.
+  const openRun = (v: EditorView): boolean => { open(v); return true; };
+  return keymap.of([
+    { key: "Ctrl-Space", run: openRun },
+    { key: "F2", run: openRun },
+    { key: "Alt-n", run: openRun },
+  ]);
 }
