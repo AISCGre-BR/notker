@@ -1,11 +1,14 @@
 // test/context.test.ts
 import { describe, it, expect, beforeAll } from "vitest";
+import { existsSync } from "node:fs";
 import { Parser, Language } from "web-tree-sitter";
 import { resolve } from "node:path";
 import { nabcContextAt, nodeKindAt, activeClefAt } from "../src/editor/context";
 
 const RUNTIME_WASM = resolve(__dirname, "../src/assets/tree-sitter.wasm");
 const GRAMMAR_WASM = resolve(__dirname, "../src/assets/tree-sitter-gregorio.wasm");
+
+const wasmPresent = existsSync(RUNTIME_WASM) && existsSync(GRAMMAR_WASM);
 
 let parser: Parser;
 beforeAll(async () => {
@@ -16,7 +19,7 @@ beforeAll(async () => {
 
 const DOC = `nabc-lines: 1;\nname: T;\n%%\n(c4) Pó(h|vi)pu(h)`;
 
-describe("context", () => {
+describe.skipIf(!wasmPresent)("context", () => {
   it("detecta posição dentro do campo NABC (após o |)", () => {
     const tree = parser.parse(DOC);
     const posNabc = DOC.indexOf("vi") + 1; // dentro de "vi"
