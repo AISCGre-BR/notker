@@ -12,7 +12,7 @@ pub struct ProjectBundle {
     pub files: HashMap<String, String>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn read_project(path: String) -> Result<ProjectBundle, String> {
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let mut zip = ZipArchive::new(Cursor::new(bytes)).map_err(|e| e.to_string())?;
@@ -30,7 +30,7 @@ pub fn read_project(path: String) -> Result<ProjectBundle, String> {
     Ok(ProjectBundle { project_json, files })
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn write_project(
     path: String,
     project_json: String,

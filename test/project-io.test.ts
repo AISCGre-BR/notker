@@ -17,7 +17,7 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { save } from "@tauri-apps/plugin-dialog";
 
 describe("project-io", () => {
-  beforeEach(() => { invoke.mockClear(); });
+  beforeEach(() => { vi.clearAllMocks(); });
   it("openProject abre um .notker via comando read_project", async () => {
     invoke.mockResolvedValueOnce({
       project_json: JSON.stringify({
