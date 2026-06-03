@@ -5,6 +5,7 @@ import { nabcContextAt, outermostNabcAt, nabcPartsAt } from "../editor/context";
 import type { EffectiveEntry, Family } from "./types";
 import { glyphSvgEl } from "./render";
 import { describeToken } from "./decode";
+import { nameNeume } from "./naming";
 
 function familyLabel(f: Family): string {
   return f === "stgall" ? "St. Gall" : "Laon";
@@ -61,7 +62,10 @@ export function nabcHover(
         if (sorted.length === 0) {
           // Token composto fora do catálogo: decodifica base + letras significativas
           // e mostra ao menos o neuma-base (com imagem, se o base existir no catálogo).
+          // F4: fora do catálogo → motor de nomes (canônico(s) da sinopse +
+          // sistemático + proveniência), em vez de só o nome-base.
           const desc = describeToken(token);
+          const naming = nameNeume(token, af);
           const baseEntries = desc.isKnownBase ? lookupByNabc(desc.base) : [];
           const baseSorted = baseEntries.slice().sort(
             (a, b) => Number(b.family === af) - Number(a.family === af),
@@ -72,11 +76,17 @@ export function nabcHover(
           const info = document.createElement("div");
           const fam = baseSorted.length > 0
             ? ` · <em>${familyLabel(baseSorted[0].family as Family)}</em>` : "";
+          const namesHtml = naming.displayNames
+            .map((n, i) => (i === 0 ? `<strong>${n}</strong>` : `<span>${n}</span>`))
+            .join(" · ");
+          const provHtml = naming.provenance.length
+            ? `<br><small>fonte: ${naming.provenance[0].source}</small>` : "";
           info.innerHTML =
-            `<strong>${desc.baseName}</strong>${fam}` +
+            `${namesHtml}${fam}` +
             `<br><small>composto: <code>${token}</code></small>` +
             (desc.letters.length
-              ? `<br><small>letra significativa: <b>${desc.letters.join(", ")}</b></small>` : "");
+              ? `<br><small>letra significativa: <b>${desc.letters.join(", ")}</b></small>` : "") +
+            provHtml;
           row.appendChild(info);
           dom.appendChild(row);
         } else {
