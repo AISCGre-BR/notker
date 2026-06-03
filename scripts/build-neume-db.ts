@@ -4,6 +4,8 @@ import { createHash as hash } from "node:crypto";
 import { resolve } from "node:path";
 import { Parser, Language } from "web-tree-sitter";
 import { decodeGlyph } from "../src/neume/decode";
+import { nameNeume } from "../src/neume/naming";
+import synopsis from "../src/neume/synopsis-neumes.json";
 import type { Family, NeumeDb, NeumeEntry, BaseAnnotations } from "../src/neume/types";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -48,9 +50,44 @@ async function main() {
       const e = decodeGlyph(family, code, svg, annot);
       e.nabcValid = probe(e.nabc);
       if (!e.nabcValid) invalid++;
+      // F4: enriquece com nome(s) canônico(s) da sinopse + termos sistemáticos.
+      const naming = nameNeume(e.nabc, family);
+      e.terms = Array.from(new Set([...e.terms, ...naming.terms]));
+      if (naming.canonical.length) {
+        e.name = naming.displayNames[0];
+        e.provenance = naming.provenance;
+      }
       entries.push(e);
     }
   }
+
+  // F4: entradas-sequência sintéticas (cl!po, etc.) — chanceladas pela sinopse,
+  // buscáveis e inseríveis como texto. Miniatura = glifo da primeira base (placeholder).
+  const seen = new Set(entries.map((e) => e.id));
+  const rows = (synopsis as { rows: { family: Family; name: string; examples: string[] }[] }).rows;
+  let synthetic = 0;
+  for (const row of rows) {
+    for (const code of row.examples) {
+      if (!code.includes("!")) continue;
+      const id = `${row.family}:${code}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const firstBase = code.split("!")[0].replace(/^[/`]+/, "").slice(0, 2);
+      const svg = glyphs[row.family]?.[firstBase] ?? { path: "M0 0", viewBox: "0 0 10 10", advance: 10 };
+      const naming = nameNeume(code, row.family);
+      const valid = probe(code);
+      if (!valid) invalid++;
+      entries.push({
+        id, family: row.family, code, nabc: code, nabcValid: valid,
+        base: firstBase, name: naming.displayNames[0] ?? code,
+        qualifiers: [], letters: [],
+        terms: Array.from(new Set([...naming.terms, code.toLowerCase()])),
+        meaning: "", svg, synthetic: true, provenance: naming.provenance,
+      });
+      synthetic++;
+    }
+  }
+  console.log(`neume-db: +${synthetic} entradas-sequência sintéticas`);
 
   const db: NeumeDb = {
     schema: 1,

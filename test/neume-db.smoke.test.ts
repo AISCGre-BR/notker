@@ -25,4 +25,15 @@ describe.skipIf(!dbPresent)("neume-db gerado", () => {
     const valid = db.entries.filter((e) => e.nabcValid).length;
     expect(valid / db.entries.length).toBeGreaterThan(0.8);
   });
+  it("F4: enriquece termos com nomes canônicos compostos (ex.: subbipunctis)", () => {
+    const db = JSON.parse(readFileSync("src/assets/neume-db.json", "utf8")) as NeumeDb;
+    const hasSub = db.entries.some((e) => e.terms.includes("subbipunctis"));
+    expect(hasSub).toBe(true);
+  });
+  it("F4: emite entradas-sequência sintéticas (código com !) com miniatura", () => {
+    const db = JSON.parse(readFileSync("src/assets/neume-db.json", "utf8")) as NeumeDb;
+    const seq = db.entries.filter((e) => e.synthetic && e.code.includes("!"));
+    expect(seq.length).toBeGreaterThan(0);
+    for (const e of seq) expect(e.svg.path.length).toBeGreaterThan(0);
+  });
 });
