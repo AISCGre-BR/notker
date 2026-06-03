@@ -1,0 +1,247 @@
+{
+  "schema": 1,
+  "provenance": {
+    "source": "Cardine, Semiologia Gregoriana, pp.12–15",
+    "via": "GregorioNabcRef v6.2.0"
+  },
+  "modifiers": {
+    "S": "modificação do sinal",
+    "G": "modificação do agrupamento (quebra neumática)",
+    "M": "modificação melódica",
+    "-": "episema",
+    ">": "liquescência aumentativa",
+    "~": "liquescência diminutiva",
+    "su": "subpunctis",
+    "pp": "praepunctis",
+    "ls": "letra significativa",
+    "lt": "letra significativa"
+  },
+  "rows": [
+    {
+      "family": "stgall",
+      "name": "virga",
+      "examples": ["vi", "vilsc3", "vilst1", "vippt1lsc2", "vi-", "vi>"]
+    },
+    {
+      "family": "stgall",
+      "name": "tractulus",
+      "examples": ["ta", "talsc3", "talst2", "ta>"]
+    },
+    {
+      "family": "stgall",
+      "name": "punctum",
+      "examples": ["pu", "st", "visu1sux1"]
+    },
+    {
+      "family": "stgall",
+      "name": "gravis",
+      "examples": ["gr"]
+    },
+    {
+      "family": "stgall",
+      "name": "clivis",
+      "examples": ["cl", "cllsc3", "cllst2", "cl-lst2", "cl-", "clS-", "clS", "clS1", "clM", "cl>", "cl>1", "cl~"]
+    },
+    {
+      "family": "stgall",
+      "name": "pes",
+      "examples": ["pe", "pe-", "pe-1", "peS", "peG", "pe>", "pe>1", "pe>2", "pe~"]
+    },
+    {
+      "family": "stgall",
+      "name": "porrectus",
+      "examples": ["po", "polsc2", "po-", "po-1", "poG", "po>", "po~"]
+    },
+    {
+      "family": "stgall",
+      "name": "torculus",
+      "examples": ["to", "tolsc3", "tolsc4lst3", "tolst2", "to-", "to-1", "toS", "toS1", "toS2", "toS3", "toG", "toM", "toM1", "to>", "pe>"]
+    },
+    {
+      "family": "stgall",
+      "name": "climacus",
+      "examples": ["ci", "ci1", "cilsc3", "cilst2", "ci-", "ciS", "ciS1", "visut1su2", "ciG", "ciG1", "ciM", "ci>", "ci~"]
+    },
+    {
+      "family": "stgall",
+      "name": "scandicus",
+      "examples": ["sc", "sc1", "sc-", "scS", "scG", "scG1", "scM1", "vi-hevi-hivi-hm", "vihevihivihm", "sc>", "sc~"]
+    },
+    {
+      "family": "stgall",
+      "name": "porrectus flexus",
+      "examples": ["pf", "pflsc2", "pf1lsc2", "pflst2", "pf-", "pfS", "sfM", "pfM", "pf>", "pf~"]
+    },
+    {
+      "family": "stgall",
+      "name": "pes subbipunctis",
+      "examples": ["pesu2", "vippt1su2lsc3", "pe-su2", "pe-1su2", "peSsu2", "peSsut2", "vippt1su2", "pe-1sut2", "toS2sut1", "vi-!ci", "pesu1suw1", "pesu1sux1", "to>"]
+    },
+    {
+      "family": "stgall",
+      "name": "scandicus flexus",
+      "examples": ["sf", "sflsc3", "sf-", "sfS", "vi-tohk", "peclhi", "sfM", "cl>ppt2", "sc>"]
+    },
+    {
+      "family": "stgall",
+      "name": "torculus resupinus",
+      "examples": ["tr", "trlsc2", "trlst2", "tr-1", "trS", "trG", "trG1", "trG2", "trM", "tr>", "tr~"]
+    },
+    {
+      "family": "stgall",
+      "name": "apostropha",
+      "examples": ["st", "st-", "stS", "st>"]
+    },
+    {
+      "family": "stgall",
+      "name": "distropha",
+      "examples": ["ds", "ds-lsx6", "ds-", "ds>"]
+    },
+    {
+      "family": "stgall",
+      "name": "tristropha",
+      "examples": ["ts", "ts-lsx6", "ts-", "tsM", "ts>"]
+    },
+    {
+      "family": "stgall",
+      "name": "trigonus",
+      "examples": ["tg", "tg1", "tgS", "tgS1", "tgS3", "tgM", "ds>"]
+    },
+    {
+      "family": "stgall",
+      "name": "bivirga & trivirga",
+      "examples": ["bv", "tv", "bv-", "tv-", "bv>"]
+    },
+    {
+      "family": "stgall",
+      "name": "pressus",
+      "examples": ["pr", "pi", "prlsc2", "pr-lsc2", "prlst2", "pr-", "pilsc2", "pilst2", "prM", "pr>", "pi>", "vs>", "or>"]
+    },
+    {
+      "family": "stgall",
+      "name": "virga strata",
+      "examples": ["vs", "vslsc3", "vslst2", "vs-", "vs>", "ta>"]
+    },
+    {
+      "family": "stgall",
+      "name": "oriscus",
+      "examples": ["or", "or>"]
+    },
+    {
+      "family": "stgall",
+      "name": "salicus",
+      "examples": ["sa", "sa1", "salsfr1", "saM1lsfr1", "sa-", "sa-1", "saG", "saM", "saM1", "saM2", "sa>", "sa->1", "pe>2"]
+    },
+    {
+      "family": "stgall",
+      "name": "pes quassus",
+      "examples": ["pq", "pqlsfr1", "pq-", "pq>"]
+    },
+    {
+      "family": "stgall",
+      "name": "quilisma",
+      "examples": ["ql", "qi", "ql-", "qi-", "ql>", "qi>"]
+    },
+    {
+      "family": "stgall",
+      "name": "pes stratus",
+      "examples": ["pt"]
+    },
+    {
+      "family": "stgall",
+      "name": "porrectus flexus resupinus",
+      "examples": ["cl!po"],
+      "by": "gabriel"
+    },
+    {
+      "family": "laon",
+      "name": "uncinus",
+      "examples": ["un"]
+    },
+    {
+      "family": "laon",
+      "name": "punctum",
+      "examples": ["pu"]
+    },
+    {
+      "family": "laon",
+      "name": "virga",
+      "examples": ["vi", "viS", "vipp2su2vihh", "vi>1"]
+    },
+    {
+      "family": "laon",
+      "name": "tractulus",
+      "examples": ["ta", "ds", "ts", "talst2", "tslsc2lst2", "ta>2"]
+    },
+    {
+      "family": "laon",
+      "name": "clivis",
+      "examples": ["cl", "clG", "cllsn9", "cllst9", "clGlsa5", "clG1", "clM", "cl>", "cl>1", "vi>", "ta>2"]
+    },
+    {
+      "family": "laon",
+      "name": "pes",
+      "examples": ["pe", "peG", "pelsn3", "pelst2", "pelsc2", "pe>1", "ta>"]
+    },
+    {
+      "family": "laon",
+      "name": "porrectus",
+      "examples": ["po", "poG", "poM", "po>"]
+    },
+    {
+      "family": "laon",
+      "name": "torculus",
+      "examples": ["to", "toS1", "toG", "toGlsa5", "toSlsa5", "toSsun1lsa5", "tolst9", "to>"]
+    },
+    {
+      "family": "laon",
+      "name": "climacus",
+      "examples": ["ci", "pusu1sun1", "visu2", "unsun2", "visu2lst3", "cl>1"]
+    },
+    {
+      "family": "laon",
+      "name": "scandicus",
+      "examples": ["sc", "sc1", "vippn1pp1", "vippn2", "pevihl", "sclst2", "pelst2vihl", "pelsa2vihl", "vi>1pp2", "ta>ppn1", "ta>pp2"]
+    },
+    {
+      "family": "laon",
+      "name": "porrectus flexus",
+      "examples": ["pf1", "pfS", "unhg`to", "po`un", "unhglst2`to", "po`unlsa2", "pfM", "pf>"]
+    },
+    {
+      "family": "laon",
+      "name": "(pes subbipunctis)",
+      "examples": ["tosu1", "tosun1", "vippn1su2", "unppn1sun2", "visu1sun1", "tosu1lsc5", "tosun1lsa5", "unlst2`puhisu1sun1"]
+    },
+    {
+      "family": "laon",
+      "name": "scandicus flexus",
+      "examples": ["sf", "unhd`to", "sfG", "unhdlst2`to", "pelst2clhh"]
+    },
+    {
+      "family": "laon",
+      "name": "torculus resupinus",
+      "examples": ["tr", "trS", "poppn1", "pe`peG", "tovihg", "toGvihg", "trSlsc1", "trlst3", "trlst9", "tr>", "pe`ta>"]
+    },
+    {
+      "family": "laon",
+      "name": "clivis + pes or torculus",
+      "examples": ["cl!pe", "cl!to", "toS!pe", "toS!to"]
+    },
+    {
+      "family": "laon",
+      "name": "oriscus",
+      "examples": ["or", "or1", "ql", "or>", "oc", "oc!vi", "pq", "pq1", "tg", "cl1!or", "cl1!pi", "cl1!pi!vi", "cl1!pi!cl", "cl1!pi!to", "to!or", "sa", "sa1", "vs", "vsG", "pe!or"]
+    },
+    {
+      "family": "laon",
+      "name": "quilisma",
+      "examples": ["ql", "ql!cl", "ql!po"]
+    },
+    {
+      "family": "laon",
+      "name": "pes stratus",
+      "examples": ["pt1"]
+    }
+  ]
+}
