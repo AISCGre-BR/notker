@@ -40,6 +40,11 @@ jobs:
               Depois abra normalmente.
             - **Windows** — SmartScreen → "Mais informações" → "Executar assim mesmo".
 
+            ## Aviso / Notice
+
+            Software em fase **alpha**, distribuído **"como está" (*as is*)**, sem garantia de qualquer tipo, nos termos da **GPL-3.0**. Use por sua conta e risco e mantenha backups do seu trabalho.
+            _**Alpha**-stage software, distributed **"as is"**, without warranty of any kind, under the **GPL-3.0**. Use at your own risk and keep backups of your work._
+
   build:
     name: build ${{ matrix.label }}
     needs: create-release

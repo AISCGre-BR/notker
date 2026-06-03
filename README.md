@@ -1,6 +1,10 @@
 # Notker
 
-Editor desktop de canto gregoriano (**GABC/NABC**). Tauri 2 + CodeMirror 6. **GPL-3.0** · `0.0.2-alpha`.
+Editor desktop de canto gregoriano (**GABC/NABC**). Tauri 2 + CodeMirror 6. **GPL-3.0** · `0.0.3-alpha`.
+
+## Aviso (alpha, "como está")
+
+O Notker está em fase **alpha**: em desenvolvimento ativo, sujeito a mudanças, instabilidades e eventual perda de dados. É distribuído **"como está" (*as is*)**, **sem garantia de qualquer tipo**, expressa ou implícita — incluindo, sem limitação, garantias de comercialização ou de adequação a um fim específico —, nos termos da licença **GPL-3.0**. O uso é por sua conta e risco; **mantenha backups do seu trabalho**.
 
 ## Desenvolvimento
 
