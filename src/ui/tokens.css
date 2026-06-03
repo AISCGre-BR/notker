@@ -268,7 +268,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 /* A centralização e o z-index ficam no host pré-existente #dialog-host (inline,
    index.html), cujo display none→flex força o repaint do WebKitGTK. Sem backdrop
    semitransparente full-viewport (trava o compositor) — host transparente. */
-.newdlg-box { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); box-shadow: var(--shadow); padding: 18px 20px; min-width: 320px; max-width: 92vw; display: flex; flex-direction: column; gap: 10px; font-family: serif; }
+.newdlg-box { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); box-shadow: var(--shadow); padding: 18px 20px; width: 420px; max-width: 92vw; display: flex; flex-direction: column; gap: 10px; font-family: serif; }
 .newdlg-title { font-size: 1.05rem; }
 .newdlg-fam-row { display: flex; gap: 8px; }
 .newdlg-fam-btn { flex: 1 1 0; padding: 7px 10px; border: 1px solid var(--rule); background: transparent; color: var(--ink); cursor: pointer; font-family: serif; }
