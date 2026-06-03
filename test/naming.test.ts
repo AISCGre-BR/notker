@@ -23,4 +23,19 @@ describe("nameNeume (orquestra canônico + sistemático)", () => {
     const r = nameNeume("cl!po", "stgall");
     expect(r.displayNames).toContain("porrectus flexus resupinus");
   });
+  // Bug 2: a contagem de subpunctis (bi=2, tri=3, genérico >3) deve refletir o
+  // número real, não herdar "subbipunctis" só porque o exemplo da sinopse usa su2.
+  it("su3 → subtripunctis (não subbipunctis)", () => {
+    const r = nameNeume("pesu3", "stgall");
+    expect(r.displayNames).toContain("pes subtripunctis");
+    expect(r.displayNames).not.toContain("pes subbipunctis");
+  });
+  it("su2 permanece subbipunctis", () => {
+    expect(nameNeume("pesu2", "stgall").displayNames).toContain("pes subbipunctis");
+  });
+  it("su >3 generaliza para subpunctis (sem bi/tri)", () => {
+    const r = nameNeume("pesu5", "stgall");
+    expect(r.displayNames).toContain("pes subpunctis");
+    expect(r.displayNames.some((n) => /subbi|subtri/.test(n))).toBe(false);
+  });
 });

@@ -34,12 +34,25 @@ export function describeToken(token: string): TokenDescription {
   return { base, baseName, isKnownBase, letters, rest };
 }
 
-/** Termos de busca derivados dos modificadores NABC (GregorioNabcRef:270-271,528). */
+/** Nome do subpunctis conforme a contagem: 2=bi, 3=tri, demais (1 ou >3) = genérico.
+ *  Cardine não nomeia além de tri — acima disso generaliza para "subpunctis". */
+export function subpunctisWord(n: number): string {
+  if (n === 2) return "subbipunctis";
+  if (n === 3) return "subtripunctis";
+  return "subpunctis";
+}
+
+/** Termos de busca derivados dos modificadores NABC (GregorioNabcRef §270–291). */
 function modifierTerms(rest: string): string[] {
   const out: string[] = [];
-  const su = rest.match(/su[tuwx]?(\d)?/);   // subpunctis (su) + opcional forma + contagem
-  if (su) { out.push("subpunctis"); if (su[1] === "2") out.push("subbipunctis"); }
-  const pp = rest.match(/pp[tuwx]?(\d)?/);   // prepunctis (pp)
+  const su = rest.match(/su[tuvwxy]?(\d+)?/);   // subpunctis (su) + forma opcional + contagem
+  if (su) {
+    out.push("subpunctis");                     // genérico, sempre buscável
+    const n = su[1] ? parseInt(su[1], 10) : 1;
+    const w = subpunctisWord(n);
+    if (w !== "subpunctis") out.push(w);         // subbipunctis / subtripunctis
+  }
+  const pp = rest.match(/pp[tuvwxy]?(\d+)?/);    // praepunctis (pp)
   if (pp) out.push("prepunctis", "praepunctis");
   return out;
 }
