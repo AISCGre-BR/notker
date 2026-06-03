@@ -1,6 +1,6 @@
 {
   "name": "notker",
-  "version": "0.0.2-alpha",
+  "version": "0.0.3-alpha",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-only",

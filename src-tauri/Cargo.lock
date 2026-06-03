@@ -1843,7 +1843,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "notker"
-version = "0.0.2-alpha"
+version = "0.0.3-alpha"
 dependencies = [
  "serde",
  "serde_json",
