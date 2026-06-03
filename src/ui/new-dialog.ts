@@ -1,19 +1,19 @@
 // Popup "Novo projeto" / "Adicionar canto".
-// IMPORTANTE (Linux/WebKitGTK): NÃO usar <input type="radio">/checkbox/select —
-// controles de formulário nativos travam o compositor do WebKitGTK ao abrir o
-// popup (app congela, sem erro de JS). A família usa dois BOTÕES-toggle. Tudo é
-// montado via createElement + input de texto + button, espelhando os overlays que
-// funcionam (paleta F2, painel de Nomes F4).
+//
+// Linux/WebKitGTK — DOIS cuidados aprendidos na marra:
+// 1) O popup é montado num HOST PRÉ-EXISTENTE (#dialog-host) e exibido alternando
+//    seu `display` (none→flex). Essa troca força o WebKitGTK a repintar; um
+//    elemento recém-inserido em document.body NÃO é pintado até a janela ser
+//    redimensionada (mesmo truque do #overlay-host do painel de Nomes, que funciona).
+// 2) Sem <input type="radio">/checkbox/select — controles de formulário nativos
+//    (widgets GTK) podem travar o compositor. A família usa botões-toggle.
 import type { Family } from "../neume/types";
 
 export interface NewDocResult { family: Family; name?: string; office?: string }
 
-/** Popup modal-leve. Resolve com os campos ou null (cancelado). */
+/** Popup modal-leve no host pré-existente `host`. Resolve com os campos ou null. */
 export function newDocumentDialog(host: HTMLElement, opts: { title: string }): Promise<NewDocResult | null> {
   return new Promise((resolve) => {
-    const root = document.createElement("div");
-    root.className = "newdlg";
-
     const box = document.createElement("div");
     box.className = "newdlg-box";
 
@@ -68,11 +68,16 @@ export function newDocumentDialog(host: HTMLElement, opts: { title: string }): P
     actions.append(cancel, ok);
     box.appendChild(actions);
 
-    root.appendChild(box);
-    host.appendChild(root);
+    // Exibe no host pré-existente: a troca de display força o repaint do WebKitGTK.
+    host.replaceChildren(box);
+    host.style.display = "flex";
     name.focus();
 
-    const close = (r: NewDocResult | null) => { root.remove(); resolve(r); };
+    const close = (r: NewDocResult | null) => {
+      host.style.display = "none";
+      host.replaceChildren();
+      resolve(r);
+    };
     const confirm = () => {
       const nm = name.value.trim();
       const of = office.value.trim();

@@ -202,6 +202,7 @@ async function boot() {
   }
 
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
+  const dialogHost = document.querySelector<HTMLElement>("#dialog-host")!;
   const docList = createDocList(docListHost, {
     onSelect: (id) => switchToDoc(id),
     onAdd: () => void addNewDoc(),
@@ -225,7 +226,7 @@ async function boot() {
   }
   // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
   async function addNewDoc(): Promise<void> {
-    const r = await newDocumentDialog(document.body, { title: "Adicionar canto" });
+    const r = await newDocumentDialog(dialogHost, { title: "Adicionar canto" });
     if (!r) return;
     captureEditorIntoProject();
     const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
@@ -241,7 +242,7 @@ async function boot() {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
     // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
     newProjectCmd: async () => {
-      const r = await newDocumentDialog(document.body, { title: "Novo projeto" });
+      const r = await newDocumentDialog(dialogHost, { title: "Novo projeto" });
       if (!r) { setStatus("Novo: cancelado"); return; }
       project = newProject({ family: r.family, name: r.name, office: r.office });
       syncFromProject();

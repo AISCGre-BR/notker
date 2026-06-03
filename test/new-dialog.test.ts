@@ -13,7 +13,8 @@ describe("diálogo Novo", () => {
     host.querySelector<HTMLButtonElement>(".newdlg-ok")!.click();
     const r = await p;
     expect(r).toEqual({ family: "laon", name: "Rorate", office: "Introitus" });
-    expect(host.querySelector(".newdlg")).toBeNull(); // fechou
+    expect(host.querySelector(".newdlg-box")).toBeNull(); // fechou (host esvaziado)
+    expect(host.style.display).toBe("none");
   });
 
   it("não usa controles de formulário nativos (sem radio/checkbox/select)", () => {

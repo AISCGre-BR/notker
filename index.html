@@ -65,6 +65,11 @@
       <span id="family" title="Família ativa (clique para alternar)">✠ St. Gall</span>
     </div>
     <div id="overlay-host" style="position:fixed; top:0; right:0; width:420px; max-height:100vh; overflow:auto; z-index:60; display:none;"></div>
+    <!-- Host PRÉ-EXISTENTE do popup. Alternar seu display (none→flex) força o
+         WebKitGTK a repintar — sem isso o popup só aparece ao redimensionar a
+         janela (mesmo truque do #overlay-host do painel de Nomes). Transparente
+         (sem alpha) para não disparar o congelamento do compositor. -->
+    <div id="dialog-host" style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:2000;"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
