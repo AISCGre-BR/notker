@@ -11,8 +11,13 @@ import type { Family } from "../neume/types";
 
 export interface NewDocResult { family: Family; name?: string; office?: string }
 
-/** Popup modal-leve no host pré-existente `host`. Resolve com os campos ou null. */
-export function newDocumentDialog(host: HTMLElement, opts: { title: string }): Promise<NewDocResult | null> {
+/** Popup modal-leve no host pré-existente `host`. Resolve com os campos ou null.
+ *  `onRepaint` (opcional) é chamado ao exibir E ao fechar, para forçar o repaint
+ *  do WebKitGTK em sessões software/remotas (ver force-repaint.ts). */
+export function newDocumentDialog(
+  host: HTMLElement,
+  opts: { title: string; onRepaint?: () => void },
+): Promise<NewDocResult | null> {
   return new Promise((resolve) => {
     const box = document.createElement("div");
     box.className = "newdlg-box";
@@ -72,10 +77,12 @@ export function newDocumentDialog(host: HTMLElement, opts: { title: string }): P
     host.replaceChildren(box);
     host.style.display = "flex";
     name.focus();
+    opts.onRepaint?.(); // força o frame em sessões software/remotas
 
     const close = (r: NewDocResult | null) => {
       host.style.display = "none";
       host.replaceChildren();
+      opts.onRepaint?.(); // repinta para apagar o popup (senão fica "fantasma")
       resolve(r);
     };
     const confirm = () => {

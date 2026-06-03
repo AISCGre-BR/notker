@@ -13,6 +13,8 @@
     "shell:allow-stdin-write",
     "dialog:allow-open",
     "dialog:allow-save",
+    "core:window:allow-inner-size",
+    "core:window:allow-set-size",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-app-meta-recursive",

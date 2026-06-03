@@ -23,6 +23,7 @@ import type { Tree } from "web-tree-sitter";
 import { createCommands } from "./ui/commands";
 import { createToolbar } from "./ui/toolbar";
 import { newDocumentDialog } from "./ui/new-dialog";
+import { forceRepaint } from "./ui/force-repaint";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
@@ -226,7 +227,7 @@ async function boot() {
   }
   // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
   async function addNewDoc(): Promise<void> {
-    const r = await newDocumentDialog(dialogHost, { title: "Adicionar canto" });
+    const r = await newDocumentDialog(dialogHost, { title: "Adicionar canto", onRepaint: () => void forceRepaint() });
     if (!r) return;
     captureEditorIntoProject();
     const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
@@ -242,7 +243,7 @@ async function boot() {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
     // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
     newProjectCmd: async () => {
-      const r = await newDocumentDialog(dialogHost, { title: "Novo projeto" });
+      const r = await newDocumentDialog(dialogHost, { title: "Novo projeto", onRepaint: () => void forceRepaint() });
       if (!r) { setStatus("Novo: cancelado"); return; }
       project = newProject({ family: r.family, name: r.name, office: r.office });
       syncFromProject();
