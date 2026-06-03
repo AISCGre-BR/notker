@@ -263,3 +263,11 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   box-shadow: var(--shadow); line-height: 1.5;
 }
 .neume-tooltip code, .gabc-tooltip code { font-size: 0.9em; color: var(--ink-soft); }
+
+/* ── Diálogo "Novo projeto" ────────────────────────────────────────────────── */
+.newdlg { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); z-index: 2000; }
+.newdlg-box { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); padding: 18px 20px; min-width: 320px; display: flex; flex-direction: column; gap: 10px; font-family: serif; }
+.newdlg-title { font-size: 1.05rem; }
+.newdlg-name, .newdlg-office { padding: 7px 9px; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
+.newdlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.newdlg-actions button { padding: 6px 12px; cursor: pointer; }
