@@ -3,6 +3,21 @@ export type Family = "stgall" | "laon";
 
 export interface GlyphSvg { path: string; viewBox: string; advance: number; }
 
+/** Proveniência de um nome canônico (citação obrigatória — F4). */
+export interface Provenance {
+  source: string;  // "Cardine, Semiologia Gregoriana, pp.12–15"
+  via: string;     // "GregorioNabcRef v6.2.0"
+  family: Family;
+  row: string;     // nome da linha da sinopse que originou o nome
+}
+
+/** Candidato de nome canônico vindo da tabela-sinopse. */
+export interface Candidate {
+  name: string;
+  family: Family;
+  provenance: Provenance;
+}
+
 export interface NeumeEntry {
   id: string;            // `${family}:${code}`
   family: Family;
@@ -16,6 +31,8 @@ export interface NeumeEntry {
   terms: string[];       // termos de busca (lower-case, sem acento)
   meaning: string;       // de base-annotations (curado) ou ""
   svg: GlyphSvg;
+  provenance?: Provenance[]; // F4: nomes canônicos da sinopse, com citação
+  synthetic?: boolean;       // F4: entrada-sequência (cl!po) sem glifo de fonte próprio
 }
 
 export interface NeumeDb {
