@@ -10,6 +10,17 @@ pub fn run() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
+    // Linux: quando a renderização acelerada (EGL/DRI3) falha — ex.:
+    // "libEGL warning: DRI3 error: Could not get DRI3 device" — o modo de
+    // composição acelerada do WebKitGTK NÃO repinta conteúdo dinâmico: popups e
+    // overlays recém-exibidos só aparecem após redimensionar a janela, e o
+    // fullscreen pode travar o compositor. Desligamos a composição acelerada
+    // (caminho de software repinta corretamente). Override do usuário respeitado.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
