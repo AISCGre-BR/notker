@@ -272,6 +272,9 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .newdlg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2000; }
 .newdlg-box { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); box-shadow: var(--shadow); padding: 18px 20px; min-width: 320px; display: flex; flex-direction: column; gap: 10px; font-family: serif; }
 .newdlg-title { font-size: 1.05rem; }
+.newdlg-fam-row { display: flex; gap: 8px; }
+.newdlg-fam-btn { flex: 1 1 0; padding: 7px 10px; border: 1px solid var(--rule); background: transparent; color: var(--ink); cursor: pointer; font-family: serif; }
+.newdlg-fam-btn.active { border-color: var(--rubric); color: var(--rubric); background: var(--cream-deep); }
 .newdlg-name, .newdlg-office { padding: 7px 9px; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
 .newdlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .newdlg-actions button { padding: 6px 12px; cursor: pointer; }

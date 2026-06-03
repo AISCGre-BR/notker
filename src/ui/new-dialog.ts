@@ -1,42 +1,88 @@
-// ⚠️ NÃO RELIGAR sem revalidar no Linux: este modal customizado CONGELA o
-// WebKitGTK ao abrir (app trava por completo; sem erro de JS). Os testes jsdom
-// passam, mas não reproduzem o congelamento real. "Novo"/"Adicionar canto"
-// passaram a criar direto (sem modal) — nome no cabeçalho name:, família no
-// botão "Família". Mantido como base para um seletor seguro no bloco de UI/UX
-// da v0.0.5. Não é importado por main.ts.
+// Popup "Novo projeto" / "Adicionar canto".
+// IMPORTANTE (Linux/WebKitGTK): NÃO usar <input type="radio">/checkbox/select —
+// controles de formulário nativos travam o compositor do WebKitGTK ao abrir o
+// popup (app congela, sem erro de JS). A família usa dois BOTÕES-toggle. Tudo é
+// montado via createElement + input de texto + button, espelhando os overlays que
+// funcionam (paleta F2, painel de Nomes F4).
 import type { Family } from "../neume/types";
 
 export interface NewDocResult { family: Family; name?: string; office?: string }
 
-/** Diálogo modal mínimo. Resolve com os campos ou null (cancelado). */
+/** Popup modal-leve. Resolve com os campos ou null (cancelado). */
 export function newDocumentDialog(host: HTMLElement, opts: { title: string }): Promise<NewDocResult | null> {
   return new Promise((resolve) => {
     const root = document.createElement("div");
     root.className = "newdlg";
-    root.innerHTML = `
-      <div class="newdlg-box">
-        <div class="newdlg-title">${opts.title}</div>
-        <label class="newdlg-fam"><input type="radio" name="fam" value="stgall" checked> St. Gallen</label>
-        <label class="newdlg-fam"><input type="radio" name="fam" value="laon"> Laon</label>
-        <input class="newdlg-name" type="text" placeholder="name (título do canto)…">
-        <input class="newdlg-office" type="text" placeholder="office-part (opcional)…">
-        <div class="newdlg-actions">
-          <button class="newdlg-cancel">Cancelar</button>
-          <button class="newdlg-ok">Criar</button>
-        </div>
-      </div>`;
+
+    const box = document.createElement("div");
+    box.className = "newdlg-box";
+
+    const title = document.createElement("div");
+    title.className = "newdlg-title";
+    title.textContent = opts.title;
+    box.appendChild(title);
+
+    // Família: dois botões-toggle (sem radio nativo — ver comentário do topo).
+    let family: Family = "stgall";
+    const famRow = document.createElement("div");
+    famRow.className = "newdlg-fam-row";
+    const famBtns = {} as Record<Family, HTMLButtonElement>;
+    (["stgall", "laon"] as Family[]).forEach((f) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "newdlg-fam-btn" + (f === family ? " active" : "");
+      b.dataset.fam = f;
+      b.textContent = f === "stgall" ? "St. Gallen" : "Laon";
+      b.addEventListener("click", () => {
+        family = f;
+        famBtns.stgall.classList.toggle("active", family === "stgall");
+        famBtns.laon.classList.toggle("active", family === "laon");
+      });
+      famBtns[f] = b;
+      famRow.appendChild(b);
+    });
+    box.appendChild(famRow);
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "newdlg-name";
+    name.placeholder = "name (título do canto)…";
+    box.appendChild(name);
+
+    const office = document.createElement("input");
+    office.type = "text";
+    office.className = "newdlg-office";
+    office.placeholder = "office-part (opcional)…";
+    box.appendChild(office);
+
+    const actions = document.createElement("div");
+    actions.className = "newdlg-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "newdlg-cancel";
+    cancel.textContent = "Cancelar";
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "newdlg-ok";
+    ok.textContent = "Criar";
+    actions.append(cancel, ok);
+    box.appendChild(actions);
+
+    root.appendChild(box);
     host.appendChild(root);
-    // Foco imediato no campo nome — sem isso, as teclas iriam para o editor atrás.
-    queueMicrotask(() => root.querySelector<HTMLInputElement>(".newdlg-name")?.focus());
+    name.focus();
 
     const close = (r: NewDocResult | null) => { root.remove(); resolve(r); };
-    root.querySelector<HTMLButtonElement>(".newdlg-cancel")!.addEventListener("click", () => close(null));
-    root.querySelector<HTMLButtonElement>(".newdlg-ok")!.addEventListener("click", () => {
-      const family = (root.querySelector<HTMLInputElement>('input[name="fam"]:checked')!.value === "laon"
-        ? "laon" : "stgall") as Family;
-      const name = root.querySelector<HTMLInputElement>(".newdlg-name")!.value.trim();
-      const office = root.querySelector<HTMLInputElement>(".newdlg-office")!.value.trim();
-      close({ family, ...(name ? { name } : {}), ...(office ? { office } : {}) });
+    const confirm = () => {
+      const nm = name.value.trim();
+      const of = office.value.trim();
+      close({ family, ...(nm ? { name: nm } : {}), ...(of ? { office: of } : {}) });
+    };
+    cancel.addEventListener("click", () => close(null));
+    ok.addEventListener("click", confirm);
+    name.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); confirm(); }
+      else if (e.key === "Escape") { e.preventDefault(); close(null); }
     });
   });
 }

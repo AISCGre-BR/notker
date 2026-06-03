@@ -22,6 +22,7 @@ import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
 import { createCommands } from "./ui/commands";
 import { createToolbar } from "./ui/toolbar";
+import { newDocumentDialog } from "./ui/new-dialog";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
@@ -222,27 +223,30 @@ async function boot() {
     project = setActive(project, id);
     syncFromProject();
   }
-  // Adiciona um canto novo ao projeto (sem modal: o nome se edita no cabeçalho
-  // name: e a família no botão "Família" — modal customizado trava o WebKitGTK).
-  function addNewDoc(): void {
+  // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
+  async function addNewDoc(): Promise<void> {
+    const r = await newDocumentDialog(document.body, { title: "Adicionar canto" });
+    if (!r) return;
     captureEditorIntoProject();
-    const n = project.docs.length + 1;
-    project = addDoc(project, { title: `Canto ${n}`, content: `name: Canto ${n};\n%%\n(c4) ` });
+    const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
+    project = addDoc(project, { title: r.name ?? "Novo", content, family: r.family });
     project = setActive(project, project.docs[project.docs.length - 1].id);
     syncFromProject();
     view.focus();
-    setStatus(`canto adicionado: Canto ${n} — edite o cabeçalho name:`);
+    setStatus(`canto adicionado: ${r.name ?? "Novo"}`);
   }
   docList.render(project);
 
   const commands = createCommands({
-    // Novo projeto sem modal (o diálogo customizado trava o WebKitGTK no Linux).
-    // O nome se edita no cabeçalho name: do editor; a família, no botão "Família".
-    newProjectCmd: () => {
-      project = newProject({ family: "stgall", name: "Novo" });
+    // Novo projeto via popup (família por botões-toggle, sem radio nativo que
+    // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
+    newProjectCmd: async () => {
+      const r = await newDocumentDialog(document.body, { title: "Novo projeto" });
+      if (!r) { setStatus("Novo: cancelado"); return; }
+      project = newProject({ family: r.family, name: r.name, office: r.office });
       syncFromProject();
       view.focus();
-      setStatus("novo projeto — edite o cabeçalho name: e escolha St.Gall/Laon no botão 'Família'");
+      setStatus("novo projeto — família " + familyLabel(r.family));
     },
     openFile: async () => {
       try {
