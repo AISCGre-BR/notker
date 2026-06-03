@@ -8,7 +8,6 @@ import { SidecarTransport } from "./lsp/transport-sidecar";
 import { lspDiagnosticsToCM, formatDocument } from "./lsp/cm-lsp";
 import { makeTreeSitterHighlighter } from "./editor/highlight-tree-sitter";
 import { forceLinting } from "@codemirror/lint";
-import { openGabc, saveAsGabc } from "./files/file-io";
 import type { Diagnostic } from "@codemirror/lint";
 import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
@@ -29,6 +28,13 @@ import { installSync, syncFromCursor } from "./preview/sync";
 import { createOverlayPanel } from "./overlay-ui/panel";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
+import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
+import {
+  type NotkerProject, newProject, getActiveDoc, effectiveFamily,
+  withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
+} from "./project/model";
+import { newDocumentDialog } from "./ui/new-dialog";
+import { createDocList } from "./project/doc-list";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -79,7 +85,8 @@ async function boot() {
   const neumeCompartment = new Compartment();
   extraExtensions.push(neumeCompartment.of([]));
 
-  const view = createEditor(app, "name: Novo;\n%%\n(c4) ", extraExtensions);
+  let project: NotkerProject = newProject({ family: "stgall", name: "Novo" });
+  const view = createEditor(app, getActiveDoc(project).content, extraExtensions);
 
   const client = new LspClient(new SidecarTransport());
   client.onNotification("textDocument/publishDiagnostics", (p: { uri: string; diagnostics: LspDiagnosticParam[] }) => {
@@ -108,23 +115,22 @@ async function boot() {
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
-  let activeFamily: Family = "stgall";
+  const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
   function updateFamilyIndicator(): void {
     const el = document.querySelector("#family");
     if (el) {
-      el.textContent = "✠ " + familyLabel(activeFamily);
+      el.textContent = "✠ " + familyLabel(currentFamily());
       (el as HTMLElement).title = "Família ativa (clique ou Ctrl/Cmd+Shift+G para alternar)";
     }
   }
   function toggleFamily(): void {
-    activeFamily = activeFamily === "stgall" ? "laon" : "stgall";
+    const f: Family = currentFamily() === "stgall" ? "laon" : "stgall";
+    project = setDocFamily(project, project.activeId, f);
     updateFamilyIndicator();
     reindex();
-    // Feedback explícito: o efeito (prioriza esta família na busca/hover/inserção)
-    // era invisível demais — agora confirma no rodapé. (Bug 3.)
-    setStatus("família ativa: " + familyLabel(activeFamily) + " — busca/hover priorizam esta notação");
+    setStatus("família do documento: " + familyLabel(f) + " — busca/hover priorizam esta notação");
   }
 
   // Carrega db de neumas e reconfigura o compartment F2.
@@ -136,8 +142,8 @@ async function boot() {
     catch (e) { console.warn("[notker] overlay de nomes indisponível (usando vazio):", e); }
     const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
     effectiveRef = effective;
-    let searchInst = new NeumeSearch(effective(), activeFamily);
-    reindex = () => { searchInst = new NeumeSearch(effective(), activeFamily); };
+    let searchInst = new NeumeSearch(effective(), currentFamily());
+    reindex = () => { searchInst = new NeumeSearch(effective(), currentFamily()); };
     // Agrupamento por nabc: múltiplas entradas (famílias diferentes) podem compartilhar o mesmo código.
     const byNabc = new Map<string, import("./neume/types").NeumeEntry[]>();
     for (const e of db.all()) {
@@ -150,7 +156,7 @@ async function boot() {
       search: () => searchInst,
       lookupByNabc: (nabc: string): EffectiveEntry[] =>
         (byNabc.get(nabc) ?? []).map((e) => mergeEntry(e, overlay.entries[e.id])),
-      activeFamily: () => activeFamily,
+      activeFamily: () => currentFamily(),
       onAddName: async (id: string) => {
         const name = window.prompt("Novo nome para este neuma:");
         if (!name) return;
@@ -195,28 +201,80 @@ async function boot() {
     console.error("[notker] preview ao vivo indisponível:", err);
   }
 
+  const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
+  const docList = createDocList(docListHost, {
+    onSelect: (id) => switchToDoc(id),
+    onAdd: () => void addNewDoc(),
+    onRemove: (id) => { project = removeDoc(project, id); syncFromProject(); },
+  });
+
+  /** Reflete o doc ativo do projeto no editor + indicadores. */
+  function syncFromProject(): void {
+    replaceDoc(getActiveDoc(project).content);
+    docList.render(project);
+    updateFamilyIndicator();
+    reindex();
+  }
+  function captureEditorIntoProject(): void {
+    project = withActiveContent(project, view.state.doc.toString());
+  }
+  function switchToDoc(id: string): void {
+    captureEditorIntoProject();
+    project = setActive(project, id);
+    syncFromProject();
+  }
+  async function addNewDoc(): Promise<void> {
+    const r = await newDocumentDialog(document.body, { title: "Adicionar canto" });
+    if (!r) return;
+    captureEditorIntoProject();
+    const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
+    project = addDoc(project, { title: r.name ?? "Novo", content, family: r.family });
+    project = setActive(project, project.docs[project.docs.length - 1].id);
+    syncFromProject();
+  }
+  docList.render(project);
+
   const commands = createCommands({
+    newProjectCmd: async () => {
+      const r = await newDocumentDialog(document.body, { title: "Novo projeto" });
+      if (!r) { setStatus("Novo: cancelado"); return; }
+      project = newProject({ family: r.family, name: r.name, office: r.office });
+      syncFromProject();
+      setStatus("novo projeto — família " + familyLabel(r.family));
+    },
     openFile: async () => {
       try {
-        setStatus("Ctrl+O: abrindo diálogo…");
-        const r = await openGabc();
-        if (!r) { setStatus("Ctrl+O: cancelado"); return; }
-        replaceDoc(r.content); // carrega o conteúdo de fato (antes fazia location.reload e perdia tudo)
-        setStatus("aberto: " + r.path);
-      } catch (err) {
-        setStatus("Ctrl+O ERRO: " + String(err));
-        console.error("[notker] erro ao abrir:", err);
-      }
+        setStatus("abrindo…");
+        const p = await openProject();
+        if (!p) { setStatus("abrir: cancelado"); return; }
+        project = p;
+        syncFromProject();
+        setStatus("aberto: " + (p.path ?? "projeto (.gabc importado)"));
+      } catch (err) { setStatus("abrir ERRO: " + String(err)); console.error(err); }
     },
     saveFile: async () => {
       try {
-        setStatus("Ctrl+S: salvando…");
-        const p = await saveAsGabc(view.state.doc.toString());
-        setStatus(p ? "salvo: " + p : "Ctrl+S: cancelado");
-      } catch (err) {
-        setStatus("Ctrl+S ERRO: " + String(err));
-        console.error("[notker] erro ao salvar:", err);
-      }
+        captureEditorIntoProject();
+        setStatus("salvando projeto…");
+        const path = await saveProject(project);
+        if (!path) { setStatus("salvar: cancelado"); return; }
+        project = { ...project, path };
+        setStatus("salvo: " + path);
+      } catch (err) { setStatus("salvar ERRO: " + String(err)); console.error(err); }
+    },
+    exportGabc: async () => {
+      try {
+        captureEditorIntoProject();
+        const out = await exportCurrentGabc(project);
+        setStatus(out ? "exportado .gabc: " + out : "exportar: cancelado");
+      } catch (err) { setStatus("exportar ERRO: " + String(err)); console.error(err); }
+    },
+    exportAllGabcCmd: async () => {
+      try {
+        captureEditorIntoProject();
+        const n = await exportAllGabc(project);
+        setStatus(n ? `exportados ${n} .gabc` : "exportar todos: cancelado");
+      } catch (err) { setStatus("exportar todos ERRO: " + String(err)); console.error(err); }
     },
     format: async () => {
       try {
@@ -314,8 +372,11 @@ async function boot() {
   });
 
   createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { id: "openFile", label: "Abrir", title: "Ctrl+O" },
-    { id: "saveFile", label: "Salvar", title: "Ctrl+S" },
+    { id: "newProjectCmd", label: "Novo", title: "novo projeto (.notker)" },
+    { id: "openFile", label: "Abrir", title: "Ctrl+O — .notker ou .gabc" },
+    { id: "saveFile", label: "Salvar", title: "Ctrl+S — projeto .notker" },
+    { id: "exportGabc", label: "Exportar", title: "exportar o canto atual como .gabc padrão" },
+    { id: "exportAllGabcCmd", label: "Exportar todos", title: "exportar todos os cantos como .gabc" },
     { id: "format", label: "Formatar", title: "Ctrl+Shift+F" },
     { id: "openSearch", label: "Buscar", title: "F2" },
     { id: "openOverlayPanel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },

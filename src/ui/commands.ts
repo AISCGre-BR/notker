@@ -1,6 +1,9 @@
 export interface CommandHandlers {
+  newProjectCmd?: () => void | Promise<void>;
   openFile: () => void | Promise<void>;
   saveFile: () => void | Promise<void>;
+  exportGabc?: () => void | Promise<void>;
+  exportAllGabcCmd?: () => void | Promise<void>;
   format: () => void | Promise<void>;
   exportOverlay: () => void | Promise<void>;
   importOverlay: () => void | Promise<void>;
