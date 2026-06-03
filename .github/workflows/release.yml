@@ -9,9 +9,44 @@ permissions:
   contents: write
 
 jobs:
+  # Cria a Release (vazia) uma única vez, antes dos builds. Evita corrida de
+  # criação entre os jobs paralelos do matrix e centraliza o corpo/metadados.
+  create-release:
+    name: create-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Criar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Notker ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          body: |
+            ## Downloads
+
+            - macOS Apple Silicon: `.dmg` (arm64) · macOS Intel: `.dmg` (x64) · Linux: `.AppImage` · Windows: `.exe`
+            - _Cada asset é publicado assim que a plataforma termina; pode levar alguns minutos até todos aparecerem._
+
+            **Builds não assinadas.**
+
+            - **macOS** — o Gatekeeper marca apps baixados como "danificados" (sobretudo no Apple Silicon). Após arrastar o Notker para `/Applications`, rode uma vez no Terminal:
+              ```
+              xattr -dr com.apple.quarantine /Applications/Notker.app
+              ```
+              Depois abra normalmente. (Ctrl+clique → Abrir só funciona em alguns casos; o comando acima resolve sempre.)
+            - **Windows** — SmartScreen → "Mais informações" → "Executar assim mesmo".
+
   build:
     name: build ${{ matrix.label }}
+    needs: create-release
+    # Roda após create-release em tags; em workflow_dispatch (sem tag)
+    # create-release é "skipped" e mesmo assim seguimos com os builds.
+    if: ${{ always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
+    # Cap contra runner travado (ex.: macos-13 Intel rodou 3h26m antes de falhar).
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -59,42 +94,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  release:
-    name: release
-    needs: build
-    # !cancelled() em vez de success(): publica os assets que existirem mesmo se
-    # alguma plataforma falhar (ex.: Linux). Uma plataforma flaky não bloqueia o
-    # release. fail_on_unmatched_files: false tolera globs ausentes.
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Publicar Release
+      # Publica o asset DESTA plataforma assim que ela termina — independe das
+      # outras. Uma plataforma lenta/travada (Intel) nunca segura o arm64.
+      - name: Anexar asset ao Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Notker ${{ github.ref_name }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          files: ${{ matrix.glob }}
           fail_on_unmatched_files: false
-          files: |
-            artifacts/notker-macos-arm/*.dmg
-            artifacts/notker-macos-intel/*.dmg
-            artifacts/notker-linux/*.AppImage
-            artifacts/notker-windows/*-setup.exe
-          body: |
-            ## Downloads
-
-            - macOS Apple Silicon: `.dmg` (arm64) · macOS Intel: `.dmg` (x64) · Linux: `.AppImage` · Windows: `.exe`
-
-            **Builds não assinadas.**
-
-            - **macOS** — o Gatekeeper marca apps baixados como "danificados" (sobretudo no Apple Silicon). Após arrastar o Notker para `/Applications`, rode uma vez no Terminal:
-              ```
-              xattr -dr com.apple.quarantine /Applications/Notker.app
-              ```
-              Depois abra normalmente. (Ctrl+clique → Abrir só funciona em alguns casos; o comando acima resolve sempre.)
-            - **Windows** — SmartScreen → "Mais informações" → "Executar assim mesmo".
