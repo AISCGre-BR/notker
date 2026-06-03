@@ -26,16 +26,18 @@ jobs:
           body: |
             ## Downloads
 
-            - macOS Apple Silicon: `.dmg` (arm64) · macOS Intel: `.dmg` (x64) · Linux: `.AppImage` · Windows: `.exe`
-            - _Cada asset é publicado assim que a plataforma termina; pode levar alguns minutos até todos aparecerem._
+            - **Linux:** `.rpm` (Fedora/openSUSE) · `.deb` (Debian/Ubuntu) · `.AppImage` (portátil)
+            - **macOS:** Apple Silicon `.dmg` (arm64) · Intel `.dmg` (x64) — **Windows:** `.exe`
+            - _Cada asset é publicado assim que a plataforma termina._
 
             **Builds não assinadas.**
 
-            - **macOS** — o Gatekeeper marca apps baixados como "danificados" (sobretudo no Apple Silicon). Após arrastar o Notker para `/Applications`, rode uma vez no Terminal:
+            - **Linux** — em distribuições recentes, prefira o `.rpm`/`.deb` (usam o WebKit do sistema). O `.AppImage` pode abrir em branco em alguns sistemas.
+            - **macOS** — após arrastar o Notker para `/Applications`, rode uma vez no Terminal:
               ```
               xattr -dr com.apple.quarantine /Applications/Notker.app
               ```
-              Depois abra normalmente. (Ctrl+clique → Abrir só funciona em alguns casos; o comando acima resolve sempre.)
+              Depois abra normalmente.
             - **Windows** — SmartScreen → "Mais informações" → "Executar assim mesmo".
 
   build:
@@ -53,7 +55,13 @@ jobs:
         include:
           - { os: macos-14, label: macos-arm, bundles: dmg, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
           - { os: macos-13, label: macos-intel, bundles: dmg, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
-          - { os: ubuntu-24.04, label: linux, bundles: appimage, glob: "src-tauri/target/release/bundle/appimage/*.AppImage" }
+          - os: ubuntu-24.04
+            label: linux
+            bundles: appimage,deb,rpm
+            glob: |
+              src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/deb/*.deb
+              src-tauri/target/release/bundle/rpm/*.rpm
           - { os: windows-latest, label: windows, bundles: nsis, glob: "src-tauri/target/release/bundle/nsis/*-setup.exe" }
     steps:
       - uses: actions/checkout@v4
