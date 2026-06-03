@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createOverlayPanel } from "../src/overlay-ui/panel";
-import type { EffectiveEntry, Provenance } from "../src/neume/types";
+import type { EffectiveEntry, Provenance, Overlay } from "../src/neume/types";
 
 function eff(id: string, name: string, names: string[], extra?: Partial<EffectiveEntry>): EffectiveEntry {
   return {
@@ -113,10 +113,10 @@ describe("painel de overlay", () => {
   it("remover uma glosa pelo × tira do rascunho ao salvar", () => {
     const host = document.createElement("div");
     const onSave = vi.fn();
-    const initial = {
+    const initial: Overlay = {
       schema: 1, kind: "notker-neume-overlay",
       entries: { "stgall:cl": { names: ["clive longo"] } },
-    } as const;
+    };
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clive longo", "clivis"])],
       onSave,
