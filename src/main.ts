@@ -33,7 +33,6 @@ import {
   type NotkerProject, newProject, getActiveDoc, effectiveFamily,
   withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
 } from "./project/model";
-import { newDocumentDialog } from "./ui/new-dialog";
 import { createDocList } from "./project/doc-list";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
@@ -223,24 +222,27 @@ async function boot() {
     project = setActive(project, id);
     syncFromProject();
   }
-  async function addNewDoc(): Promise<void> {
-    const r = await newDocumentDialog(document.body, { title: "Adicionar canto" });
-    if (!r) return;
+  // Adiciona um canto novo ao projeto (sem modal: o nome se edita no cabeçalho
+  // name: e a família no botão "Família" — modal customizado trava o WebKitGTK).
+  function addNewDoc(): void {
     captureEditorIntoProject();
-    const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
-    project = addDoc(project, { title: r.name ?? "Novo", content, family: r.family });
+    const n = project.docs.length + 1;
+    project = addDoc(project, { title: `Canto ${n}`, content: `name: Canto ${n};\n%%\n(c4) ` });
     project = setActive(project, project.docs[project.docs.length - 1].id);
     syncFromProject();
+    view.focus();
+    setStatus(`canto adicionado: Canto ${n} — edite o cabeçalho name:`);
   }
   docList.render(project);
 
   const commands = createCommands({
-    newProjectCmd: async () => {
-      const r = await newDocumentDialog(document.body, { title: "Novo projeto" });
-      if (!r) { setStatus("Novo: cancelado"); return; }
-      project = newProject({ family: r.family, name: r.name, office: r.office });
+    // Novo projeto sem modal (o diálogo customizado trava o WebKitGTK no Linux).
+    // O nome se edita no cabeçalho name: do editor; a família, no botão "Família".
+    newProjectCmd: () => {
+      project = newProject({ family: "stgall", name: "Novo" });
       syncFromProject();
-      setStatus("novo projeto — família " + familyLabel(r.family));
+      view.focus();
+      setStatus("novo projeto — edite o cabeçalho name: e escolha St.Gall/Laon no botão 'Família'");
     },
     openFile: async () => {
       try {

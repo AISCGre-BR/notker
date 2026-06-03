@@ -1,3 +1,9 @@
+// ⚠️ NÃO RELIGAR sem revalidar no Linux: este modal customizado CONGELA o
+// WebKitGTK ao abrir (app trava por completo; sem erro de JS). Os testes jsdom
+// passam, mas não reproduzem o congelamento real. "Novo"/"Adicionar canto"
+// passaram a criar direto (sem modal) — nome no cabeçalho name:, família no
+// botão "Família". Mantido como base para um seletor seguro no bloco de UI/UX
+// da v0.0.5. Não é importado por main.ts.
 import type { Family } from "../neume/types";
 
 export interface NewDocResult { family: Family; name?: string; office?: string }
