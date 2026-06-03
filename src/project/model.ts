@@ -20,7 +20,9 @@ const genId = (): string =>
   (globalThis.crypto?.randomUUID?.() ?? "d" + Math.random().toString(36).slice(2));
 
 function slug(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return s.toLowerCase()
+    .replace(/æ/g, "ae").replace(/œ/g, "oe")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "canto";
 }
 
@@ -101,7 +103,7 @@ export function toBundle(p: NotkerProject): { project_json: string; files: Recor
   return { project_json: JSON.stringify(meta, null, 2), files };
 }
 
-export function fromBundle(projectJson: string, files: Record<string, string>, path: string): NotkerProject {
+export function fromBundle(projectJson: string, files: Record<string, string>, path: string | undefined): NotkerProject {
   const meta = JSON.parse(projectJson) as Partial<ProjectJson>;
   if (meta.kind !== "notker-project") throw new Error("não é um projeto Notker");
   const family: Family = meta.family === "laon" ? "laon" : "stgall";

@@ -45,12 +45,27 @@ describe("modelo de projeto", () => {
     p = removeDoc(p, firstId);
     expect(p.docs).toHaveLength(1);
     expect(p.activeId).toBe(bId); // remover o não-ativo mantém ativo
+
+    // remover o ATIVO reatribui o activeId ao primeiro restante
+    let q = newProject({ family: "stgall", name: "X" });
+    const xId = q.activeId;
+    q = addDoc(q, { title: "Y", content: "name: Y;\n%%\n(c4) y" });
+    q = removeDoc(q, xId); // remove o ativo (X)
+    expect(q.docs).toHaveLength(1);
+    expect(q.activeId).toBe(q.docs[0].id);
+    expect(q.docs[0].title).toBe("Y");
   });
 
   it("withActiveContent atualiza o conteúdo do doc ativo", () => {
     let p = newProject({ family: "stgall" });
     p = withActiveContent(p, "name: Novo;\n%%\n(c4) c d e");
     expect(getActiveDoc(p).content).toContain("c d e");
+  });
+
+  it("toBundle transliterada ligaduras latinas no nome do arquivo", () => {
+    const p = newProject({ family: "stgall", name: "Rorate Cæli" });
+    const meta = JSON.parse(toBundle(p).project_json);
+    expect(meta.documents[0].file).toContain("rorate-caeli");
   });
 
   it("toBundle/fromBundle faz roundtrip; project.json não carrega conteúdo", () => {
