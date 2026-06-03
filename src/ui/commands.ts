@@ -10,6 +10,13 @@ export interface CommandHandlers {
   togglePreview: () => void | Promise<void>;
   toggleSplit: () => void | Promise<void>;
   toggleLegend: () => void | Promise<void>;
+  // F4: mover o neuma sob o cursor (também há atalhos Alt+setas). Opcionais para
+  // não obrigar quem só testa o registro de comandos.
+  moveUp?: () => void | Promise<void>;
+  moveDown?: () => void | Promise<void>;
+  moveLeft?: () => void | Promise<void>;
+  moveRight?: () => void | Promise<void>;
+  moveReset?: () => void | Promise<void>;
 }
 export type CommandId = keyof CommandHandlers;
 

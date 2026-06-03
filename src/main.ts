@@ -17,6 +17,7 @@ import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "
 import { mergeEntry, addName, mergeOverlays } from "./neume/overlay";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
+import { nabcMoveKeymap, runMove } from "./neume/nabc-move";
 import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
@@ -69,6 +70,9 @@ async function boot() {
   extraExtensions.push(
     externalLinter(() => diagnostics),
     EditorView.updateListener.of((u) => { if (u.docChanged) onDocChange(); }),
+    // F4: Alt+setas movem o neuma sob o cursor (altura/horizontal). O thunk lê o
+    // getTree atual (reatribuído quando o highlighter WASM carrega).
+    nabcMoveKeymap(() => getTree()),
   );
 
   // Compartment para injetar extensões F2 após o carregamento assíncrono do db.
@@ -264,6 +268,8 @@ async function boot() {
           reindex();
           closePanel();
         },
+        onExport: () => { void commands.run("exportOverlay"); },
+        onImport: () => { void commands.run("importOverlay"); },
         onClose: closePanel,
       });
       op.open();
@@ -275,6 +281,12 @@ async function boot() {
     toggleLegend: () => {
       view.dispatch({ effects: toggleLegend.of(!view.state.field(legendVisible)) });
     },
+    // F4: mover o neuma sob o cursor (espelham os atalhos Alt+setas).
+    moveUp: () => { runMove(view, () => getTree(), "up"); },
+    moveDown: () => { runMove(view, () => getTree(), "down"); },
+    moveLeft: () => { runMove(view, () => getTree(), "left"); },
+    moveRight: () => { runMove(view, () => getTree(), "right"); },
+    moveReset: () => { runMove(view, () => getTree(), "reset"); },
   });
 
   createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
@@ -287,6 +299,11 @@ async function boot() {
     { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
     { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
     { id: "toggleSplit", label: "Dividir", title: "alternar lado-a-lado / empilhado" },
+    { id: "moveLeft", label: "◀", title: "Alt+← — empurrar o neuma à esquerda" },
+    { id: "moveDown", label: "▼", title: "Alt+↓ — descer a altura do neuma" },
+    { id: "moveUp", label: "▲", title: "Alt+↑ — subir a altura do neuma" },
+    { id: "moveRight", label: "▶", title: "Alt+→ — empurrar o neuma à direita" },
+    { id: "moveReset", label: "⟳", title: "Alt+0 — resetar posição do neuma" },
   ]);
 
   window.addEventListener("keydown", (e) => {
