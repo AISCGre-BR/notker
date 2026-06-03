@@ -76,7 +76,7 @@ describe("painel de overlay", () => {
     expect(host.querySelector(".overlay-synthetic-badge")!.textContent).toBe("seq");
   });
 
-  it("clicar em .overlay-export chama onExport", () => {
+  it("Exportar passa o RASCUNHO atual (inclui nomes ainda não salvos)", () => {
     const host = document.createElement("div");
     const onExport = vi.fn();
     const panel = createOverlayPanel(host, {
@@ -85,10 +85,13 @@ describe("painel de overlay", () => {
       onExport,
     });
     panel.open();
+    panel.addName("stgall:cl", "clive curto"); // adiciona sem Salvar
     const btn = host.querySelector<HTMLButtonElement>(".overlay-export");
     expect(btn).not.toBeNull();
     btn!.click();
     expect(onExport).toHaveBeenCalledTimes(1);
+    const exported = onExport.mock.calls[0][0];
+    expect(exported.entries["stgall:cl"].names).toContain("clive curto");
   });
 
   it("adicionar nome pela UI (✚ → input → Adicionar) cria uma glosa", () => {

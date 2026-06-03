@@ -230,8 +230,9 @@ async function boot() {
     },
     exportOverlay: async () => {
       try {
+        const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
         await exportOverlay(overlay);
-        setStatus("overlay exportado");
+        setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
       } catch (err) {
         setStatus("Ctrl+Alt+E ERRO: " + String(err));
         console.error("[notker] erro ao exportar overlay:", err);
@@ -279,7 +280,16 @@ async function boot() {
           reindex();
           setStatus("nomes salvos");
         },
-        onExport: () => { void commands.run("exportOverlay"); },
+        onExport: async (draft) => {
+          // Exporta o que está NA TELA: commita o rascunho (persiste) e exporta-o.
+          // Evita "exportei e veio vazio" por não ter clicado Salvar antes.
+          overlay = draft;
+          await saveUserOverlay(overlay);
+          reindex();
+          const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
+          await exportOverlay(overlay);
+          setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
+        },
         onImport: async () => {
           await commands.run("importOverlay");
           op.refresh(); // recarrega a lista com os nomes importados (evita Salvar apagá-los)

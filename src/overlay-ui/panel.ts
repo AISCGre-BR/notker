@@ -20,7 +20,9 @@ export interface OverlayPanelOpts {
   /** Overlay atual do usuário, para editar/remover (rascunho parte dele). */
   initial?: () => Overlay;
   onClose?: () => void;
-  onExport?: () => void;
+  /** Exporta o RASCUNHO atual (o que está na tela), não o overlay salvo — assim
+   *  "Exportar" reflete o que o usuário vê, mesmo sem ter clicado Salvar antes. */
+  onExport?: (draft: Overlay) => void;
   onImport?: () => void;
 }
 export interface OverlayPanel {
@@ -213,7 +215,7 @@ export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): O
       }
       if (opts.onExport) {
         const b = el("button", "overlay-export", "Exportar");
-        b.addEventListener("click", () => opts.onExport!());
+        b.addEventListener("click", () => opts.onExport!(draft));
         actions.appendChild(b);
       }
       root.appendChild(actions);
