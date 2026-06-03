@@ -128,6 +128,24 @@ describe("painel de overlay", () => {
     expect(ov.entries["stgall:cl"]?.names ?? []).not.toContain("clive longo");
   });
 
+  it("refresh re-lê o overlay (após importar) e mostra as novas glosas", () => {
+    const host = document.createElement("div");
+    let ov: { schema: 1; kind: "notker-neume-overlay"; entries: Record<string, { names?: string[] }> } =
+      { schema: 1, kind: "notker-neume-overlay", entries: {} };
+    const panel = createOverlayPanel(host, {
+      entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
+      onSave: vi.fn(),
+      initial: () => structuredClone(ov),
+    });
+    panel.open();
+    expect(host.querySelector(".overlay-gloss")).toBeNull();
+    // simula um import que alterou o overlay em memória
+    ov = { schema: 1, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["importado"] } } };
+    panel.refresh();
+    expect(host.querySelector(".overlay-gloss")).not.toBeNull();
+    expect(host.textContent).toContain("importado");
+  });
+
   it("ocultar (◉) marca a linha como oculta", () => {
     const host = document.createElement("div");
     const panel = createOverlayPanel(host, {

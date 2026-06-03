@@ -241,12 +241,17 @@ async function boot() {
       try {
         const imported = await importOverlay();
         if (!imported) { setStatus("importar: cancelado"); return; }
+        const n = Object.keys(imported.entries).length;
+        if (n === 0) {
+          setStatus("importar: arquivo de nomes vazio (0 entradas) — nada a importar");
+          return;
+        }
         overlay = mergeOverlays(overlay, imported);
         await saveUserOverlay(overlay);
         reindex();
-        setStatus("overlay importado");
+        setStatus(`nomes importados: ${n} entrada(s)`);
       } catch (err) {
-        setStatus("Ctrl+Alt+I ERRO: " + String(err));
+        setStatus("importar ERRO (arquivo inválido?): " + String(err));
         console.error("[notker] erro ao importar overlay:", err);
       }
     },
@@ -275,7 +280,10 @@ async function boot() {
           setStatus("nomes salvos");
         },
         onExport: () => { void commands.run("exportOverlay"); },
-        onImport: () => { void commands.run("importOverlay"); },
+        onImport: async () => {
+          await commands.run("importOverlay");
+          op.refresh(); // recarrega a lista com os nomes importados (evita Salvar apagá-los)
+        },
         onClose: closePanel,
       });
       op.open();

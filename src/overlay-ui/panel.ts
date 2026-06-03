@@ -25,6 +25,9 @@ export interface OverlayPanelOpts {
 }
 export interface OverlayPanel {
   open(): void; close(): void;
+  /** Re-lê o overlay atual (via `initial`) para o rascunho e re-renderiza.
+   *  Usado após importar, para a lista refletir os nomes recém-carregados. */
+  refresh(): void;
   addName(id: string, name: string): void;
   setHidden(id: string, hidden: boolean): void;
   promote(id: string, name: string): void;
@@ -251,6 +254,11 @@ export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): O
   return {
     open: () => render(),
     close: () => { host.innerHTML = ""; },
+    refresh: () => {
+      // Após importar, o overlay mudou em disco/memória: re-clona o rascunho.
+      if (opts.initial) draft = cloneOverlay(opts.initial());
+      render();
+    },
     addName: (id, name) => addNameTo(id, name),
     setHidden: (id, hidden) => setHiddenTo(id, hidden),
     promote: (id, name) => promoteName(id, name),
