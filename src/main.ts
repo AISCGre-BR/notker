@@ -265,11 +265,14 @@ async function boot() {
       host.style.display = "block";
       const op = createOverlayPanel(host, {
         entries: effectiveRef,
+        initial: () => overlay,
         onSave: async (o) => {
-          overlay = mergeOverlays(overlay, o);
+          // O rascunho já parte do overlay atual (initial) e foi editado por
+          // completo — substitui (permite remover/renomear), não só unir.
+          overlay = o;
           await saveUserOverlay(overlay);
           reindex();
-          closePanel();
+          setStatus("nomes salvos");
         },
         onExport: () => { void commands.run("exportOverlay"); },
         onImport: () => { void commands.run("importOverlay"); },
@@ -297,7 +300,7 @@ async function boot() {
     { id: "saveFile", label: "Salvar", title: "Ctrl+S" },
     { id: "format", label: "Formatar", title: "Ctrl+Shift+F" },
     { id: "openSearch", label: "Buscar", title: "F2" },
-    { id: "openOverlayPanel", label: "Overlay", title: "Ctrl+Alt+E/I" },
+    { id: "openOverlayPanel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
     { id: "toggleLegend", label: "Régua", title: "Ctrl+Alt+L — letra↔altura na pauta" },
     { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
     { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
@@ -329,6 +332,10 @@ async function boot() {
     if (e.ctrlKey && e.altKey && (e.key === "i" || e.key === "I")) {
       e.preventDefault();
       void commands.run("importOverlay");
+    }
+    if (e.ctrlKey && e.altKey && (e.key === "n" || e.key === "N")) {
+      e.preventDefault();
+      void commands.run("openOverlayPanel");
     }
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "g" || e.key === "G")) {
       e.preventDefault();

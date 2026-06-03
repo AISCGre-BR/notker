@@ -48,3 +48,22 @@ export function addName(o: Overlay, id: string, name: string): Overlay {
   const names = Array.from(new Set([...(prev.names ?? []), name]));
   return { ...o, entries: { ...o.entries, [id]: { ...prev, names } } };
 }
+
+/** Remove um nome de um id (mutação imutável). Esvazia `names` quando fica vazio. */
+export function removeName(o: Overlay, id: string, name: string): Overlay {
+  const prev = o.entries[id];
+  if (!prev?.names) return o;
+  const names = prev.names.filter((n) => n !== name);
+  return { ...o, entries: { ...o.entries, [id]: { ...prev, names: names.length ? names : undefined } } };
+}
+
+/** Cópia profunda de um overlay (para editar um rascunho sem mutar o original). */
+export function cloneOverlay(o: Overlay): Overlay {
+  return {
+    schema: 1,
+    kind: "notker-neume-overlay",
+    entries: Object.fromEntries(
+      Object.entries(o.entries).map(([k, v]) => [k, { ...v, names: v.names ? [...v.names] : undefined }]),
+    ),
+  };
+}

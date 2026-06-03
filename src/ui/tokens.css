@@ -101,34 +101,149 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 
-/* ── Painel de overlay (gaveta lateral) ────────────────────────────────────── */
+/* ── Painel de nomes (scriptorium lateral) ─────────────────────────────────── */
 .overlay-panel {
   background: var(--surface); border-left: 1px solid var(--rule);
   font-family: var(--font); box-shadow: var(--shadow); min-height: 100%;
+  display: flex; flex-direction: column;
+  /* textura sutil de pergaminho: pontilhado de tinta diluída */
+  background-image: radial-gradient(rgba(122, 106, 88, 0.05) 1px, transparent 1px);
+  background-size: 14px 14px;
 }
 .overlay-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px; border-bottom: 1px solid var(--rule); background: var(--cream-deep);
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 14px 16px 12px; border-bottom: 1px solid var(--rule);
+  background: linear-gradient(var(--cream), var(--cream-deep));
 }
+.overlay-titlewrap { display: flex; flex-direction: column; gap: 2px; }
 .overlay-title {
-  font-family: var(--font-display); font-size: 19px; font-weight: 600; color: var(--ink);
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  color: var(--ink); line-height: 1; letter-spacing: 0.01em;
+}
+.overlay-title::first-letter { color: var(--rubric); }
+.overlay-sub {
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-muted);
 }
 .overlay-close {
   font: 22px/1 var(--font); color: var(--ink-muted); background: transparent;
-  border: none; cursor: pointer; padding: 0 6px; transition: color 160ms var(--ease);
+  border: none; cursor: pointer; padding: 0 4px; transition: color 160ms var(--ease);
 }
 .overlay-close:hover { color: var(--rubric); }
+
+.overlay-search {
+  margin: 0; width: 100%; font: 14px/1.4 var(--font); color: var(--ink);
+  background: var(--surface); border: none; border-bottom: 1px solid var(--rule);
+  padding: 10px 16px; outline: none;
+}
+.overlay-search:focus { border-bottom-color: var(--rubric); background: var(--cream); }
+.overlay-search::placeholder { color: var(--ink-muted); font-style: italic; }
+
+.overlay-actions {
+  display: flex; gap: 0; border-bottom: 1px solid var(--rule); background: var(--cream-deep);
+}
+.overlay-import, .overlay-export {
+  flex: 1 1 0; font: 500 11px/1 var(--font); text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--ink-soft); background: transparent;
+  border: none; padding: 8px 10px; cursor: pointer;
+  transition: color 160ms var(--ease), background 160ms var(--ease);
+}
+.overlay-import { border-right: 1px solid var(--rule); }
+.overlay-import:hover, .overlay-export:hover { color: var(--rubric); background: var(--cream); }
+
+.overlay-list { flex: 1 1 auto; overflow-y: auto; }
+
 .overlay-row {
-  display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+  display: flex; align-items: flex-start; gap: 12px; padding: 9px 16px;
   border-bottom: 1px solid var(--rule-soft);
+  transition: background 140ms var(--ease);
 }
 .overlay-row:hover { background: var(--cream); }
+.overlay-row-hidden { opacity: 0.45; }
+.overlay-row-hidden .overlay-name { text-decoration: line-through; }
+
+.overlay-fig {
+  flex: 0 0 auto; width: 34px; height: 34px; display: flex; align-items: center;
+  justify-content: center; background: var(--surface); border: 1px solid var(--rule-soft);
+}
+.overlay-fig svg { color: var(--ink); }
+
+.overlay-row-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.overlay-nameline { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.overlay-name {
+  font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--ink);
+  line-height: 1.15;
+}
+.overlay-prov {
+  font-family: var(--font); font-size: 11px; color: var(--rubric); cursor: help;
+  margin-left: 2px; vertical-align: super; font-weight: 400;
+}
+.overlay-synthetic-badge {
+  font: 600 8.5px/1 var(--font); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-muted); border: 1px solid var(--rule); padding: 2px 4px;
+  align-self: center;
+}
+
+.overlay-glosses { display: flex; flex-wrap: wrap; gap: 5px; }
+.overlay-gloss {
+  display: inline-flex; align-items: center; gap: 3px;
+  font: 500 12px/1.3 var(--font); color: var(--rubric);
+  background: rgba(160, 37, 49, 0.06); border: 1px solid rgba(160, 37, 49, 0.28);
+  padding: 2px 4px 2px 7px;
+}
+.overlay-gloss-default { background: rgba(160, 37, 49, 0.12); border-color: var(--rubric); }
+.overlay-gloss-default .overlay-gloss-text::before {
+  content: "❧ "; color: var(--rubric); font-size: 0.9em;
+}
+.overlay-gloss-text { white-space: nowrap; }
+.overlay-promote, .overlay-gloss-remove {
+  background: transparent; border: none; cursor: pointer; padding: 0 1px;
+  color: var(--rubric); opacity: 0.55; line-height: 1; font-size: 12px;
+  transition: opacity 140ms var(--ease);
+}
+.overlay-promote:hover, .overlay-gloss-remove:hover { opacity: 1; }
+.overlay-gloss-remove { font-size: 14px; }
+
+.overlay-add-wrap { display: flex; gap: 0; margin-top: 2px; }
+.overlay-add {
+  flex: 1 1 auto; min-width: 0; font: 13px/1.4 var(--font); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rubric); padding: 5px 8px; outline: none;
+}
+.overlay-add::placeholder { color: var(--ink-muted); font-style: italic; }
+.overlay-add-btn {
+  flex: 0 0 auto; font: 500 11px/1 var(--font); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--cream); background: var(--rubric);
+  border: 1px solid var(--rubric); padding: 0 12px; cursor: pointer;
+  transition: background 160ms var(--ease);
+}
+.overlay-add-btn:hover { background: var(--rubric-soft); }
+
+.overlay-row-side { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.overlay-add-toggle, .overlay-hide {
+  background: transparent; border: 1px solid transparent; cursor: pointer;
+  color: var(--ink-muted); font-size: 14px; line-height: 1; padding: 2px 4px;
+  transition: color 140ms var(--ease), border-color 140ms var(--ease);
+}
+.overlay-add-toggle:hover, .overlay-hide:hover { color: var(--rubric); border-color: var(--rule); }
+
 .overlay-conflict { color: var(--rubric); }
+.overlay-empty, .overlay-more {
+  padding: 20px 16px; color: var(--ink-muted); font-style: italic; font-size: 13px; text-align: center;
+}
+.overlay-more { border-top: 1px solid var(--rule-soft); }
+
+.overlay-foot {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 16px; border-top: 1px solid var(--rule); background: var(--cream-deep);
+}
+.overlay-count {
+  font: 11px/1 var(--font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted);
+}
 .overlay-save {
-  display: block; margin: 14px; font: 500 12px/1 var(--font);
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--cream);
-  background: var(--rubric); border: 1px solid var(--rubric); padding: 10px 18px;
-  cursor: pointer; transition: background 180ms var(--ease), transform 180ms var(--ease);
+  font: 500 12px/1 var(--font); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--cream); background: var(--rubric); border: 1px solid var(--rubric);
+  padding: 10px 22px; cursor: pointer;
+  transition: background 180ms var(--ease), transform 180ms var(--ease);
 }
 .overlay-save:hover { background: var(--rubric-soft); transform: translateY(-1px); }
 

@@ -91,6 +91,54 @@ describe("painel de overlay", () => {
     expect(onExport).toHaveBeenCalledTimes(1);
   });
 
+  it("adicionar nome pela UI (✚ → input → Adicionar) cria uma glosa", () => {
+    const host = document.createElement("div");
+    const panel = createOverlayPanel(host, {
+      entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
+      onSave: vi.fn(),
+    });
+    panel.open();
+    host.querySelector<HTMLButtonElement>(".overlay-add-toggle")!.click(); // revela editor
+    const input = host.querySelector<HTMLInputElement>("input.overlay-add")!;
+    input.value = "clive longo";
+    host.querySelector<HTMLButtonElement>(".overlay-add-btn")!.click();
+    const gloss = host.querySelector(".overlay-gloss");
+    expect(gloss).not.toBeNull();
+    expect(gloss!.textContent).toContain("clive longo");
+  });
+
+  it("remover uma glosa pelo × tira do rascunho ao salvar", () => {
+    const host = document.createElement("div");
+    const onSave = vi.fn();
+    const initial = {
+      schema: 1, kind: "notker-neume-overlay",
+      entries: { "stgall:cl": { names: ["clive longo"] } },
+    } as const;
+    const panel = createOverlayPanel(host, {
+      entries: () => [eff("stgall:cl", "clivis", ["clive longo", "clivis"])],
+      onSave,
+      initial: () => structuredClone(initial),
+    });
+    panel.open();
+    expect(host.querySelector(".overlay-gloss")).not.toBeNull();
+    host.querySelector<HTMLButtonElement>(".overlay-gloss-remove")!.click();
+    expect(host.querySelector(".overlay-gloss")).toBeNull();
+    host.querySelector<HTMLButtonElement>(".overlay-save")!.click();
+    const ov = onSave.mock.calls[0][0];
+    expect(ov.entries["stgall:cl"]?.names ?? []).not.toContain("clive longo");
+  });
+
+  it("ocultar (◉) marca a linha como oculta", () => {
+    const host = document.createElement("div");
+    const panel = createOverlayPanel(host, {
+      entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
+      onSave: vi.fn(),
+    });
+    panel.open();
+    host.querySelector<HTMLButtonElement>(".overlay-hide")!.click();
+    expect(host.querySelector(".overlay-row-hidden")).not.toBeNull();
+  });
+
   it("entry com provenance põe title com a fonte no label", () => {
     const prov: Provenance = {
       source: "Cardine, Semiologia Gregoriana, pp.12–15",
