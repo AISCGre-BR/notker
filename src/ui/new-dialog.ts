@@ -20,6 +20,8 @@ export function newDocumentDialog(host: HTMLElement, opts: { title: string }): P
         </div>
       </div>`;
     host.appendChild(root);
+    // Foco imediato no campo nome — sem isso, as teclas iriam para o editor atrás.
+    queueMicrotask(() => root.querySelector<HTMLInputElement>(".newdlg-name")?.focus());
 
     const close = (r: NewDocResult | null) => { root.remove(); resolve(r); };
     root.querySelector<HTMLButtonElement>(".newdlg-cancel")!.addEventListener("click", () => close(null));
