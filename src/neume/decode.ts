@@ -1,6 +1,7 @@
 // src/neume/decode.ts
 import type { Family, NeumeEntry, GlyphSvg, BaseAnnotations } from "./types";
 import { KIND_NAMES, NEUME_KINDS, decodeName } from "./tables";
+import { parsePosition, type Position } from "./positions";
 
 const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -41,6 +42,37 @@ function modifierTerms(rest: string): string[] {
   const pp = rest.match(/pp[tuwx]?(\d)?/);   // prepunctis (pp)
   if (pp) out.push("prepunctis", "praepunctis");
   return out;
+}
+
+/** Resultado do decode sistemático (generativo, "composição", rotulado como derivado). */
+export interface SystematicDecode {
+  base: string;
+  baseName: string;
+  name: string;          // nome composto legível (baseName + modificadores)
+  terms: string[];       // termos de busca (lower-case, sem acento), inclui posicionamento
+  position: Position;    // deslocamento horizontal + pitch decodificados
+  letters: string[];
+}
+
+/** Decodifica MECANICAMENTE um token NABC num nome composto + termos, incluindo
+ *  posicionamento (horizontal/pitch). Não consulta a sinopse; é a metade "sistemática"
+ *  que sempre existe, mesmo sem nome canônico. (GregorioNabcRef §178–320.) */
+export function decodeSystematic(token: string, _family: Family): SystematicDecode {
+  const position = parsePosition(token);
+  const body = token.replace(/^[/`]+/, "");
+  const desc = describeToken(body);
+  const modTerms = modifierTerms(desc.rest);
+  const posTerms: string[] = [];
+  if (position.hshift > 0) posTerms.push("deslocado a direita");
+  if (position.hshift < 0) posTerms.push("deslocado a esquerda");
+  if (position.pitch !== "f") posTerms.push(`altura relativa h${position.pitch}`);
+  const name = [desc.baseName, ...modTerms].join(" ").trim();
+  const terms = Array.from(new Set([
+    norm(desc.baseName), norm(desc.base),
+    ...modTerms.map(norm), ...posTerms.map(norm),
+    ...desc.letters.map((l) => norm(l)),
+  ].filter(Boolean)));
+  return { base: desc.base, baseName: desc.baseName, name, terms, position, letters: desc.letters };
 }
 
 export function decodeGlyph(

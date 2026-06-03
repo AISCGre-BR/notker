@@ -1,6 +1,6 @@
 // test/decode.test.ts
 import { describe, it, expect } from "vitest";
-import { decodeGlyph, describeToken } from "../src/neume/decode";
+import { decodeGlyph, describeToken, decodeSystematic } from "../src/neume/decode";
 
 describe("describeToken (decodifica qualquer composto)", () => {
   it("tractulus com letra significativa: tahglsi9", () => {
@@ -26,6 +26,23 @@ describe("describeToken (decodifica qualquer composto)", () => {
   });
   it("base desconhecida marca isKnownBase=false", () => {
     expect(describeToken("zz").isKnownBase).toBe(false);
+  });
+});
+
+describe("decodeSystematic (nome composto + posicionamento)", () => {
+  it("termos de subpunctis/praepunctis e deslocamento horizontal", () => {
+    const d = decodeSystematic("//vippt3su2", "stgall");
+    expect(d.terms).toEqual(expect.arrayContaining(["subpunctis", "praepunctis"]));
+    expect(d.terms).toEqual(expect.arrayContaining(["deslocado a direita"]));
+    expect(d.position.hshift).toBe(2);
+  });
+  it("altura relativa quando pitch != f", () => {
+    const d = decodeSystematic("vihg", "stgall");
+    expect(d.position.pitch).toBe("g");
+    expect(d.terms).toEqual(expect.arrayContaining(["altura relativa hg"]));
+  });
+  it("nome composto começa pelo baseName", () => {
+    expect(decodeSystematic("pesu2", "stgall").name).toMatch(/^pes/);
   });
 });
 
