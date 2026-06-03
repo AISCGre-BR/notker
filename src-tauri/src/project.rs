@@ -16,7 +16,7 @@ pub struct ProjectBundle {
 pub fn read_project(path: String) -> Result<ProjectBundle, String> {
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let mut zip = ZipArchive::new(Cursor::new(bytes)).map_err(|e| e.to_string())?;
-    let mut project_json = String::new();
+    let mut project_json: Option<String> = None;
     let mut files = HashMap::new();
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
@@ -24,11 +24,9 @@ pub fn read_project(path: String) -> Result<ProjectBundle, String> {
         let name = entry.name().to_string();
         let mut content = String::new();
         entry.read_to_string(&mut content).map_err(|e| e.to_string())?;
-        if name == "project.json" { project_json = content; } else { files.insert(name, content); }
+        if name == "project.json" { project_json = Some(content); } else { files.insert(name, content); }
     }
-    if project_json.is_empty() {
-        return Err("project.json ausente no .notker".into());
-    }
+    let project_json = project_json.ok_or("project.json ausente no .notker")?;
     Ok(ProjectBundle { project_json, files })
 }
 
@@ -44,7 +42,7 @@ pub fn write_project(
         let opts = SimpleFileOptions::default();
         zip.start_file("project.json", opts).map_err(|e| e.to_string())?;
         zip.write_all(project_json.as_bytes()).map_err(|e| e.to_string())?;
-        for (name, content) in &files {
+        for (name, content) in files.iter().filter(|(k, _)| k.as_str() != "project.json") {
             zip.start_file(name, opts).map_err(|e| e.to_string())?;
             zip.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
         }
@@ -60,7 +58,7 @@ mod tests {
     #[test]
     fn roundtrip_project() {
         let path = std::env::temp_dir()
-            .join("notker-roundtrip-test.notker")
+            .join(format!("notker-roundtrip-{}.notker", std::process::id()))
             .to_string_lossy()
             .to_string();
         let mut files = HashMap::new();
