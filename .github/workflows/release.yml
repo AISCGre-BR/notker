@@ -26,13 +26,13 @@ jobs:
           body: |
             ## Downloads
 
-            - **Linux:** `.rpm` (Fedora/openSUSE) · `.deb` (Debian/Ubuntu) · `.AppImage` (portátil)
+            - **Linux:** `.rpm` (Fedora/openSUSE) · `.deb` (Debian/Ubuntu)
             - **macOS:** Apple Silicon `.dmg` (arm64) · Intel `.dmg` (x64) — **Windows:** `.exe`
             - _Cada asset é publicado assim que a plataforma termina._
 
             **Builds não assinadas.**
 
-            - **Linux** — em distribuições recentes, prefira o `.rpm`/`.deb` (usam o WebKit do sistema). O `.AppImage` pode abrir em branco em alguns sistemas.
+            - **Linux** — `.rpm` (Fedora/openSUSE) e `.deb` (Debian/Ubuntu) usam o WebKit do sistema.
             - **macOS** — após arrastar o Notker para `/Applications`, rode uma vez no Terminal:
               ```
               xattr -dr com.apple.quarantine /Applications/Notker.app
@@ -59,12 +59,13 @@ jobs:
       matrix:
         include:
           - { os: macos-14, label: macos-arm, bundles: dmg, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
-          - { os: macos-13, label: macos-intel, bundles: dmg, glob: "src-tauri/target/release/bundle/dmg/*.dmg" }
+          # Intel via cross-build no runner arm64 (macos-13 Intel era cancelado/
+          # travava na CI). --target muda o caminho do bundle para target/<triple>/.
+          - { os: macos-14, label: macos-intel, target: x86_64-apple-darwin, bundles: dmg, glob: "src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg" }
           - os: ubuntu-24.04
             label: linux
-            bundles: appimage,deb,rpm
+            bundles: deb,rpm
             glob: |
-              src-tauri/target/release/bundle/appimage/*.AppImage
               src-tauri/target/release/bundle/deb/*.deb
               src-tauri/target/release/bundle/rpm/*.rpm
           - { os: windows-latest, label: windows, bundles: nsis, glob: "src-tauri/target/release/bundle/nsis/*-setup.exe" }
@@ -76,6 +77,10 @@ jobs:
           node-version: 22
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          # Alvo extra para cross-build (ex.: x86_64-apple-darwin no runner arm64);
+          # vazio nas demais plataformas (build do host).
+          targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -90,15 +95,16 @@ jobs:
 
       - run: npm ci
 
-      # Sidecar LSP compilado para o host (nome esperado pelo externalBin do Tauri).
+      # Sidecar LSP. Sem matrix.target compila para o host; com target faz
+      # cross-build (ex.: x86_64-apple-darwin) — nome esperado pelo externalBin.
       - name: Build gregorio-lsp sidecar
         shell: bash
-        run: npm run sidecar
+        run: npm run sidecar -- ${{ matrix.target }}
 
       # Os assets portáveis (wasm + neume-db.json) são versionados; o frontend
       # (beforeBuildCommand: npm run build) compila direto. tauri build empacota nativo.
       - name: Build + bundle
-        run: npx tauri build --bundles ${{ matrix.bundles }}
+        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
       - uses: actions/upload-artifact@v4
         with:
