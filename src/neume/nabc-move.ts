@@ -57,9 +57,15 @@ export function applyMove(
   pos: number,
   action: MoveAction
 ): MoveEdit | null {
+  // Tolerância de fronteira (Bug 1): após um nudge o cursor fica em tokenTo, logo
+  // após o nabc_snippet, onde descendantForIndex já não acerta o nó. Provamos pos
+  // e, se falhar, pos-1 — assim nudges repetidos funcionam sem reselecionar.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { inNabc, tokenFrom, tokenTo } = outermostNabcAt(tree as any, doc, pos);
-  if (!inNabc) return null;
+  let ctx = outermostNabcAt(tree as any, doc, pos);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (!ctx.inNabc && pos > 0) ctx = outermostNabcAt(tree as any, doc, pos - 1);
+  if (!ctx.inNabc) return null;
+  const { tokenFrom, tokenTo } = ctx;
 
   const raw = doc.slice(tokenFrom, tokenTo);
 
@@ -124,9 +130,11 @@ export function runMove(
   const edit = applyMove(tree, doc, pos, action);
   if (!edit) return false;
 
+  // Cursor permanece no INÍCIO do neuma movido (dentro do nabc_snippet), para que
+  // o próximo nudge encontre o mesmo token sem reselecionar (Bug 1).
   view.dispatch({
     changes: edit,
-    selection: { anchor: edit.from + edit.insert.length },
+    selection: { anchor: edit.from },
   });
   return true;
 }

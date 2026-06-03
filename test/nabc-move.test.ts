@@ -142,6 +142,18 @@ describe("applyMove (puro, mock de tree-sitter)", () => {
     expect(edit!.to).toBe(tto);
   });
 
+  // ----- caso 3b (regressão Bug 1): cursor no FIM do token ainda move -----
+  // Após um nudge, o cursor fica logo após o token (fronteira do nabc_snippet),
+  // onde descendantForIndex já não acerta o nó. applyMove deve tolerar isso
+  // (provar pos-1) para que nudges repetidos funcionem sem reselecionar.
+  it("cursor na fronteira final do token ainda move o mesmo neuma (Bug 1)", () => {
+    const nabcNode = makeNode("nabc_snippet", TOKEN_SIMPLE_FROM, TOKEN_SIMPLE_TO);
+    const tree = makeTree(nabcNode);
+    const edit = applyMove(tree, DOC_SIMPLE, TOKEN_SIMPLE_TO, "up"); // pos == tokenTo
+    expect(edit).not.toBeNull();
+    expect(edit!.insert).toBe("vihg");
+  });
+
   // ----- caso 4: cursor fora de NABC → null -----
   it("cursor fora de NABC → applyMove devolve null", () => {
     // Nó nabc está em [TOKEN_SIMPLE_FROM, TOKEN_SIMPLE_TO); cursor fora.
