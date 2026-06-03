@@ -122,6 +122,9 @@ async function boot() {
     activeFamily = activeFamily === "stgall" ? "laon" : "stgall";
     updateFamilyIndicator();
     reindex();
+    // Feedback explícito: o efeito (prioriza esta família na busca/hover/inserção)
+    // era invisível demais — agora confirma no rodapé. (Bug 3.)
+    setStatus("família ativa: " + familyLabel(activeFamily) + " — busca/hover priorizam esta notação");
   }
 
   // Carrega db de neumas e reconfigura o compartment F2.
