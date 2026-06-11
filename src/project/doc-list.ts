@@ -21,12 +21,6 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): DocList {
         textContent: "Cantos",
       })
     );
-    const add = document.createElement("button");
-    add.className = "doc-add";
-    add.textContent = "+";
-    add.title = "Adicionar canto";
-    add.addEventListener("click", () => opts.onAdd());
-    head.appendChild(add);
     root.appendChild(head);
 
     for (const d of p.docs) {
@@ -54,6 +48,15 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): DocList {
       }
       root.appendChild(item);
     }
+
+    // Linha "+ Adicionar canto" após os itens (substitui o "+" do cabeçalho).
+    const addRow = document.createElement("button");
+    addRow.className = "doc-add-row";
+    addRow.textContent = "+ Adicionar canto";
+    addRow.title = "Adicionar canto ao projeto";
+    addRow.addEventListener("click", () => opts.onAdd());
+    root.appendChild(addRow);
+
     host.appendChild(root);
   }
   return { render };

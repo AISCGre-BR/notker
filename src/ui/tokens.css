@@ -274,13 +274,15 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .newdlg-fam-btn { flex: 1 1 0; padding: 7px 10px; border: 1px solid var(--rule); background: transparent; color: var(--ink); cursor: pointer; font-family: serif; }
 .newdlg-fam-btn.active { border-color: var(--rubric); color: var(--rubric); background: var(--cream-deep); }
 .newdlg-name, .newdlg-office { padding: 7px 9px; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
+.newdlg-warning { font-size: 0.85rem; color: var(--rubric); border-left: 2px solid var(--rubric); padding-left: 8px; }
 .newdlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .newdlg-actions button { padding: 6px 12px; cursor: pointer; }
 
 /* ── Lista lateral de documentos ──────────────────────────────────────────── */
 .doc-list { display: flex; flex-direction: column; font-family: serif; font-size: 13px; height: 100%; }
 .doc-list-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--rule); }
-.doc-add { border: none; background: transparent; cursor: pointer; font-size: 16px; color: var(--ink-soft); }
+.doc-add-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; cursor: pointer; width: 100%; font-family: serif; color: var(--ink-soft); background: transparent; border: none; text-align: left; }
+.doc-add-row:hover { background: var(--cream-deep); }
 .doc-item { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; cursor: pointer; }
 .doc-item.active { background: var(--cream-deep); border-left: 2px solid var(--rubric-soft); }
 .doc-item-label { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

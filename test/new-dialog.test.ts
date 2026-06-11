@@ -39,4 +39,30 @@ describe("diálogo Novo", () => {
     host.querySelector<HTMLButtonElement>(".newdlg-cancel")!.click();
     expect(await p).toBeNull();
   });
+
+  // Tarefa 2: aviso/rótulo no popup
+  it("com warning e okLabel, renderiza .newdlg-warning e botão ok com rótulo customizado", async () => {
+    const host = document.createElement("div");
+    const p = newDocumentDialog(host, {
+      title: "Substituir projeto",
+      warning: "substitui o projeto atual — alterações não salvas serão perdidas",
+      okLabel: "Substituir",
+    });
+    const warn = host.querySelector(".newdlg-warning");
+    expect(warn).not.toBeNull();
+    expect(warn!.textContent).toContain("substitui o projeto atual");
+    const ok = host.querySelector<HTMLButtonElement>(".newdlg-ok");
+    expect(ok!.textContent).toBe("Substituir");
+    // fecha para não deixar promessa pendente
+    host.querySelector<HTMLButtonElement>(".newdlg-cancel")!.click();
+    await p;
+  });
+
+  it("sem warning/okLabel, não existe .newdlg-warning e ok diz 'Criar'", () => {
+    const host = document.createElement("div");
+    newDocumentDialog(host, { title: "Adicionar canto" });
+    expect(host.querySelector(".newdlg-warning")).toBeNull();
+    const ok = host.querySelector<HTMLButtonElement>(".newdlg-ok");
+    expect(ok!.textContent).toBe("Criar");
+  });
 });

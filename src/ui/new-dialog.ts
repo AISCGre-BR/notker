@@ -15,7 +15,7 @@ export interface NewDocResult { family: Family; name?: string; office?: string }
  *  os campos ou null. */
 export function newDocumentDialog(
   host: HTMLElement,
-  opts: { title: string },
+  opts: { title: string; warning?: string; okLabel?: string },
 ): Promise<NewDocResult | null> {
   return new Promise((resolve) => {
     const box = document.createElement("div");
@@ -59,6 +59,14 @@ export function newDocumentDialog(
     office.placeholder = "office-part (opcional)…";
     box.appendChild(office);
 
+    // Aviso discreto (ex.: "substitui o projeto atual") entre o input office e as ações.
+    if (opts.warning) {
+      const warn = document.createElement("div");
+      warn.className = "newdlg-warning";
+      warn.textContent = "⚠ " + opts.warning;
+      box.appendChild(warn);
+    }
+
     const actions = document.createElement("div");
     actions.className = "newdlg-actions";
     const cancel = document.createElement("button");
@@ -68,7 +76,7 @@ export function newDocumentDialog(
     const ok = document.createElement("button");
     ok.type = "button";
     ok.className = "newdlg-ok";
-    ok.textContent = "Criar";
+    ok.textContent = opts.okLabel ?? "Criar";
     actions.append(cancel, ok);
     box.appendChild(actions);
 

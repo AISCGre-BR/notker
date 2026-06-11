@@ -242,7 +242,11 @@ async function boot() {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
     // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
     newProjectCmd: async () => {
-      const r = await newDocumentDialog(dialogHost, { title: "Novo projeto" });
+      const r = await newDocumentDialog(dialogHost, {
+        title: "Novo projeto",
+        warning: "substitui o projeto atual — alterações não salvas serão perdidas",
+        okLabel: "Substituir",
+      });
       if (!r) { setStatus("Novo: cancelado"); return; }
       project = newProject({ family: r.family, name: r.name, office: r.office });
       syncFromProject();
@@ -379,7 +383,7 @@ async function boot() {
   });
 
   createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { id: "newProjectCmd", label: "Novo", title: "novo projeto (.notker)" },
+    { id: "newProjectCmd", label: "Novo projeto", title: "novo projeto (.notker)" },
     { id: "openFile", label: "Abrir", title: "Ctrl+O — .notker ou .gabc" },
     { id: "saveFile", label: "Salvar", title: "Ctrl+S — projeto .notker" },
     { id: "exportGabc", label: "Exportar", title: "exportar o canto atual como .gabc padrão" },
