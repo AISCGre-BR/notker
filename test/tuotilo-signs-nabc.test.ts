@@ -142,4 +142,37 @@ describe("tuotilo signs NABC — enriquecimento por enrichFromNabc", () => {
     const count = r.signs.filter((s) => s === "episema").length;
     expect(count).toBe(1);
   });
+
+  // ── NABC-14: token com sufixo subpunctis (su) não produz sign espúrio ────────
+  // Token real de samples/03-factus-est.gabc (via synopsis-neumes.json: "toS2sut1"):
+  // sílaba "(fg|//////toS2sut1lsi2lsal2)" — barra + torculus modificado + subpunctis + ls
+  // Após strip correto, os 2-grams NÃO devem incluir "su"; nenhum sign espúrio esperado.
+  it("NABC-14: token real com subpunctis (toS2sut1) não produz nenhum sign espúrio", () => {
+    const r = extractSyllable("(fg|//////toS2sut1lsi2lsal2)");
+    // Nenhum sign que não exista no gabc puro deve aparecer
+    expect(r.signs).not.toContain("oriscus");
+    expect(r.signs).not.toContain("strophae");
+    expect(r.signs).not.toContain("quilisma");
+    expect(r.signs).not.toContain("liqAug");
+    expect(r.signs).not.toContain("liqDim");
+    // pitches gabc preservados
+    expect(r.pitches).toEqual(["f", "g"]);
+  });
+
+  // ── NABC-15: base relevante antes de subpunctis ainda é detectada ─────────────
+  // "orsut1" = oriscus (base "or") seguido de subpunctis ("sut1")
+  // strip deve remover "sut1" mas preservar "or" → oriscus detectado
+  it("NABC-15: oriscus detectado em token 'orsut1' (or + subpunctis sut1)", () => {
+    const r = extractSyllable("(f|orsut1)");
+    expect(r.signs).toContain("oriscus");
+  });
+
+  // ── NABC-16: praepunctis (pp) também é removido sem gerar base espúria ────────
+  // "vippt1": virga + praepunctis (ppt1) — "pp" não deve gerar nenhum sign
+  it("NABC-16: token com praepunctis (vippt1) não produz sign espúrio", () => {
+    const r = extractSyllable("(f|vippt1)");
+    expect(r.signs).not.toContain("oriscus");
+    expect(r.signs).not.toContain("strophae");
+    expect(r.signs).not.toContain("quilisma");
+  });
 });

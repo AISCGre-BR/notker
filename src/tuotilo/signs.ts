@@ -186,6 +186,9 @@ function stripNonGlyphParts(token: string): string {
   s = s.replace(/h[a-m]/g, "");
   // Remove ajuste horizontal: /+ e `+
   s = s.replace(/[/`]+/g, "");
+  // Remove sufixos subpunctis (su) e praepunctis (pp): padrão (su|pp)[a-z]?[0-9]+
+  // Exemplos do catálogo: sut1, sun1, su2, ppt1, ppn1, pp2 (synopsis-neumes.json)
+  s = s.replace(/(su|pp)[a-z]?[0-9]+/g, "");
   return s;
 }
 
