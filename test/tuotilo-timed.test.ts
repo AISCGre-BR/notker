@@ -91,6 +91,12 @@ describe("computeTimedNotes — interpretado (fidelidade por nota)", () => {
     // tônica continua ≤ valor silábico pleno alargado (não vira episema)
     expect(tonic).toBeLessThan(P.baseMs * 1.15);
   });
+  it("D10b. tônica FORA de récita não ganha nada: recitationTonic não vaza", () => {
+    const tonicSolo = timed([syl(["h"], undefined, null, false, true), syl(["g"], undefined, null, true)]).notes[0];
+    const plainSolo = timed([syl(["h"]), syl(["g"], undefined, null, true)]).notes[0];
+    // mesma seed, mesma posição → mesmo jitter → ms idênticos
+    expect(tonicSolo.ms).toBe(plainSolo.ms);
+  });
   it("D8. ANTI-MENSURALISTA (D-23): razão dos 2 clusters fora de [1.9, 2.1]", () => {
     const signsPool: RhythmSign[][] = [
       [], ["episema"], ["currentes"], ["quilisma"], ["preQuilisma"],

@@ -152,6 +152,9 @@ describe("tuotilo signs — accented (acento gráfico no texto)", () => {
   it("A-3. acento combinante (é) também conta", () => {
     expect(extractSyllable("ré(f)").accented).toBe(true);
   });
+  it("A-3b. NFD verdadeiro: e + U+0301 combinante conta", () => {
+    expect(extractSyllable("ré(f)").accented).toBe(true);
+  });
   it("A-4. sem texto (melisma puro ou divisio) → false", () => {
     expect(extractSyllable("(fgh)").accented).toBe(false);
     expect(extractSyllable("(::)").accented).toBe(false);
