@@ -30,14 +30,16 @@ describe("computeTimedNotes — interpretado (fidelidade por nota)", () => {
     // podem distar até ~(1.08/0.92 - 1) ≈ 0.17 relativo → teto folgado 0.2)
     expect(Math.abs(notes[0].ms - notes[2].ms) / notes[0].ms).toBeLessThan(0.2);
   });
-  it("D2. attack=true em: 1ª nota, repercussão e pós-divisio; false dentro do incisum", () => {
+  it("D2. articulation: full no início/pós-divisio e récita; pulse na repercussão intra-sílaba; legato no resto", () => {
     const { notes } = timed([
-      syl(["f", "g"]),                 // 0:início(true) 1:legato(false)
-      syl(["g"]),                      // 2: repercussão g→g (true)
+      syl(["f", "g"]),                 // 0:full 1:legato
+      syl(["g"]),                      // 2:repercussão ENTRE sílabas → full
       syl([], undefined, "minima"),
-      syl(["h", "i"]),                 // 3: pós-divisio(true) 4: legato(false)
+      syl(["h", "h", "i"]),            // 3:full(pós-divisio) 4:pulse(intra-sílaba) 5:legato
     ]);
-    expect(notes.map((n) => n.attack)).toEqual([true, false, true, true, false]);
+    expect(notes.map((n) => n.articulation)).toEqual([
+      "full", "legato", "full", "full", "pulse", "legato",
+    ]);
   });
   it("D3. pauseAfterMs na última nota pré-divisio = pauseBeats × baseMs", () => {
     const { notes } = timed([syl(["f", "g"]), syl([], undefined, "maior"), syl(["h"])]);
@@ -77,7 +79,7 @@ describe("computeTimedNotes — interpretado (fidelidade por nota)", () => {
     // mas o fator 0.83 domina folgadamente o jitter de ±8%)
     for (const n of run) expect(n.ms).toBeLessThan(solo.ms);
     // e continuam rearticuladas (regra sagrada)
-    expect(run.map((n) => n.attack)).toEqual([true, true, true, true]);
+    expect(run.map((n) => n.articulation)).toEqual(["full", "full", "full", "full"]);
   });
   it("D10. récita: tônica pesa mais que átonas do MESMO run (a-do-rá-te)", () => {
     const { notes } = timed([
@@ -121,9 +123,9 @@ describe("computeTimedNotes — solfejo", () => {
     );
     for (const n of notes) expect(n.ms).toBe(P.baseMs);
   });
-  it("S2. attack=true em TODAS as notas (re-ataque por nota)", () => {
+  it("S2. solfejo: articulation full em TODAS as notas (re-ataque por nota)", () => {
     const { notes } = timed([syl(["f", "g", "g", "h"])], "solfejo");
-    expect(notes.every((n) => n.attack)).toBe(true);
+    expect(notes.every((n) => n.articulation === "full")).toBe(true);
   });
   it("S4. recitação NÃO aplica no solfejo (isócrono)", () => {
     const { notes } = timed([syl(["h"]), syl(["h"]), syl(["h"])], "solfejo");

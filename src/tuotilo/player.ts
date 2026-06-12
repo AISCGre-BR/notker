@@ -2,15 +2,16 @@
  * player.ts — Player Web Audio do Tuotilo v2 (grupos legato por incisum).
  *
  * Modelo de agendamento:
- *   - Notas consecutivas com attack=false formam um GRUPO LEGATO: 1 oscilador,
+ *   - Notas consecutivas com articulation="legato" formam um GRUPO LEGATO: 1 oscilador,
  *     pitch muda em degrau via frequency.setValueAtTime nas fronteiras de nota,
  *     envelope único cobre todo o grupo.
- *   - attack=true sempre cria um oscilador NOVO (repercussão sagrada do projeto:
+ *   - articulation="full" sempre cria um oscilador NOVO (repercussão sagrada do projeto:
  *     distropha/tristropha/bis-punctum são re-articulações explícitas, nunca fundir).
+ *   - articulation="pulse" = repercussão intra-sílaba: continuidade + pulso de gain (B1.2).
  *   - Divisio (pauseAfterMs > 0) também quebra o grupo (cursor recomeça sem carry).
  *
  * Envelope por GRUPO (D2):
- *   attack  18ms: 0 → 0.8 (linearRamp)
+ *   ataque  18ms: 0 → 0.8 (linearRamp)
  *   sustain  até release point
  *   release 70ms: → 0  terminando 22ms ANTES do fim do GRUPO (gap de re-ataque)
  */
@@ -136,7 +137,7 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
       const groups: GroupNote[][] = [];
       let current: GroupNote[] | null = null;
       for (const note of playback.notes) {
-        if (note.attack || current === null) {
+        if (note.articulation !== "legato" || current === null) {
           current = [];
           groups.push(current);
         }
@@ -146,7 +147,7 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
         cursor += note.ms;
         if (note.pauseAfterMs > 0) {
           cursor += note.pauseAfterMs;
-          current = null; // divisio: próximo grupo recomeça mesmo sem attack
+          current = null; // divisio: próximo grupo recomeça mesmo sem articulation=full
         }
       }
       for (const g of groups) scheduleGroup(ctx, baseTime, g);

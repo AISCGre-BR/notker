@@ -88,12 +88,18 @@ function saturate(logSum: number, cap: number): number {
 
 export type PlaybackMode = "interpretado" | "solfejo";
 
+/** Articulação da nota no fluxo (B1.2):
+ *  full   = novo oscilador + envelope (início de incisum, pós-divisio, récita)
+ *  pulse  = repercussão INTRA-sílaba: pulso de volume no som contínuo
+ *  legato = continua o grupo sem rearticular */
+export type Articulation = "full" | "pulse" | "legato";
+
 export interface TimedNote {
   idx: number;
   pitch: string;
   ms: number;
   pauseAfterMs: number;   // pausa de divisio após ESTA nota
-  attack: boolean;        // true = novo envelope/oscilador (início de grupo legato)
+  articulation: Articulation;  // articulação da nota no fluxo
   syllableIndex: number;
 }
 export interface TimedPlayback { notes: TimedNote[]; leadInMs: number; }
@@ -118,10 +124,10 @@ export function computeTimedNotes(
 
   const notes: TimedNote[] = tl.notes.map((n, i) => {
     let ms: number;
-    let attack: boolean;
+    let articulation: Articulation;
     if (mode === "solfejo") {
       ms = p.baseMs;
-      attack = true;
+      articulation = "full";
     } else {
       let L = 0;
       for (const sign of n.signs) {
@@ -144,12 +150,18 @@ export function computeTimedNotes(
       ms = Math.max(1, D * (1 + g));
 
       const prev = tl.notes[i - 1];
-      attack = !prev || prev.incisumIndex !== n.incisumIndex || n.repercussion;
+      if (!prev || prev.incisumIndex !== n.incisumIndex) {
+        articulation = "full";
+      } else if (n.repercussion) {
+        articulation = prev.syllableIndex === n.syllableIndex ? "pulse" : "full";
+      } else {
+        articulation = "legato";
+      }
     }
     return {
       idx: n.idx, pitch: n.pitch, ms,
       pauseAfterMs: pauseAfter.get(n.idx) ?? 0,
-      attack, syllableIndex: n.syllableIndex,
+      articulation, syllableIndex: n.syllableIndex,
     };
   });
 

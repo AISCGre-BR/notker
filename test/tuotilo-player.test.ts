@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createPlayer, pitchToFreq } from "../src/tuotilo/player";
-import type { TimedNote, TimedPlayback } from "../src/tuotilo/duration";
+import type { TimedNote, TimedPlayback, Articulation } from "../src/tuotilo/duration";
 
 // ── Fake AudioContext ─────────────────────────────────────────────────────────
 
@@ -103,7 +103,7 @@ function makeFakeCtx(currentTime = 0): FakeCtx {
 // ── Helpers de construção de TimedNote / TimedPlayback ────────────────────────
 
 function tn(partial: Partial<TimedNote> & { pitch: string; ms: number }): TimedNote {
-  return { idx: 0, pauseAfterMs: 0, attack: true, syllableIndex: 0, ...partial };
+  return { idx: 0, pauseAfterMs: 0, articulation: "full" as Articulation, syllableIndex: 0, ...partial };
 }
 function pb(notes: TimedNote[], leadInMs = 0): TimedPlayback {
   return { notes: notes.map((n, i) => ({ ...n, idx: i })), leadInMs };
@@ -150,12 +150,12 @@ describe("Player v2 — grupos legato", () => {
   }
   const BASE = 0.05;
 
-  it("P1. legato: 3 notas attack=[T,F,F] → 1 oscilador, 3 setValueAtTime de frequência", () => {
+  it("P1. legato: 3 notas articulation=[full,legato,legato] → 1 oscilador, 3 setValueAtTime de frequência", () => {
     const { player, ctx } = makePlayer();
     player.play(pb([
       tn({ pitch: "f", ms: 200 }),
-      tn({ pitch: "g", ms: 150, attack: false }),
-      tn({ pitch: "h", ms: 100, attack: false }),
+      tn({ pitch: "g", ms: 150, articulation: "legato" }),
+      tn({ pitch: "h", ms: 100, articulation: "legato" }),
     ]), vi.fn(), vi.fn());
     expect(ctx()._oscillators).toHaveLength(1);
     const osc = ctx()._oscillators[0];
@@ -167,17 +167,17 @@ describe("Player v2 — grupos legato", () => {
     expect(osc.stop).toHaveBeenCalledWith(expect.closeTo(BASE + 0.45, 9));
   });
 
-  it("P2. REGRA SAGRADA: attack=true no meio (repercussão) → 2 osciladores", () => {
+  it("P2. REGRA SAGRADA: articulation=full no meio (repercussão) → 2 osciladores", () => {
     const { player, ctx } = makePlayer();
     player.play(pb([
       tn({ pitch: "f", ms: 200 }),
-      tn({ pitch: "f", ms: 200, attack: true }),
+      tn({ pitch: "f", ms: 200, articulation: "full" }),
     ]), vi.fn(), vi.fn());
     expect(ctx()._oscillators).toHaveLength(2);
     expect(ctx()._oscillators[0]).not.toBe(ctx()._oscillators[1]);
   });
 
-  it("P3. solfejo (todas attack=true) → n osciladores, comportamento v1", () => {
+  it("P3. solfejo (todas articulation=full) → n osciladores, comportamento v1", () => {
     const { player, ctx } = makePlayer();
     player.play(pb([
       tn({ pitch: "f", ms: 100 }), tn({ pitch: "g", ms: 100 }), tn({ pitch: "h", ms: 100 }),
@@ -190,7 +190,7 @@ describe("Player v2 — grupos legato", () => {
     const { player, ctx } = makePlayer();
     player.play(pb([
       tn({ pitch: "f", ms: 300 }),
-      tn({ pitch: "g", ms: 300, attack: false }),
+      tn({ pitch: "g", ms: 300, articulation: "legato" }),
     ]), vi.fn(), vi.fn());
     const gain = ctx()._gains[0];
     const ramps = gain.gain.linearRampToValueAtTime.mock.calls as [number, number][];
@@ -230,7 +230,7 @@ describe("Player v2 — grupos legato", () => {
     const onEnd = vi.fn();
     player.play(pb([
       tn({ pitch: "f", ms: 100 }),
-      tn({ pitch: "g", ms: 100, attack: false }),
+      tn({ pitch: "g", ms: 100, articulation: "legato" }),
       tn({ pitch: "h", ms: 100 }),
     ]), onNote, onEnd);
     vi.runAllTimers();
@@ -279,13 +279,13 @@ describe("Player v2 — grupos legato", () => {
     expect(player.playing).toBe(true);
   });
 
-  it("P10. pauseAfterMs fecha o grupo MESMO com attack=false na nota seguinte", () => {
+  it("P10. pauseAfterMs fecha o grupo MESMO com articulation=legato na nota seguinte", () => {
     const { player, ctx } = makePlayer();
     player.play(pb([
       tn({ pitch: "f", ms: 200, pauseAfterMs: 100 }),
-      tn({ pitch: "g", ms: 100, attack: false }),
+      tn({ pitch: "g", ms: 100, articulation: "legato" }),
     ]), vi.fn(), vi.fn());
-    // dois grupos: a pausa força current=null mesmo sem attack
+    // dois grupos: a pausa força current=null mesmo sem articulation=full
     expect(ctx()._oscillators).toHaveLength(2);
     expect(ctx()._oscillators[1].start).toHaveBeenCalledWith(expect.closeTo(0.05 + 0.3, 9));
   });
