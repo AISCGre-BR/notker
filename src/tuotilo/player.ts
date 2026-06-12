@@ -59,14 +59,30 @@ export const PEAK_GAIN  = 0.8;
 export const PULSE_DIP  = 0.34;  // nível do mergulho na repercussão (× PEAK_GAIN)
 export const PULSE_MS   = 56;    // duração total do mergulho vai-e-volta (ms)
 
+// ── Presets de timbre ─────────────────────────────────────────────────────────
+
+/** Timbres do sintetizador (B1.3): "voz" = sawtooth + formantes (vogal "ah");
+ *  "flauta" = triangle + lowpass (timbre da v1/v2). Decisão final por UAT. */
+export type SynthTimbre = "voz" | "flauta";
+
+const VOZ_F1_HZ   = 710;    // formante 1 da vogal "ah"
+const VOZ_F2_HZ   = 1180;   // formante 2
+const VOZ_F1_Q    = 4.7;
+const VOZ_F2_Q    = 6.3;
+const VOZ_F1_MIX  = 0.61;   // pesos de mistura dos caminhos
+const VOZ_F2_MIX  = 0.27;
+const VOZ_BODY_MIX   = 0.24; // caminho de corpo (lowpass) p/ não ficar anasalado
+const VOZ_BODY_LP_HZ = 2400;
+
 // ── Grupo legato ──────────────────────────────────────────────────────────────
 
 interface GroupNote { freq: number; atMs: number; durMs: number; pulse: boolean; }
 
 /** Agenda um grupo legato: 1 oscilador, pitch em degrau nas fronteiras de nota,
  *  envelope único no grupo (D2). Grupos de 1 nota reproduzem o envelope v1.
- *  Notas com pulse=true recebem mergulho de volume na fronteira (B1.2). */
-function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[]): void {
+ *  Notas com pulse=true recebem mergulho de volume na fronteira (B1.2).
+ *  O parâmetro timbre define a cadeia de síntese (fonte + filtros). */
+function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[], timbre: SynthTimbre): void {
   const first = notes[0];
   const last = notes[notes.length - 1];
   const startSec = baseTime + first.atMs / 1000;
@@ -75,14 +91,39 @@ function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[]):
   const releaseSec = endSec - (GAP_MS + RELEASE_MS) / 1000;
 
   const osc = ctx.createOscillator();
-  osc.type = "triangle";
   for (const n of notes) osc.frequency.setValueAtTime(n.freq, baseTime + n.atMs / 1000);
 
-  const filter = ctx.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(1200, startSec);
+  const gain = ctx.createGain(); // envelope do grupo (ataque/pulsos/release)
 
-  const gain = ctx.createGain();
+  if (timbre === "flauta") {
+    osc.type = "triangle";
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(1200, startSec);
+    osc.connect(filter);
+    filter.connect(gain);
+  } else {
+    // "voz": sawtooth → [formante1, formante2, corpo] em paralelo → mix → envelope
+    osc.type = "sawtooth";
+    const paths: [number, number | null, number][] = [
+      [VOZ_F1_HZ, VOZ_F1_Q, VOZ_F1_MIX],
+      [VOZ_F2_HZ, VOZ_F2_Q, VOZ_F2_MIX],
+      [VOZ_BODY_LP_HZ, null, VOZ_BODY_MIX],
+    ];
+    for (const [hz, q, mix] of paths) {
+      const f = ctx.createBiquadFilter();
+      f.type = q === null ? "lowpass" : "bandpass";
+      f.frequency.setValueAtTime(hz, startSec);
+      if (q !== null && f.Q) f.Q.setValueAtTime(q, startSec);
+      const m = ctx.createGain();
+      m.gain.setValueAtTime(mix, startSec);
+      osc.connect(f);
+      f.connect(m);
+      m.connect(gain);
+    }
+  }
+
+  // Envelope: ataque + pulsos + release — IGUAL para os dois timbres.
   gain.gain.setValueAtTime(0, startSec);
   gain.gain.linearRampToValueAtTime(PEAK_GAIN, attackEndSec);
 
@@ -103,8 +144,6 @@ function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[]):
   const releaseEndSec = Math.max(releaseSec + RELEASE_MS / 1000, attackEndSec + 0.001);
   gain.gain.linearRampToValueAtTime(0, releaseEndSec);
 
-  osc.connect(filter);
-  filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start(startSec);
   osc.stop(endSec);
@@ -118,7 +157,7 @@ export interface Player {
   readonly playing: boolean;
 }
 
-export function createPlayer(ctxFactory: () => AudioContext): Player {
+export function createPlayer(ctxFactory: () => AudioContext, timbre: SynthTimbre = "voz"): Player {
   let _playing = false;
   let _ctx: AudioContext | null = null;
   let _timers: ReturnType<typeof setTimeout>[] = [];
@@ -188,7 +227,7 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
           current = null; // divisio: próximo grupo recomeça mesmo sem articulation=full
         }
       }
-      for (const g of groups) scheduleGroup(ctx, baseTime, g);
+      for (const g of groups) scheduleGroup(ctx, baseTime, g, timbre);
       const endTimer = setTimeout(() => { _playing = false; onEnd(); }, cursor);
       _timers.push(endTimer);
     },

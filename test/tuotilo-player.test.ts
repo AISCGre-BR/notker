@@ -8,6 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createPlayer, pitchToFreq, PEAK_GAIN, PULSE_DIP } from "../src/tuotilo/player";
+import type { SynthTimbre } from "../src/tuotilo/player";
 import type { TimedNote, TimedPlayback, Articulation } from "../src/tuotilo/duration";
 
 // ── Fake AudioContext ─────────────────────────────────────────────────────────
@@ -140,12 +141,12 @@ describe("Player v2 — grupos legato", () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  function makePlayer() {
+  function makePlayer(timbre: SynthTimbre = "flauta") {
     let fakeCtx!: FakeCtx;
     const player = createPlayer(() => {
       fakeCtx = makeFakeCtx(0);
       return fakeCtx as unknown as AudioContext;
-    });
+    }, timbre);
     return { player, ctx: () => fakeCtx };
   }
   const BASE = 0.05;
@@ -342,5 +343,57 @@ describe("Player v2 — grupos legato", () => {
     expect(ctx()._oscillators).toHaveLength(1);
     const osc = ctx()._oscillators[0];
     expect(osc.frequency.setValueAtTime).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ── Testes: Player — timbres ──────────────────────────────────────────────────
+
+describe("Player — timbres", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("TB1. default 'voz': sawtooth + 2 formantes bandpass (F1≈710, F2≈1180)", () => {
+    let fakeCtx!: FakeCtx;
+    const player = createPlayer(() => {
+      fakeCtx = makeFakeCtx(0);
+      return fakeCtx as unknown as AudioContext;
+    });
+    player.play(pb([tn({ pitch: "g", ms: 300 })]), vi.fn(), vi.fn());
+    const osc = fakeCtx._oscillators[0];
+    expect(osc.type).toBe("sawtooth");
+    const bandpass = fakeCtx._filters.filter((f) => f.type === "bandpass");
+    expect(bandpass.length).toBeGreaterThanOrEqual(2);
+    const freqs = bandpass.map((f) =>
+      (f.frequency.setValueAtTime.mock.calls as [number, number][])[0]?.[0],
+    );
+    expect(freqs).toContain(710);
+    expect(freqs).toContain(1180);
+  });
+
+  it("TB2. timbre 'flauta': cadeia legada triangle → lowpass 1200", () => {
+    let fakeCtx!: FakeCtx;
+    const player = createPlayer(() => {
+      fakeCtx = makeFakeCtx(0);
+      return fakeCtx as unknown as AudioContext;
+    }, "flauta");
+    player.play(pb([tn({ pitch: "g", ms: 300 })]), vi.fn(), vi.fn());
+    const osc = fakeCtx._oscillators[0];
+    expect(osc.type).toBe("triangle");
+    const lp = fakeCtx._filters.find((f) => f.type === "lowpass");
+    expect(lp).toBeDefined();
+    expect(lp!.frequency.setValueAtTime).toHaveBeenCalledWith(1200, expect.any(Number));
+  });
+
+  it("TB3. 'voz': envelope (gain final) continua ligado ao destination", () => {
+    let fakeCtx!: FakeCtx;
+    const player = createPlayer(() => {
+      fakeCtx = makeFakeCtx(0);
+      return fakeCtx as unknown as AudioContext;
+    });
+    player.play(pb([tn({ pitch: "g", ms: 300 })]), vi.fn(), vi.fn());
+    const connectedToDest = fakeCtx._gains.some((g) =>
+      (g.connect.mock.calls as unknown[][]).some((c) => c[0] === fakeCtx.destination),
+    );
+    expect(connectedToDest).toBe(true);
   });
 });
