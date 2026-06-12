@@ -20,7 +20,7 @@ function syl(
 ): SyllableRhythm {
   // perPitchSigns simplificado: primeiro pitch recebe signs; restantes recebem []
   const perPitchSigns = pitches.map((_, i) => (i === 0 ? [...signs] : []));
-  return { pitches, signs, perPitchSigns, divisio, wordFinal };
+  return { pitches, signs, perPitchSigns, aligned: true, divisio, wordFinal };
 }
 
 // ── Teste 1: episema alarga ─────────────────────────────────────────────────
@@ -164,7 +164,7 @@ describe("tuotilo duration — computeDurations", () => {
   // ── Teste 8: sílaba só divisio (sem pitches) ───────────────────────────────
 
   it("8. sílaba só divisio => notes=[], pauseMs do nível", () => {
-    const s: SyllableRhythm = { pitches: [], signs: [], perPitchSigns: [], divisio: "finalis", wordFinal: false };
+    const s: SyllableRhythm = { pitches: [], signs: [], perPitchSigns: [], aligned: true, divisio: "finalis", wordFinal: false };
     const [ev] = computeDurations([s], DEFAULT_PROFILE, 42);
     expect(ev.notes).toHaveLength(0);
     expect(ev.pauseMs).toBeCloseTo(DEFAULT_PROFILE.pauseBeats.finalis * DEFAULT_PROFILE.baseMs, 5);

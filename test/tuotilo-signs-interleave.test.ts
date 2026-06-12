@@ -48,11 +48,11 @@ describe("tuotilo signs — segmentos gabc|nabc intercalados", () => {
   // nabc (ímpares 1,3,5): "vi-" + "//ds-hg" + "//to"
   //
   // Pitches esperados: i h h f g f  (6 notas)
-  //   iv.  → i(mora)   (v ignorado)
+  //   iv.  → i (v ignorado; . não gera mora — D1)
   //   hh   → h h
-  //   /fgf. → f g f(mora)
+  //   /fgf. → f g f (. não gera mora — D1)
   //
-  // Sinais: mora (iv. e fgf.), strophae (nabc ds no segmento 3 = "//ds-hg")
+  // Sinais: strophae (nabc ds no segmento 3 = "//ds-hg"); mora da quadrada NOT (D1)
   it("INTER-2: es(...) com 6 segmentos intercalados → 6 pitches e strophae", () => {
     const src = "es(iv.|vi-|hh|//ds-hg|/fgf.|//to)";
     const r = extractSyllable(src);
@@ -60,11 +60,12 @@ describe("tuotilo signs — segmentos gabc|nabc intercalados", () => {
     expect(r.pitches).toHaveLength(6);
     expect(r.pitches).toEqual(["i", "h", "h", "f", "g", "f"]);
 
-    // mora: presente em iv. e /fgf.
-    expect(r.signs).toContain("mora");
-
-    // strophae: base "ds" no segmento nabc "//ds-hg"
+    // D1: mora da quadrada (iv. e fgf.) NÃO entra mais.
+    expect(r.signs).not.toContain("mora");
+    // strophae: "ds-hg" alinha com "hh" (2×2) → strophae por nota
     expect(r.signs).toContain("strophae");
+    // episema: "vi-" alinha com "iv." (1×1) e "ds-" com "hh"
+    expect(r.signs).toContain("episema");
   });
 
   // ── Teste INTER-3: regressão — forma simples (1 pipe) permanece ídêntica ──────
@@ -75,6 +76,19 @@ describe("tuotilo signs — segmentos gabc|nabc intercalados", () => {
     expect(r.pitches).toEqual(["f", "g"]);
     // "hh" do nabc não deve virar pitch
     expect(r.pitches).not.toContain("h");
+  });
+
+  it("INTER-5: alinhamento por segmento — episema do ds- cai nas notas h,h e não no resto", () => {
+    const r = extractSyllable("es(iv.|vi-|hh|//ds-hg|/fgf.|//to)");
+    // notas: i(0) h(1) h(2) f(3) g(4) f(5)
+    expect(r.perPitchSigns[0]).toContain("episema");   // iv. × vi-  (1×1 alinhado)
+    expect(r.perPitchSigns[1]).toContain("strophae");  // hh × ds-   (2×2 alinhado)
+    expect(r.perPitchSigns[1]).toContain("episema");
+    expect(r.perPitchSigns[2]).toContain("strophae");
+    expect(r.perPitchSigns[3]).toEqual([]);            // fgf. × to  (3×3 alinhado, to sem sinal)
+    expect(r.perPitchSigns[4]).toEqual([]);
+    expect(r.perPitchSigns[5]).toEqual([]);
+    expect(r.aligned).toBe(true);
   });
 
   // ── Teste INTER-4: extractAll no arquivo completo ─────────────────────────────

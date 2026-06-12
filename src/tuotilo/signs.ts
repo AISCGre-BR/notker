@@ -1,24 +1,29 @@
 /** signs.ts — Extração de sinais rítmicos gabc+nabc por sílaba para o motor Tuotilo.
  *
+ * v2 — Decisões de spec:
+ *   D1: episema (`_`+dígitos), mora (`.`+[01]) e episema vertical (`'`+[01]) da notação
+ *       quadrada NUNCA geram sinais rítmicos; o parser CONSUME esses caracteres mas os
+ *       descarta. Sinais rítmicos vêm SÓ do NABC (+ quilisma `w`/`W`, initio debilis `-`,
+ *       currentes maiúsculos A-M — estes são neumáticos/melódicos do gabc).
+ *   D3: alinhamento por segmento via alignSegment(gabcNoteCount, nabcToken|null);
+ *       divergência de contagem → fallback "smear" (sinais borrados em todas as notas,
+ *       aligned=false).
+ *
  * Sintaxe gabc confirmada via nabc-lib/dist/nabc-renderer.es6.js (linhas 17943-18016):
  *   pitch minúsculo a-m = punctum   | maiúsculo A-M = inclinatum (→ currentes v1)
- *   `_`  após nota = episema horizontal (H_EPISEMA; pode ter dígitos 0-5 de posição)
- *   `.`  após nota = punctum mora   (PUNCTUM_MORA)
- *   `w`  após nota = quilisma       (S_QUILISMA)
- *   `-`  antes de nota gabc = initio debilis (diferente de `-` no NABC = episema)
+ *   `_`  após nota = episema horizontal (H_EPISEMA; D1: consumido, SEM sinal)
+ *   `.`  após nota = punctum mora   (PUNCTUM_MORA; D1: consumido, SEM sinal)
+ *   `w`  após nota = quilisma       (S_QUILISMA — sinal melódico, MANTIDO)
+ *   `-`  antes de nota gabc = initio debilis (MANTIDO)
  *   `,`→"minima"  `;`→"minor"  `:`→"maior"  `::`→"finalis"  `` ` ``→null (virgula, sem efeito v1)
  *   demais símbolos (~><'vVsx#@r=Ryo^qQ!) ignorados sem quebrar.
  *
  * Modificadores NABC (synopsis-neumes.json → "modifiers"; GregorioNabcRef §241–250):
- *   "-" = episema (fonte primária: St. Gall/Laon)  ">" = liqAug (liquescência aumentativa)
- *   "~" = liqDim (diminutiva)                       "S"/"G"/"M" = modificações visuais (ignoradas v1)
- *
- * Bases NABC relevantes para ritmo (nível sílaba — sem alinhamento nota-a-nota):
- *   or, pq, pt, oc   → "oriscus"   |   st, ds, ts, bv, tv → "strophae"
- *   ql, qi           → "quilisma"  (reforço do sinal gabc quando presente)
+ *   "-" = episema (fonte primária: St. Gall/Laon)  ">" = liqAug  "~" = liqDim
  */
 
 import type { SyllableSource } from "../preview/engine";
+import { alignSegment } from "./nabc-align";
 
 export type RhythmSign =
   | "episema"
@@ -35,28 +40,13 @@ export type RhythmSign =
 export interface SyllableRhythm {
   pitches: string[];              // minúsculas, na ordem; repercussões PRESERVADAS
   signs: RhythmSign[];            // união dos sinais da sílaba (sem duplicatas)
-  perPitchSigns: RhythmSign[][];  // paralelo a pitches
+  perPitchSigns: RhythmSign[][];  // paralelo a pitches — FONTE para a timeline
+  aligned: boolean;               // false se algum segmento caiu no fallback D3
   divisio: "minima" | "minor" | "maior" | "finalis" | null;
   wordFinal: boolean;
 }
 
 // ── Helpers internos ─────────────────────────────────────────────────────────
-
-/** Extrai a string gabc de dentro dos parênteses da última `(...)` da sílaba.
- *  Retorna null se não houver grupo gabc.
- *
- *  Sintaxe intercalada: quando o melisma é longo, o conteúdo alterna segmentos
- *  gabc|nabc|gabc|nabc|...  (índices PARES = gabc, ÍMPARES = nabc).
- *  Caso simples (sem `|` ou único `|`): comportamento anterior preservado. */
-function extractGabcGroup(src: string): string | null {
-  const m = src.match(/\(([^)]*)\)\s*$/);
-  if (!m) return null;
-  const inner = m[1];
-  const segs = inner.split("|");
-  if (segs.length <= 1) return inner; // sem pipe: gabc puro
-  // Concatenar todos os segmentos de índice PAR (0, 2, 4, …)
-  return segs.filter((_, i) => i % 2 === 0).join("/");
-}
 
 /** Detecta divisio pelo conteúdo gabc (sem notas).
  *  ATENÇÃO: detectar `::` antes de `:` para evitar match parcial. */
@@ -75,6 +65,20 @@ function isDivisioOnly(gabc: string): boolean {
   return /^[;:,`^]+$/.test(gabc.trim());
 }
 
+/** Segmentos pareados (gabc, nabc) do grupo `(...)`. Intercalado:
+ *  índices pares = gabc, ímpares = nabc do par anterior. */
+function extractSegments(src: string): { gabc: string; nabc: string | null }[] | null {
+  const m = src.match(/\(([^)]*)\)\s*$/);
+  if (!m) return null;
+  const segs = m[1].split("|");
+  if (segs.length <= 1) return [{ gabc: segs[0] ?? "", nabc: null }];
+  const pairs: { gabc: string; nabc: string | null }[] = [];
+  for (let i = 0; i < segs.length; i += 2) {
+    pairs.push({ gabc: segs[i], nabc: segs[i + 1] ?? null });
+  }
+  return pairs;
+}
+
 // ── Parser de notas por token ─────────────────────────────────────────────────
 
 interface NoteToken {
@@ -82,7 +86,10 @@ interface NoteToken {
   signs: RhythmSign[];
 }
 
-/** Analisa a parte gabc e devolve array de tokens de nota. */
+/** Analisa a parte gabc e devolve array de tokens de nota.
+ *  D1: episema (`_`), mora (`.`) e episema vertical (`'`) SÃO CONSUMIDOS mas NÃO
+ *  geram sinais. Apenas quilisma `w`/`W`, initio debilis `-` e currentes maiúsculos
+ *  A-M geram sinais (estes são neumáticos/melódicos do gabc, não rítmicos da quadrada). */
 function parseNotes(gabc: string): NoteToken[] {
   const tokens: NoteToken[] = [];
   let i = 0;
@@ -111,19 +118,18 @@ function parseNotes(gabc: string): NoteToken[] {
       i++; // avança além do pitch
 
       // Consome qualificadores que seguem imediatamente a nota
-      // Episema: `_` opcionalmente seguido de dígitos 0-5
+
+      // D1 — Episema: `_` opcionalmente seguido de dígitos 0-5: CONSUMIDO, SEM sinal
       while (i < len && gabc[i] === "_") {
-        noteSigns.push("episema");
         i++; // consume `_`
         while (i < len && /[0-5]/.test(gabc[i])) i++; // dígitos opcionais de posição
       }
-      // Mora: `.` (PUNCTUM_MORA — pode ter `0` ou `1` opcional)
+      // D1 — Mora: `.` (PUNCTUM_MORA — pode ter `0` ou `1` opcional): CONSUMIDO, SEM sinal
       if (i < len && gabc[i] === ".") {
-        noteSigns.push("mora");
         i++;
         if (i < len && (gabc[i] === "0" || gabc[i] === "1")) i++;
       }
-      // Quilisma: `w` (S_QUILISMA)
+      // Quilisma: `w` (S_QUILISMA) — sinal melódico, MANTIDO
       if (i < len && gabc[i] === "w") {
         noteSigns.push("quilisma");
         i++;
@@ -133,7 +139,7 @@ function parseNotes(gabc: string): NoteToken[] {
         noteSigns.push("quilisma");
         i++;
       }
-      // Episema vertical: `'` com dígito opcional — ignorado semiologicamente v1
+      // D1 — Episema vertical: `'` com dígito opcional: CONSUMIDO, SEM sinal
       if (i < len && gabc[i] === "'") {
         i++;
         if (i < len && /[01]/.test(gabc[i])) i++;
@@ -145,7 +151,6 @@ function parseNotes(gabc: string): NoteToken[] {
       continue;
     }
 
-    // Símbolos multi-char ou prefixos de outros tipos de nota
     // `@[a-m]` = nota fused (prefixo @) — trata como pitch normal
     if (ch === "@" && i + 1 < len && /[a-mA-M]/.test(gabc[i + 1])) {
       i++; // consome `@`, a nota virá na próxima iteração
@@ -159,137 +164,60 @@ function parseNotes(gabc: string): NoteToken[] {
   return tokens;
 }
 
-// ── Enriquecimento NABC ───────────────────────────────────────────────────────
-
-/** Bases NABC que indicam oriscus (GregorioNabcRef; tables.ts KIND_NAMES). */
-const ORISCUS_BASES = new Set(["or", "pq", "pt", "oc"]);
-
-/** Bases NABC que indicam strophae (apostropha e seus compostos). */
-const STROPHAE_BASES = new Set(["st", "ds", "ts", "bv", "tv"]);
-
-/** Bases NABC que indicam quilisma. */
-const QUILISMA_BASES = new Set(["ql", "qi"]);
-
-/** Extrai a parte nabc de dentro dos parênteses (segmentos de índice ÍMPAR).
- *  Retorna null se não houver separador `|`.
- *
- *  Sintaxe intercalada: `gabc0|nabc0|gabc1|nabc1|...` — todos os segmentos ímpares
- *  são concatenados com `!` (separador de neumas compostos NABC), que enrichFromNabc
- *  já sabe dividir. */
-function extractNabcGroup(src: string): string | null {
-  const m = src.match(/\(([^)]*)\)\s*$/);
-  if (!m) return null;
-  const segs = m[1].split("|");
-  if (segs.length <= 1) return null;
-  // Segmentos ímpares (1, 3, 5, …)
-  const nabcSegs = segs.filter((_, i) => i % 2 === 1);
-  return nabcSegs.join("!");
-}
-
-/** Remove prefixos de letras significativas (ls.../lt...) e hh-pitch (h[a-m])
- *  do token para isolar bases e modificadores de glifo.
- *  Estratégia leve: substitui padrões conhecidos por ""; não usa tabelas externas. */
-function stripNonGlyphParts(token: string): string {
-  // Remove letras significativas: ls<letras><dígito> e lt<letras><dígito>
-  let s = token.replace(/l[st][a-z]+[0-9]/g, "");
-  // Remove pitch relativo: h[a-m]
-  s = s.replace(/h[a-m]/g, "");
-  // Remove ajuste horizontal: /+ e `+
-  s = s.replace(/[/`]+/g, "");
-  // Remove sufixos subpunctis (su) e praepunctis (pp): padrão (su|pp)[a-z]?[0-9]+
-  // Exemplos do catálogo: sut1, sun1, su2, ppt1, ppn1, pp2 (synopsis-neumes.json)
-  s = s.replace(/(su|pp)[a-z]?[0-9]+/g, "");
-  return s;
-}
-
-/** Extrai sinais rítmicos do token NABC e os adiciona a `s` (nível sílaba v1).
- *  Reutiliza NEUME_KINDS/KIND_NAMES indiretamente via ORISCUS_BASES/STROPHAE_BASES.
- *  NÃO tenta alinhar nota-a-nota; decisão "sentido geral" por divergência gabc×nabc. */
-export function enrichFromNabc(s: SyllableRhythm, nabcSrc: string): SyllableRhythm {
-  if (!nabcSrc) return s;
-
-  const signsSet = new Set<RhythmSign>(s.signs);
-
-  // Cada neuma do token é separado por "!" (NABC_COMPLEX_NEUME_SEPARATOR).
-  // Iterar sobre todos para detectar bases semiológicas em qualquer posição.
-  for (const part of nabcSrc.split("!")) {
-    const clean = stripNonGlyphParts(part);
-
-    // Extrair base de 2 letras de cada segmento (pode ter vários glifos concatenados)
-    // Padrão: letras minúsculas seguidas de modificadores SGM->~1-9
-    const baseMatches = clean.match(/[a-z]{2}/g) ?? [];
-    for (const base of baseMatches) {
-      if (ORISCUS_BASES.has(base))  signsSet.add("oriscus");
-      if (STROPHAE_BASES.has(base)) signsSet.add("strophae");
-      if (QUILISMA_BASES.has(base)) signsSet.add("quilisma");
-    }
-
-    // Detectar modificadores de glifo (GregorioNabcRef §241–250):
-    //   "-"  = episema (NABC é a fonte primária de ritmo — St. Gall/Laon)
-    //   ">"  = liquescência aumentativa
-    //   "~"  = liquescência diminutiva
-    // O Set garante que "episema" não duplica mesmo se o GABC também tiver `_`.
-    if (clean.includes("-")) signsSet.add("episema");
-    if (clean.includes(">")) signsSet.add("liqAug");
-    if (clean.includes("~")) signsSet.add("liqDim");
-  }
-
-  return { ...s, signs: Array.from(signsSet) };
-}
-
 // ── API pública ──────────────────────────────────────────────────────────────
 
 /** Extrai sinais rítmicos de uma sílaba gabc.
- *  @param src — string no formato "texto(gabc)" ou "(gabc|nabc)" */
+ *  @param src — string no formato "texto(gabc)" ou "(gabc|nabc)" ou intercalado */
 export function extractSyllable(src: string, wordFinal = false): SyllableRhythm {
-  const gabcGroup = extractGabcGroup(src);
-
-  if (!gabcGroup) {
+  const segments = extractSegments(src);
+  if (!segments) {
     // Sem grupo gabc — retorna estrutura vazia
-    return { pitches: [], signs: [], perPitchSigns: [], divisio: null, wordFinal };
+    return { pitches: [], signs: [], perPitchSigns: [], aligned: true, divisio: null, wordFinal };
   }
 
+  const joined = segments.map((s) => s.gabc).join("/");
+
   // Divisio only?
-  if (isDivisioOnly(gabcGroup)) {
+  if (isDivisioOnly(joined)) {
     return {
       pitches: [],
       signs: [],
       perPitchSigns: [],
-      divisio: parseDivisio(gabcGroup),
+      aligned: true,
+      divisio: parseDivisio(joined),
       wordFinal,
     };
   }
 
-  // Parsing de notas
-  const noteTokens = parseNotes(gabcGroup);
-  const pitches = noteTokens.map((n) => n.pitch);
-  const perPitchSigns: RhythmSign[][] = noteTokens.map((n) => [...n.signs]);
+  const pitches: string[] = [];
+  const perPitchSigns: RhythmSign[][] = [];
+  let aligned = true;
 
-  // Propagação de preQuilisma: para cada nota com "quilisma",
-  // a nota imediatamente anterior recebe "preQuilisma".
-  for (let i = 0; i < perPitchSigns.length; i++) {
-    if (perPitchSigns[i].includes("quilisma") && i > 0) {
+  for (const seg of segments) {
+    const tokens = parseNotes(seg.gabc);
+    const a = alignSegment(tokens.length, seg.nabc);
+    if (!a.aligned) aligned = false;
+    tokens.forEach((t, i) => {
+      pitches.push(t.pitch);
+      perPitchSigns.push(Array.from(new Set([...t.signs, ...a.perNote[i]])));
+    });
+  }
+
+  // preQuilisma: nota anterior a uma quilisma que ela própria não seja quilisma.
+  for (let i = 1; i < perPitchSigns.length; i++) {
+    if (perPitchSigns[i].includes("quilisma") && !perPitchSigns[i - 1].includes("quilisma")) {
       perPitchSigns[i - 1].push("preQuilisma");
     }
   }
 
   // Divisio no conteúdo misto (ex.: notas + divisio no mesmo grupo — raro, mas seguro)
-  const divisio = parseDivisio(gabcGroup);
+  const divisio = parseDivisio(joined);
 
   // União de sinais sem duplicatas
   const signsSet = new Set<RhythmSign>();
-  for (const noteSignList of perPitchSigns) {
-    for (const s of noteSignList) signsSet.add(s);
-  }
-  const signs = Array.from(signsSet);
+  for (const list of perPitchSigns) for (const s of list) signsSet.add(s);
 
-  let result: SyllableRhythm = { pitches, signs, perPitchSigns, divisio, wordFinal };
-
-  // Enriquecimento NABC: se houver parte após `|`, extrai sinais semiológicos adicionais
-  const nabcGroup = extractNabcGroup(src);
-  if (nabcGroup) result = enrichFromNabc(result, nabcGroup);
-
-  return result;
+  return { pitches, signs: Array.from(signsSet), perPitchSigns, aligned, divisio, wordFinal };
 }
 
 /** Extrai sinais rítmicos de todas as sílabas reais do documento.

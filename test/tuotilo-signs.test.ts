@@ -15,20 +15,13 @@ import {
 
 describe("tuotilo signs — extractSyllable", () => {
 
-  // ── Teste 1: episema e mora ─────────────────────────────────────────────────
-  it("1. episema em g e mora em h: vi(fg_h.)", () => {
+  // ── Teste 1 (v2/D1): episema e mora da QUADRADA são consumidos mas IGNORADOS ─
+  it("1. D1: '_' e '.' da quadrada não geram sinais: vi(fg_h.)", () => {
     const r = extractSyllable("vi(fg_h.)");
-    // pitches: f, g (com episema), h (com mora)
-    expect(r.pitches).toEqual(["f", "g", "h"]);
-    // signs da sílaba contém episema e mora
-    expect(r.signs).toContain("episema");
-    expect(r.signs).toContain("mora");
-    // perPitchSigns por posição
-    expect(r.perPitchSigns[0]).toEqual([]);           // f: sem sinal
-    expect(r.perPitchSigns[1]).toContain("episema");  // g_
-    expect(r.perPitchSigns[1]).not.toContain("mora");
-    expect(r.perPitchSigns[2]).toContain("mora");     // h.
-    expect(r.perPitchSigns[2]).not.toContain("episema");
+    expect(r.pitches).toEqual(["f", "g", "h"]);          // parser não quebra
+    expect(r.signs).not.toContain("episema");
+    expect(r.signs).not.toContain("mora");
+    expect(r.perPitchSigns).toEqual([[], [], []]);
   });
 
   // ── Teste 2: quilisma — sintaxe confirmada: `w` é sufixo da nota quilisma ──
@@ -132,21 +125,16 @@ describe("tuotilo signs — extractSyllable", () => {
     expect(r.signs).toEqual([]);
   });
 
-  // ── Teste 9: combinação de episema com mora na mesma nota ──────────────────
-  it("9. episema + mora na mesma nota: (f_.g)", () => {
+  it("9. D1: '_.' combinados também ignorados: (f_.g)", () => {
     const r = extractSyllable("(f_.g)");
-    // f tem episema E mora; g sem nada
     expect(r.pitches).toEqual(["f", "g"]);
-    expect(r.perPitchSigns[0]).toContain("episema");
-    expect(r.perPitchSigns[0]).toContain("mora");
-    expect(r.perPitchSigns[1]).toEqual([]);
+    expect(r.perPitchSigns).toEqual([[], []]);
   });
 
-  // ── Teste 10: signs não tem duplicatas ────────────────────────────────────
-  it("10. signs sem duplicatas mesmo com múltiplos episemas", () => {
-    const r = extractSyllable("(f_g_h)");
-    const count = r.signs.filter((s) => s === "episema").length;
-    expect(count).toBe(1); // episema só aparece uma vez no array signs
+  it("10. D1: múltiplos episemas da quadrada não geram sinal nem quebram o parser", () => {
+    const r = extractSyllable("(f_2_3g_)");
+    expect(r.pitches).toEqual(["f", "g"]);
+    expect(r.signs).toEqual([]);
   });
 });
 
@@ -188,7 +176,7 @@ describe("tuotilo signs — extractAll", () => {
     expect(results[4].wordFinal).toBe(true);
   });
 
-  it("11b. extractAll retorna pitches e signs corretos para cada sílaba", () => {
+  it("11b. D1: extractAll — '_' e '.' da quadrada não geram sinais", () => {
     const doc = "(c4) a(fg_)b(h.)";
     const map = [
       { syllableIndex: 0, from: 0, to: 4 },   // (c4)
@@ -197,11 +185,11 @@ describe("tuotilo signs — extractAll", () => {
     ];
     const results = extractAll(doc, map);
     expect(results).toHaveLength(2);
-    // sílaba 1: "a(fg_)" → pitches f,g; g tem episema
+    // sílaba 1: "a(fg_)" → pitches f,g; g_ não gera episema (D1)
     expect(results[0].pitches).toEqual(["f", "g"]);
-    expect(results[0].signs).toContain("episema");
-    // sílaba 2: "b(h.)" → pitches h; h tem mora
+    expect(results[0].signs).not.toContain("episema");
+    // sílaba 2: "b(h.)" → pitches h; h. não gera mora (D1)
     expect(results[1].pitches).toEqual(["h"]);
-    expect(results[1].signs).toContain("mora");
+    expect(results[1].signs).not.toContain("mora");
   });
 });
