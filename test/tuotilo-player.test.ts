@@ -352,7 +352,7 @@ describe("Player — timbres", () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it("TB1. default 'voz': sawtooth + 2 formantes bandpass (F1≈710, F2≈1180)", () => {
+  it("TB1. default 'voz': triangle + 2 formantes bandpass (F1≈710, F2≈1180)", () => {
     let fakeCtx!: FakeCtx;
     const player = createPlayer(() => {
       fakeCtx = makeFakeCtx(0);
@@ -360,7 +360,7 @@ describe("Player — timbres", () => {
     });
     player.play(pb([tn({ pitch: "g", ms: 300 })]), vi.fn(), vi.fn());
     const osc = fakeCtx._oscillators[0];
-    expect(osc.type).toBe("sawtooth");
+    expect(osc.type).toBe("triangle");
     const bandpass = fakeCtx._filters.filter((f) => f.type === "bandpass");
     expect(bandpass.length).toBeGreaterThanOrEqual(2);
     const freqs = bandpass.map((f) =>

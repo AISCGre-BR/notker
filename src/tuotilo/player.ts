@@ -61,18 +61,18 @@ export const PULSE_MS   = 56;    // duração total do mergulho vai-e-volta (ms)
 
 // ── Presets de timbre ─────────────────────────────────────────────────────────
 
-/** Timbres do sintetizador (B1.3): "voz" = sawtooth + formantes (vogal "ah");
+/** Timbres do sintetizador (B1.3): "voz" = triangle + formantes (vogal "ah");
  *  "flauta" = triangle + lowpass (timbre da v1/v2). Decisão final por UAT. */
 export type SynthTimbre = "voz" | "flauta";
 
 const VOZ_F1_HZ   = 710;    // formante 1 da vogal "ah"
 const VOZ_F2_HZ   = 1180;   // formante 2
-const VOZ_F1_Q    = 4.7;
-const VOZ_F2_Q    = 6.3;
-const VOZ_F1_MIX  = 0.61;   // pesos de mistura dos caminhos
-const VOZ_F2_MIX  = 0.27;
-const VOZ_BODY_MIX   = 0.24; // caminho de corpo (lowpass) p/ não ficar anasalado
-const VOZ_BODY_LP_HZ = 2400;
+const VOZ_F1_Q    = 2.2;    // Q baixo = formante largo/suave (Q alto soa metálico)
+const VOZ_F2_Q    = 2.4;
+const VOZ_F1_MIX  = 0.60;   // pesos de mistura dos caminhos
+const VOZ_F2_MIX  = 0.18;
+const VOZ_BODY_MIX   = 0.66; // caminho de corpo (lowpass) p/ não ficar anasalado
+const VOZ_BODY_LP_HZ = 1800; // triângulo já é suave; aqui só arredonda
 
 // ── Grupo legato ──────────────────────────────────────────────────────────────
 
@@ -103,8 +103,9 @@ function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[], 
     osc.connect(filter);
     filter.connect(gain);
   } else {
-    // "voz": sawtooth → [formante1, formante2, corpo] em paralelo → mix → envelope
-    osc.type = "sawtooth";
+    // "voz": triangle → [formante1, formante2, corpo] em paralelo → mix → envelope
+    // (sawtooth soava metálico/chiado — UAT 2026-06-12; triângulo é mais doce)
+    osc.type = "triangle";
     const paths: [number, number | null, number][] = [
       [VOZ_F1_HZ, VOZ_F1_Q, VOZ_F1_MIX],
       [VOZ_F2_HZ, VOZ_F2_Q, VOZ_F2_MIX],
