@@ -8,7 +8,7 @@ import { NOTE_COUNTS, parseNabcToken } from "../src/tuotilo/nabc-align";
 
 describe("NOTE_COUNTS — tabela canônica", () => {
   it("A1. bases de 1 nota", () => {
-    for (const b of ["vi", "pu", "ta", "gr", "st", "or", "un"]) {
+    for (const b of ["vi", "pu", "ta", "gr", "st", "or", "un", "ql", "qi"]) {
       expect(NOTE_COUNTS[b], b).toBe(1);
     }
   });
@@ -94,5 +94,26 @@ describe("parseNabcToken — glifos e contagem", () => {
   it("B13. ql isolado = 1 nota com quilisma (compostos chegam via '!')", () => {
     const g = parseNabcToken("ql")!;
     expect(g[0].perNote).toEqual([["quilisma"]]);
+  });
+  it("B14. letra x no su = strophae; letra q = quilisma (nas notas acrescidas)", () => {
+    const gx = parseNabcToken("clsux1")!;
+    expect(gx[0].perNote).toHaveLength(3);
+    expect(gx[0].perNote[2]).toEqual(["strophae"]);
+    const gq = parseNabcToken("clsuq1")!;
+    expect(gq[0].perNote[2]).toEqual(["quilisma"]);
+  });
+  it("B15. liqAug/liqDim distribuídos a TODAS as notas da base: pe> e cl~", () => {
+    const aug = parseNabcToken("pe>")![0].perNote;
+    expect(aug[0]).toContain("liqAug");
+    expect(aug[1]).toContain("liqAug");
+    const dim = parseNabcToken("cl~")![0].perNote;
+    expect(dim[0]).toContain("liqDim");
+    expect(dim[1]).toContain("liqDim");
+  });
+  it("B16. qi (quilisma 2 loops) = 1 nota com quilisma; ni no parser = glifo sem notas", () => {
+    expect(parseNabcToken("qi")![0].perNote).toEqual([["quilisma"]]);
+    const ni = parseNabcToken("ni")!;
+    expect(ni).toHaveLength(1);
+    expect(ni[0].perNote).toEqual([]);
   });
 });

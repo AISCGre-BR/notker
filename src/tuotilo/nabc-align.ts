@@ -72,6 +72,7 @@ function extraNoteSigns(letter: string | undefined): RhythmSign[] {
   if (letter === "u" || letter === "v" || letter === "y") return ["episema"];
   if (letter === "x") return ["strophae"];
   if (letter === "q") return ["quilisma"];
+  // w (gravis), t (tractulus) e demais: sem sinal rítmico na v2
   return [];
 }
 
