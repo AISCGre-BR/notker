@@ -69,6 +69,15 @@ describe("computeTimedNotes — interpretado (fidelidade por nota)", () => {
     const { notes } = timed([syl(["f", "g"]), syl(["h"])]);
     expect(notes.map((n) => n.syllableIndex)).toEqual([0, 0, 1]);
   });
+  it("D9. recitação encurta: run de 4 unísonos silábicos < nota silábica isolada", () => {
+    const run = timed([syl(["h"]), syl(["h"]), syl(["h"]), syl(["h"])]).notes;
+    const solo = timed([syl(["h"])]).notes[0];
+    // todas as notas do run mais curtas que a isolada (mesma seed → jitter difere,
+    // mas o fator 0.83 domina folgadamente o jitter de ±8%)
+    for (const n of run) expect(n.ms).toBeLessThan(solo.ms);
+    // e continuam rearticuladas (regra sagrada)
+    expect(run.map((n) => n.attack)).toEqual([true, true, true, true]);
+  });
   it("D8. ANTI-MENSURALISTA (D-23): razão dos 2 clusters fora de [1.9, 2.1]", () => {
     const signsPool: RhythmSign[][] = [
       [], ["episema"], ["currentes"], ["quilisma"], ["preQuilisma"],
@@ -96,6 +105,10 @@ describe("computeTimedNotes — solfejo", () => {
   it("S2. attack=true em TODAS as notas (re-ataque por nota)", () => {
     const { notes } = timed([syl(["f", "g", "g", "h"])], "solfejo");
     expect(notes.every((n) => n.attack)).toBe(true);
+  });
+  it("S4. recitação NÃO aplica no solfejo (isócrono)", () => {
+    const { notes } = timed([syl(["h"]), syl(["h"]), syl(["h"])], "solfejo");
+    for (const n of notes) expect(n.ms).toBe(P.baseMs);
   });
   it("S3. pausas de divisio mantidas", () => {
     const { notes } = timed([syl(["f"]), syl([], undefined, "minor"), syl(["g"])], "solfejo");

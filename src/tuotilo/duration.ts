@@ -133,6 +133,7 @@ export function computeTimedNotes(
       if (n.divisio === "minor")   L += Math.log(p.factors.divisioMinor);
       if (n.divisio === "maior")   L += Math.log(p.factors.divisioMaior);
       if (n.divisio === "finalis") L += Math.log(p.factors.divisioFinalis);
+      if (n.recitation)            L += Math.log(p.factors.recitation);
 
       const cap = selectCap(p.caps, n.divisio, n.wordFinal);
       const D = p.baseMs * Math.exp(saturate(L, cap));

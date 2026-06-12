@@ -17,6 +17,37 @@ function syl(
   };
 }
 
+describe("buildTimeline — recitação (unísono silábico)", () => {
+  it("R1. run de 4 sílabas de 1 nota na mesma altura → recitation=true nas 4 (et adoráte)", () => {
+    const tl = buildTimeline([syl(["h"]), syl(["h"]), syl(["h"]), syl(["h"], { wordFinal: true })]);
+    expect(tl.notes.map((n) => n.recitation)).toEqual([true, true, true, true]);
+  });
+  it("R2. run de 2 NÃO marca (mínimo 3)", () => {
+    const tl = buildTimeline([syl(["f"]), syl(["f"]), syl(["g"])]);
+    expect(tl.notes.map((n) => n.recitation)).toEqual([false, false, false]);
+  });
+  it("R3. melisma quebra o run: sílaba de 2+ notas não participa", () => {
+    const tl = buildTimeline([syl(["h"]), syl(["h"]), syl(["h", "h"]), syl(["h"])]);
+    expect(tl.notes.map((n) => n.recitation)).toEqual([false, false, false, false, false]);
+  });
+  it("R4. divisio quebra o run (incisos diferentes)", () => {
+    const tl = buildTimeline([
+      syl(["h"]), syl(["h"]),
+      syl([], { divisio: "minima" }),
+      syl(["h"]), syl(["h"]),
+    ]);
+    expect(tl.notes.map((n) => n.recitation)).toEqual([false, false, false, false]);
+  });
+  it("R5. tristropha (3 notas iguais na MESMA sílaba) NÃO é recitação", () => {
+    const tl = buildTimeline([syl(["f", "f", "f"])]);
+    expect(tl.notes.map((n) => n.recitation)).toEqual([false, false, false]);
+  });
+  it("R6. repercussion/attack não mudam: run de recitação continua rearticulado", () => {
+    const tl = buildTimeline([syl(["h"]), syl(["h"]), syl(["h"])]);
+    expect(tl.notes.map((n) => n.repercussion)).toEqual([false, true, true]);
+  });
+});
+
 describe("buildTimeline", () => {
   it("T1. notas planas com idx sequencial e syllableIndex/noteInSyllable", () => {
     const tl = buildTimeline([syl(["f", "g"]), syl(["h"])]);
