@@ -7,6 +7,8 @@ export interface RhythmProfile {
     wordFinal: number;
     divisioMinima: number; divisioMinor: number; divisioMaior: number; divisioFinalis: number;
     currentes: number; initioDebilis: number;
+    // sinais adicionais (fonte NABC / formas neumáticas)
+    oriscus: number; liqAug: number; liqDim: number; strophae: number;
   };
   caps: { sign: number; incisum: number; phrase: number }; // tetos de saturação por nível
   jitterSigma: number;                  // fração de D (ex.: 0.04)
@@ -17,7 +19,9 @@ export const DEFAULT_PROFILE: RhythmProfile = {
   factors: { episema: 1.31, mora: 1.83, preQuilisma: 1.27, quilisma: 0.92,
     wordFinal: 1.12,
     divisioMinima: 1.21, divisioMinor: 1.34, divisioMaior: 1.52, divisioFinalis: 1.78,
-    currentes: 0.86, initioDebilis: 0.88 },
+    currentes: 0.86, initioDebilis: 0.88,
+    // valores em decimais irregulares: semiologia, não mensuralismo (D-23)
+    oriscus: 0.93, liqAug: 1.24, liqDim: 0.84, strophae: 0.91 },
   caps: { sign: 1.35, incisum: 1.7, phrase: 2.05 },
   jitterSigma: 0.04,
   pauseBeats: { minima: 0.2, minor: 0.45, maior: 0.95, finalis: 1.6 },
