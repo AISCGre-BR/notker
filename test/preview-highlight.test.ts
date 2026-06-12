@@ -24,4 +24,28 @@ describe("realce de sílaba no preview", () => {
     clearHighlight(svg);
     expect(svg.querySelector(".hl-strong")).toBeNull();
   });
+  it("realça TODOS os fragmentos quando a sílaba foi dividida pela quebra de linha", () => {
+    document.body.innerHTML =
+      `<svg>` +
+      `<g class="syllable syllable-1"></g>` +
+      `<g class="syllable syllable-2"></g>` +
+      `<g class="syllable syllable-2"></g>` + // fragmento da MESMA sílaba (split de linha)
+      `<g class="syllable syllable-3"></g>` +
+      `</svg>`;
+    const svg = document.querySelector("svg")!;
+    highlightSyllable(svg, 2);
+    expect(svg.querySelectorAll(".hl-strong")).toHaveLength(2);
+    // e não realça vizinhos
+    highlightSyllable(svg, 3);
+    expect(svg.querySelectorAll(".hl-strong")).toHaveLength(1);
+  });
+  it("não confunde syllable-1 com syllable-10 (match exato do índice)", () => {
+    document.body.innerHTML =
+      `<svg><g class="syllable syllable-1"></g><g class="syllable syllable-10"></g></svg>`;
+    const svg = document.querySelector("svg")!;
+    highlightSyllable(svg, 1);
+    expect(svg.querySelectorAll(".hl-strong")).toHaveLength(1);
+    expect(svg.querySelector(".hl-strong")!.getAttribute("class")).toContain("syllable-1");
+    expect(svg.querySelector(".hl-strong")!.getAttribute("class")).not.toContain("syllable-10");
+  });
 });

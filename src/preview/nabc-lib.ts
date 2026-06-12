@@ -60,9 +60,15 @@ export class NabcLibEngine implements PreviewEngine {
     const svg = svgEl ? svgEl.outerHTML : "<svg xmlns='http://www.w3.org/2000/svg'></svg>";
     const spans = syllableSpans(doc);
     const numbered = spans.filter((s) => s.syllableIndex >= 1).length;
-    const groups = svgEl ? svgEl.querySelectorAll('[class*="syllable-"]').length : 0;
-    if (groups !== numbered) {
-      console.warn(`[f3] desalinhamento sílaba↔span: svg=${groups} numeradas=${numbered}`);
+    const distinct = svgEl
+      ? new Set(
+          Array.from(svgEl.querySelectorAll('[class*="syllable-"]'))
+            .map((el) => /(?:^|\s)syllable-(\d+)(?:\s|$)/.exec(el.getAttribute("class") ?? "")?.[1])
+            .filter((x): x is string => x != null),
+        ).size
+      : 0;
+    if (distinct !== numbered) {
+      console.warn(`[f3] desalinhamento sílaba↔span: índices distintos=${distinct} numeradas=${numbered}`);
     }
     return { svg, sourceMap: spans };
   }
