@@ -35,7 +35,7 @@ import { syllableRangeOfSelection } from "./preview/source-map";
 import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel } from "./overlay-ui/panel";
 import { createSplit, type Split } from "./ui/split";
-import { createTabs } from "./ui/tabs";
+import { createBottomStrip } from "./ui/strip";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
 import {
@@ -194,9 +194,9 @@ async function boot() {
   // try/catch para que as assistências (hover/completion/paleta) carreguem sempre,
   // mesmo que o motor de preview (webview-only) falhe.
   const previewHost = document.querySelector<HTMLElement>("#preview")!;
-  const tabs = createTabs(previewHost, ["Partitura", "Interpretação"]);
-  const partituraPane = tabs.pane(0);
-  const wavePane = tabs.pane(1);
+  const strip = createBottomStrip(previewHost, "Interpretação");
+  const partituraPane = strip.top();
+  const wavePane = strip.body();
 
   // Referência mutável para limpar o cursor da onda no stopPlayback.
   // Declarada aqui (antes do wavePanel) para evitar temporal dead zone — setada
@@ -272,8 +272,8 @@ async function boot() {
     rebuildWave();
   }
 
-  // Ao trocar para a aba Interpretação, sincroniza a onda com o doc atual.
-  tabs.onChange((i) => { if (i === 1) syncWaveWithDoc(); });
+  // Ao expandir a faixa Interpretação, sincroniza a onda com o doc atual.
+  strip.onToggle((e) => { if (e) syncWaveWithDoc(); });
 
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
@@ -288,8 +288,8 @@ async function boot() {
     onDocChange = () => {
       prevOnDocChange();
       panel!.update(view.state.doc.toString());
-      // Onda: re-sincroniza apenas se a aba Interpretação estiver ativa.
-      if (tabs.active() === 1) syncWaveWithDoc();
+      // Onda: re-sincroniza apenas se a faixa Interpretação estiver expandida.
+      if (strip.expanded()) syncWaveWithDoc();
     };
     // Realce de sílaba segue o cursor.
     view.dom.addEventListener("keyup", () => syncFromCursor(view, panel!));
@@ -333,7 +333,7 @@ async function boot() {
     reindex();
     // Onda: restaura a interpretação persistida, ou cria vazia para o novo canto
     wave = getActiveDoc(project).interpretation ?? emptyWave(gabcBodyHash(getActiveDoc(project).content));
-    if (tabs.active() === 1) syncWaveWithDoc();
+    if (strip.expanded()) syncWaveWithDoc();
   }
   function captureEditorIntoProject(): void {
     project = withActiveContent(project, view.state.doc.toString());
