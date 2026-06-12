@@ -234,8 +234,31 @@ describe("Player — agendamento de notas", () => {
     expect(fakeCtx._oscillators[0]).not.toBe(fakeCtx._oscillators[1]);
   });
 
-  // ── Teste 3: release termina ANTES do fim nominal (gap 22ms) ─────────────────
-  it("3. release termina antes do fim nominal da nota (gap ≥ 22ms)", () => {
+  // ── Teste 2b: cadeia de conexão osc → filter → gain → destination ────────────
+  it("2b. cadeia de conexão: osc.connect(filter), filter.connect(gain), gain.connect(destination)", () => {
+    let fakeCtx!: FakeCtx;
+    const player = createPlayer(() => {
+      fakeCtx = makeFakeCtx(0);
+      return fakeCtx as unknown as AudioContext;
+    });
+
+    const events: SyllableEvents[] = [sylEvents(["g"], 200, 0, 0)];
+    player.play(events, vi.fn(), vi.fn());
+
+    const osc    = fakeCtx._oscillators[0];
+    const filter = fakeCtx._filters[0];
+    const gain   = fakeCtx._gains[0];
+
+    // osc → filter
+    expect(osc.connect).toHaveBeenCalledWith(filter);
+    // filter → gain
+    expect(filter.connect).toHaveBeenCalledWith(gain);
+    // gain → destination
+    expect(gain.connect).toHaveBeenCalledWith(fakeCtx.destination);
+  });
+
+  // ── Teste 3: release termina ANTES do fim nominal (gap nominal 22ms) ─────────
+  it("3. release termina antes do fim nominal da nota (gap nominal = 22ms)", () => {
     let fakeCtx!: FakeCtx;
     const player = createPlayer(() => {
       fakeCtx = makeFakeCtx(0);
@@ -256,8 +279,37 @@ describe("Player — agendamento de notas", () => {
       const releaseEndSec = rampToZero[1];
       const BASE = 0.05;
       const nominalEndSec = BASE + NOTE_MS / 1000;
-      // release termina pelo menos (22ms - tolerância 1ms) antes do fim nominal
-      expect(nominalEndSec - releaseEndSec).toBeGreaterThanOrEqual(0.021);
+      // gap nominal = GAP_MS (22ms); tolerância de ±0.5ms (3 casas decimais)
+      expect(nominalEndSec - releaseEndSec).toBeCloseTo(0.022, 3);
+    }
+  });
+
+  // ── Teste 3c: nota curta (30ms) — automação do gain em ordem crescente ────────
+  it("3c. nota de 30ms → todos os timestamps de automação do gain em ordem estritamente crescente", () => {
+    let fakeCtx!: FakeCtx;
+    const player = createPlayer(() => {
+      fakeCtx = makeFakeCtx(0);
+      return fakeCtx as unknown as AudioContext;
+    });
+
+    const events: SyllableEvents[] = [sylEvents(["g"], 30, 0, 0)];
+    player.play(events, vi.fn(), vi.fn());
+
+    const gainNode = fakeCtx._gains[0];
+    // Coleta todos os timestamps: setValueAtTime + linearRampToValueAtTime
+    const setCalls = gainNode.gain.setValueAtTime.mock.calls as [number, number][];
+    const rampCalls = gainNode.gain.linearRampToValueAtTime.mock.calls as [number, number][];
+    const timestamps: number[] = [
+      ...setCalls.map(([, t]) => t),
+      ...rampCalls.map(([, t]) => t),
+    ];
+
+    // Deve haver ao menos 3 eventos de automação (setValueAtTime(0), ramp→peak, ramp→0)
+    expect(timestamps.length).toBeGreaterThanOrEqual(3);
+
+    // Todos os timestamps devem estar em ordem estritamente crescente
+    for (let i = 1; i < timestamps.length; i++) {
+      expect(timestamps[i]).toBeGreaterThan(timestamps[i - 1]);
     }
   });
 

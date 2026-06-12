@@ -110,7 +110,14 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
     if (releaseSec > attackEndSec) {
       gain.gain.setValueAtTime(PEAK_GAIN, releaseSec);
     }
-    gain.gain.linearRampToValueAtTime(0, releaseSec + RELEASE_MS / 1000);
+    // Guard de nota curta: garante que o ramp→0 nunca fique ANTES do fim do attack.
+    // Para notas < 40ms, releaseSec + RELEASE_MS/1000 pode ser menor que attackEndSec,
+    // colocando eventos AudioParam fora de ordem (comportamento indefinido na Web Audio API).
+    const releaseEndSec = Math.max(
+      releaseSec + RELEASE_MS / 1000,
+      attackEndSec + 0.001,
+    );
+    gain.gain.linearRampToValueAtTime(0, releaseEndSec);
 
     osc.connect(filter);
     filter.connect(gain);
@@ -141,7 +148,9 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
       _playing = true;
       const ctx = _ctx;
 
-      // Tempo de início com margem de 50ms
+      // Tempo de início com margem de 50ms (= pré-fire da UI).
+      // onSyllable dispara no cursor lógico (setTimeout com delay=cursor ms),
+      // que é 50ms ANTES do áudio real de cada sílaba (pre-fire para UI).
       const baseTime = ctx.currentTime + 0.05;
       let cursor = 0; // acumulador em ms
 
