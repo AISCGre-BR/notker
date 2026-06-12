@@ -265,4 +265,15 @@ describe("tuotilo signs — acidentes (bemol/natural/sustenido) não são notas"
     expect(rs[2].perPitchAlt).toEqual([-1]);        // es: g bemol (mesma palavra)
     expect(rs[3].perPitchAlt).toEqual([0]);         // quam: palavra nova → reset
   });
+
+  it("AC7. caso real do UAT: gx do HAec bemoliza o g do MESMO HAec; 'di' (palavra... sílaba após espaço) não", () => {
+    const doc = "%%\n(c3) HAec(gxf_e|///cllst2|/gvFEfd/f_h|cilscw3``````````cl/pq) di(g)";
+    const rs = extractAll(doc, syllableSpans(doc));
+    // HAec: f,e (seg0) + g,f,e,f,d,f,h (seg1) — o g (índice 2) é bemol
+    expect(rs[0].pitches[2]).toBe("g");
+    expect(rs[0].perPitchAlt[2]).toBe(-1);
+    expect(rs[0].perPitchAlt[0]).toBe(0); // f não é afetado
+    // di: separado por espaço → palavra nova → g natural
+    expect(rs[1].perPitchAlt).toEqual([0]);
+  });
 });
