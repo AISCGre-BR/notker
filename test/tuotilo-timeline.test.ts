@@ -49,6 +49,38 @@ describe("buildTimeline — recitação (unísono silábico)", () => {
   });
 });
 
+describe("buildTimeline — tonic (tônica por palavra)", () => {
+  it("W1. sílaba acentuada é tônica: a-do-rá-te → só rá", () => {
+    const tl = buildTimeline([
+      syl(["h"]), syl(["h"]), syl(["h"], { accented: true }), syl(["h"], { wordFinal: true }),
+    ]);
+    expect(tl.notes.map((n) => n.tonic)).toEqual([false, false, true, false]);
+  });
+  it("W2. palavra de 2+ sílabas SEM acento gráfico → 1ª sílaba tônica (no-bis)", () => {
+    const tl = buildTimeline([syl(["f"]), syl(["e"], { wordFinal: true })]);
+    expect(tl.notes.map((n) => n.tonic)).toEqual([true, false]);
+  });
+  it("W3. monossílabo → átono (et)", () => {
+    const tl = buildTimeline([syl(["h"], { wordFinal: true })]);
+    expect(tl.notes.map((n) => n.tonic)).toEqual([false]);
+  });
+  it("W4. melisma: todas as notas da sílaba tônica são tônicas", () => {
+    const tl = buildTimeline([
+      syl(["f"]), syl(["g", "h"], { accented: true }), syl(["f"], { wordFinal: true }),
+    ]);
+    expect(tl.notes.map((n) => n.tonic)).toEqual([false, true, true, false]);
+  });
+  it("W5. divisio no meio não vira palavra: grupo de divisio é ignorado na contagem", () => {
+    const tl = buildTimeline([
+      syl(["f"]), syl(["e"], { wordFinal: true }),
+      syl([], { divisio: "minima", wordFinal: true }),
+      syl(["g"], { wordFinal: true }),
+    ]);
+    // 1ª palavra: f tônica (2 sílabas sem acento); divisio: sem notas; "g": monossílabo átono
+    expect(tl.notes.map((n) => n.tonic)).toEqual([true, false, false]);
+  });
+});
+
 describe("buildTimeline", () => {
   it("T1. notas planas com idx sequencial e syllableIndex/noteInSyllable", () => {
     const tl = buildTimeline([syl(["f", "g"]), syl(["h"])]);

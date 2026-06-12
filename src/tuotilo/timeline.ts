@@ -20,6 +20,7 @@ export interface TimelineNote {
   // recitação silábica em corda: true se nota pertence a run ≥3 unísonos silábicos
   // no mesmo incisum (cada sílaba com exatamente 1 nota) — fator redutor interpretado
   recitation: boolean;
+  tonic: boolean;          // sílaba tônica da palavra (acento gráfico; sem acento: 1ª de palavra ≥2 sílabas)
 }
 
 export interface TimelineDivisio { afterNoteIdx: number; kind: DivisioKind; }
@@ -43,6 +44,7 @@ export function buildTimeline(syls: SyllableRhythm[]): NoteTimeline {
         wordFinal: syl.wordFinal,
         divisio: syl.divisio,
         recitation: false, // será atualizado no pós-processamento abaixo
+        tonic: false,      // será atualizado no pós-processamento abaixo
       });
       idx++;
     });
@@ -80,6 +82,32 @@ export function buildTimeline(syls: SyllableRhythm[]): NoteTimeline {
         for (let k = i; k < j; k++) notes[k].recitation = true;
       }
       i = j; // avança para depois do run (ou para a próxima nota fora do run)
+    }
+  }
+
+  // ── Tônicas por palavra (latim litúrgico): sílaba com acento gráfico é
+  // tônica; palavra sem acento com ≥2 sílabas cantadas → 1ª sílaba tônica
+  // (latim não tem oxítonas); monossílabo → átono. Sílabas sem notas
+  // (divisio) não contam como sílaba da palavra.
+  {
+    let wordStart = 0;
+    for (let s = 0; s < syls.length; s++) {
+      if (!syls[s].wordFinal && s < syls.length - 1) continue;
+      const word = syls.slice(wordStart, s + 1);
+      const sung = word
+        .map((syl, k) => ({ syl, syllableIndex: wordStart + k }))
+        .filter((w) => w.syl.pitches.length > 0);
+      const accented = sung.filter((w) => w.syl.accented);
+      const tonicSyls = accented.length > 0
+        ? accented.map((w) => w.syllableIndex)
+        : sung.length >= 2
+          ? [sung[0].syllableIndex]
+          : [];
+      if (tonicSyls.length > 0) {
+        const set = new Set(tonicSyls);
+        for (const n of notes) if (set.has(n.syllableIndex)) n.tonic = true;
+      }
+      wordStart = s + 1;
     }
   }
 
