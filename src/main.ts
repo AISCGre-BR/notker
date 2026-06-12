@@ -404,6 +404,15 @@ async function boot() {
     moveLeft: () => { runMove(view, () => getTree(), "left"); },
     moveRight: () => { runMove(view, () => getTree(), "right"); },
     moveReset: () => { runMove(view, () => getTree(), "reset"); },
+    // Tuotilo: alterna interpretado ↔ solfejo. No solfejo toda nota vale baseMs
+    // (leitura de solmização); sinais e legato só no interpretado.
+    modeToggle: () => {
+      playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
+      const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="modo de playback — interpretado/solfejo"]');
+      if (btn) btn.textContent = playbackMode === "interpretado" ? "Interpretado" : "Solfejo";
+      if (player.playing) stopPlayback("playback: parado (troca de modo)");
+      setStatus("modo de playback: " + playbackMode);
+    },
     // Tuotilo: alterna Tocar↔Parar no playback semiológico.
     playToggle: () => {
       if (player.playing) {
@@ -458,6 +467,7 @@ async function boot() {
     { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
     { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
     { id: "toggleSplit", label: "Dividir", title: "alternar lado-a-lado / empilhado" },
+    { id: "modeToggle", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
     { id: "playToggle", label: "Tocar", title: "playback semiológico (Tuotilo)" },
     { id: "moveLeft", label: "◀", title: "Alt+← — empurrar o neuma à esquerda" },
     { id: "moveDown", label: "▼", title: "Alt+↓ — descer a altura do neuma" },

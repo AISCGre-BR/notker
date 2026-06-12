@@ -22,6 +22,8 @@ export interface CommandHandlers {
   moveReset?: () => void | Promise<void>;
   // Tuotilo: playback semiológico (alterna Tocar↔Parar)
   playToggle?: () => void | Promise<void>;
+  // Tuotilo: alterna modo de playback (interpretado ↔ solfejo)
+  modeToggle?: () => void | Promise<void>;
 }
 export type CommandId = keyof CommandHandlers;
 
