@@ -101,6 +101,7 @@ export interface TimedNote {
   pauseAfterMs: number;   // pausa de divisio após ESTA nota
   articulation: Articulation;  // articulação da nota no fluxo
   syllableIndex: number;
+  noteInSyllable: number;  // posição 0-based dentro da sílaba (chave da onda)
 }
 export interface TimedPlayback { notes: TimedNote[]; leadInMs: number; }
 
@@ -162,6 +163,7 @@ export function computeTimedNotes(
       idx: n.idx, pitch: n.pitch, ms,
       pauseAfterMs: pauseAfter.get(n.idx) ?? 0,
       articulation, syllableIndex: n.syllableIndex,
+      noteInSyllable: n.noteInSyllable,
     };
   });
 

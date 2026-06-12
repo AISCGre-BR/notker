@@ -104,7 +104,7 @@ function makeFakeCtx(currentTime = 0): FakeCtx {
 // ── Helpers de construção de TimedNote / TimedPlayback ────────────────────────
 
 function tn(partial: Partial<TimedNote> & { pitch: string; ms: number }): TimedNote {
-  return { idx: 0, pauseAfterMs: 0, articulation: "full" as Articulation, syllableIndex: 0, ...partial };
+  return { idx: 0, pauseAfterMs: 0, articulation: "full" as Articulation, syllableIndex: 0, noteInSyllable: 0, ...partial };
 }
 function pb(notes: TimedNote[], leadInMs = 0): TimedPlayback {
   return { notes: notes.map((n, i) => ({ ...n, idx: i })), leadInMs };
