@@ -43,6 +43,9 @@ import {
   withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
 } from "./project/model";
 import { createDocList } from "./project/doc-list";
+import { createWavePanel } from "./ui/wave-panel";
+import type { WaveOverlay } from "./tuotilo/wave";
+import { emptyWave, setWaveFactor, applyWave, gabcBodyHash, waveKey } from "./tuotilo/wave";
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -193,7 +196,85 @@ async function boot() {
   const previewHost = document.querySelector<HTMLElement>("#preview")!;
   const tabs = createTabs(previewHost, ["Partitura", "Interpretação"]);
   const partituraPane = tabs.pane(0);
-  const wavePane = tabs.pane(1); // preenchido na Task 5/6
+  const wavePane = tabs.pane(1);
+
+  // Referência mutável para limpar o cursor da onda no stopPlayback.
+  // Declarada aqui (antes do wavePanel) para evitar temporal dead zone — setada
+  // logo abaixo após createWavePanel.
+  let waveCursorClear: () => void = () => {};
+
+  // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
+  // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
+  const WAVE_SEED = 12345;
+  let wave: WaveOverlay = emptyWave("");
+
+  const wavePanel = createWavePanel(wavePane, {
+    onFactorChange: (syl, note, factor) => {
+      if (playbackMode !== "interpretado") {
+        setStatus("onda: edição disponível só no modo interpretado");
+        return;
+      }
+      wave = setWaveFactor(wave, syl, note, factor);
+      rebuildWave();
+    },
+    onReset: () => {
+      wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
+      rebuildWave();
+      setStatus("onda: restaurada ao neumático");
+    },
+  });
+
+  // Após criar wavePanel, liga a referência mutável usada em stopPlayback.
+  waveCursorClear = () => wavePanel.setCursor(null);
+
+  /** Recomputa a onda a partir do doc atual + overlay WaveOverlay.
+   *  Contrato do render: WaveNoteView.ms = duração BASE neumática (pura, sem fator);
+   *  o wave-panel desenha largura = ms × factor × PX_PER_MS. */
+  function rebuildWave(): void {
+    const map = panel?.sourceMap?.() ?? [];
+    const texto = view.state.doc.toString();
+    const reals = map.filter((s) => s.syllableIndex >= 1);
+    const syls = extractAll(texto, map);
+    if (syls.length === 0) { wavePanel.render([]); return; }
+    const tl = buildTimeline(syls);
+    // base = durações neumáticas PURAS (sem applyWave); o fator vem do overlay
+    const base = computeTimedNotes(tl, DEFAULT_PROFILE, WAVE_SEED, "interpretado");
+    const views = base.notes.map((n) => {
+      const sylSpan = reals[n.syllableIndex];
+      const text = n.noteInSyllable === 0 && sylSpan
+        ? (() => {
+            const parenIdx = texto.indexOf("(", sylSpan.from);
+            const end = parenIdx >= 0 ? parenIdx : sylSpan.to;
+            return texto.slice(sylSpan.from, end).trim();
+          })()
+        : "";
+      const divisioAfter = n.pauseAfterMs > 0
+        ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
+        : null;
+      return {
+        syllableIndex: n.syllableIndex,
+        noteInSyllable: n.noteInSyllable,
+        ms: n.ms,  // BASE — sem fator (o panel multiplica por factor para largura)
+        factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
+        text,
+        divisioAfter,
+      };
+    });
+    wavePanel.render(views);
+  }
+
+  /** Verifica hash do canto e sinaliza onda desatualizada (D4). */
+  function syncWaveWithDoc(): void {
+    const h = gabcBodyHash(view.state.doc.toString());
+    // Primeira vez (hash vazio): adota o hash sem marcar como stale
+    if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
+    wavePanel.setStale(Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h);
+    rebuildWave();
+  }
+
+  // Ao trocar para a aba Interpretação, sincroniza a onda com o doc atual.
+  tabs.onChange((i) => { if (i === 1) syncWaveWithDoc(); });
+
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
@@ -204,7 +285,12 @@ async function boot() {
     panel.update(view.state.doc.toString());
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
     const prevOnDocChange = onDocChange;
-    onDocChange = () => { prevOnDocChange(); panel!.update(view.state.doc.toString()); };
+    onDocChange = () => {
+      prevOnDocChange();
+      panel!.update(view.state.doc.toString());
+      // Onda: re-sincroniza apenas se a aba Interpretação estiver ativa.
+      if (tabs.active() === 1) syncWaveWithDoc();
+    };
     // Realce de sílaba segue o cursor.
     view.dom.addEventListener("keyup", () => syncFromCursor(view, panel!));
     view.dom.addEventListener("mouseup", () => syncFromCursor(view, panel!));
@@ -226,6 +312,7 @@ async function boot() {
     if (btn) btn.textContent = "Tocar";
     const svg = panel?.svgEl?.() ?? null;
     if (svg) clearHighlight(svg);
+    waveCursorClear();
     setStatus(reason ?? "playback: parado");
   }
 
@@ -244,6 +331,11 @@ async function boot() {
     docList.render(project);
     updateFamilyIndicator();
     reindex();
+    // Onda: reinicia para o novo canto (persistência chega na Task 7).
+    // TODO(Task 7): restaurar wave = getActiveDoc(project).interpretation ?? emptyWave(hash)
+    const h = gabcBodyHash(getActiveDoc(project).content);
+    wave = emptyWave(h);
+    if (tabs.active() === 1) syncWaveWithDoc();
   }
   function captureEditorIntoProject(): void {
     project = withActiveContent(project, view.state.doc.toString());
@@ -442,10 +534,12 @@ async function boot() {
       }
       const tl = buildTimeline(syls);
       const playback = computeTimedNotes(tl, DEFAULT_PROFILE, Date.now() % 9973, playbackMode);
+      // Onda: aplicar fatores do overlay apenas no modo interpretado (D4)
+      const shaped = playbackMode === "interpretado" ? applyWave(playback, wave) : playback;
       // Seleção não-vazia do mouse ⇒ toca só o trecho (spec B2a)
       const sel = view.state.selection.main;
       const range = syllableRangeOfSelection(map, sel.from, sel.to);
-      const toPlay = range ? sliceBySyllables(playback, range) : playback;
+      const toPlay = range ? sliceBySyllables(shaped, range) : shaped;
       if (toPlay.notes.length === 0) {
         setStatus("playback: seleção sem notas");
         return;
@@ -458,9 +552,13 @@ async function boot() {
       player.play(
         toPlay,
         (note) => {
-          if (note.syllableIndex === lastSyl) return;
-          lastSyl = note.syllableIndex;
-          if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
+          // Realce na partitura: por sílaba (sem mudar o guard existente)
+          if (note.syllableIndex !== lastSyl) {
+            lastSyl = note.syllableIndex;
+            if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
+          }
+          // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
+          wavePanel.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
         },
         () => { stopPlayback("playback: fim"); },
       );

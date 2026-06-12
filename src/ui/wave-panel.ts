@@ -7,7 +7,7 @@ import { WAVE_MIN, WAVE_MAX } from "../tuotilo/wave";
 export interface WaveNoteView {
   syllableIndex: number;
   noteInSyllable: number;
-  ms: number;                 // duração JÁ com o fator aplicado
+  ms: number;                 // duração BASE neumática (sem o fator da onda)
   factor: number;             // fator atual (1 = neumático puro)
   text: string;               // texto da sílaba (só na 1ª nota dela; senão "")
   divisioAfter: "minima" | "minor" | "maior" | "finalis" | null;
@@ -65,7 +65,7 @@ export function createWavePanel(host: HTMLElement, hooks: WavePanelHooks): WaveP
   host.addEventListener("pointerleave", onPointerUp);
 
   function render(notes: WaveNoteView[]): void {
-    const totalW = notes.reduce((a, n) => a + Math.max(8, n.ms * PX_PER_MS) + 2, 24);
+    const totalW = notes.reduce((a, n) => a + Math.max(8, n.ms * n.factor * PX_PER_MS) + 2, 24);
     const H = H_AREA + 38; // área + faixa de rótulos
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
