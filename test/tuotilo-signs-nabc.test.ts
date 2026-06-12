@@ -1,5 +1,5 @@
 // test/tuotilo-signs-nabc.test.ts
-// Testes TDD para enriquecimento NABC de sinais rítmicos (enrichFromNabc).
+// Testes TDD para sinais rítmicos vindos do NABC (alinhamento via nabc-align).
 // Descritores reais extraídos de samples/03-factus-est.gabc e samples/02-kyrie.gabc.
 //
 // Semântica dos modificadores NABC (synopsis-neumes.json → "modifiers"):
@@ -16,7 +16,7 @@
 import { describe, it, expect } from "vitest";
 import { extractSyllable } from "../src/tuotilo/signs";
 
-describe("tuotilo signs NABC — enriquecimento por enrichFromNabc", () => {
+describe("tuotilo signs NABC — sinais do descritor nabc", () => {
 
   // ── NABC-1: liqAug via modificador `>` ──────────────────────────────────────
   // Sílaba real: "én(ji~|vi>lst2)" — do trecho "én-tis" em Factus est (linha 2)

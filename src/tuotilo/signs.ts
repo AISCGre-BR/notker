@@ -66,7 +66,7 @@ function isDivisioOnly(gabc: string): boolean {
 }
 
 /** Segmentos pareados (gabc, nabc) do grupo `(...)`. Intercalado:
- *  índices pares = gabc, ímpares = nabc do par anterior. */
+ *  índices pares = gabc, ímpares = nabc do segmento gabc que os precede (mesmo par). */
 function extractSegments(src: string): { gabc: string; nabc: string | null }[] | null {
   const m = src.match(/\(([^)]*)\)\s*$/);
   if (!m) return null;

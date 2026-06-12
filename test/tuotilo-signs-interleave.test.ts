@@ -4,7 +4,7 @@
 // GABC real: quando um melisma é longo, o conteúdo do grupo `(...)` intercala
 // segmentos na forma `gabc0|nabc0|gabc1|nabc1|...`
 // Índices PARES  = gabc  (concatenar para obter as notas)
-// Índices ÍMPARES = nabc (alimentar enrichFromNabc)
+// Índices ÍMPARES = nabc (alinhado por segmento via nabc-align)
 //
 // Fonte dos exemplos: samples/04-dies-sanctificatus.gabc, linha 3:
 //   Di(f_e|/cl|/f!gwh!iv|`qlheppt1vi-hk|//ji/ihi|///cl!pivi)
@@ -25,7 +25,7 @@ describe("tuotilo signs — segmentos gabc|nabc intercalados", () => {
   // nabc (ímpares 1,3,5): "/cl" + "`qlheppt1vi-hk" + "///cl!pivi"
   //
   // Pitches esperados: f e f g h i j i i h i  (11 notas)
-  //   f_e   → f(episema) e
+  //   f_e   → f e (D1: o _ é consumido sem sinal; o episema do teste vem do NABC vi-)
   //   /f!gwh!iv → f, g(quilisma via w), h, i  (v ignorado; !percurso ignorado)
   //   //ji/ihi  → j, i, i, h, i
   it("INTER-1: Di(...) com 6 segmentos intercalados → 11 pitches", () => {
