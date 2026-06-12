@@ -20,6 +20,8 @@ export interface CommandHandlers {
   moveLeft?: () => void | Promise<void>;
   moveRight?: () => void | Promise<void>;
   moveReset?: () => void | Promise<void>;
+  // Tuotilo: playback semiológico (alterna Tocar↔Parar)
+  playToggle?: () => void | Promise<void>;
 }
 export type CommandId = keyof CommandHandlers;
 

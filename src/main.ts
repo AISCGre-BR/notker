@@ -26,6 +26,11 @@ import { newDocumentDialog } from "./ui/new-dialog";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
+import { highlightSyllable, clearHighlight } from "./preview/highlight";
+import { createPlayer } from "./tuotilo/player";
+import { extractAll } from "./tuotilo/signs";
+import { computeDurations } from "./tuotilo/duration";
+import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel } from "./overlay-ui/panel";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
@@ -184,22 +189,28 @@ async function boot() {
   // mesmo que o motor de preview (webview-only) falhe.
   const previewHost = document.querySelector<HTMLElement>("#preview")!;
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
+  // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
+  let panel: ReturnType<typeof createPreviewPanel> | null = null;
   try {
     const engine = new NabcLibEngine();
-    const panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
+    panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
     const prevOnDocChange = onDocChange;
-    onDocChange = () => { prevOnDocChange(); panel.update(view.state.doc.toString()); };
+    onDocChange = () => { prevOnDocChange(); panel!.update(view.state.doc.toString()); };
     // Realce de sílaba segue o cursor.
-    view.dom.addEventListener("keyup", () => syncFromCursor(view, panel));
-    view.dom.addEventListener("mouseup", () => syncFromCursor(view, panel));
+    view.dom.addEventListener("keyup", () => syncFromCursor(view, panel!));
+    view.dom.addEventListener("mouseup", () => syncFromCursor(view, panel!));
     const workspace = document.querySelector<HTMLElement>("#workspace")!;
     split = createSplit(workspace, app, previewHost, "horizontal");
   } catch (err) {
     console.error("[notker] preview ao vivo indisponível:", err);
   }
+
+  // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
+  // O panel pode ser null se o preview falhou — todos os caminhos degradam com setStatus.
+  const player = createPlayer(() => new AudioContext());
 
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
   const dialogHost = document.querySelector<HTMLElement>("#dialog-host")!;
@@ -211,6 +222,7 @@ async function boot() {
 
   /** Reflete o doc ativo do projeto no editor + indicadores. */
   function syncFromProject(): void {
+    if (player.playing) player.stop(); // para o playback ao trocar/criar/abrir doc
     replaceDoc(getActiveDoc(project).content);
     docList.render(project);
     updateFamilyIndicator();
@@ -380,6 +392,44 @@ async function boot() {
     moveLeft: () => { runMove(view, () => getTree(), "left"); },
     moveRight: () => { runMove(view, () => getTree(), "right"); },
     moveReset: () => { runMove(view, () => getTree(), "reset"); },
+    // Tuotilo: alterna Tocar↔Parar no playback semiológico.
+    playToggle: () => {
+      const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
+      if (player.playing) {
+        player.stop();
+        if (btn) btn.textContent = "Tocar";
+        setStatus("playback: parado");
+        return;
+      }
+      // Obtém mapa de sílabas do preview; sem preview → degrada com status
+      const map = panel?.sourceMap?.();
+      if (!map || map.length === 0) {
+        setStatus("playback indisponível (preview sem dados)");
+        return;
+      }
+      const texto = view.state.doc.toString();
+      // Índices SVG 1-based das sílabas reais (mesma filtragem de extractAll)
+      const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
+      const syls = extractAll(texto, map);
+      if (syls.length === 0) {
+        setStatus("playback: nenhuma sílaba encontrada");
+        return;
+      }
+      const events = computeDurations(syls, DEFAULT_PROFILE, Date.now() % 9973);
+      const svg = panel?.svgEl?.() ?? null;
+      if (btn) btn.textContent = "Parar";
+      setStatus("playback: tocando…");
+      player.play(
+        events,
+        // i = posição 0-based no array de eventos; mapear para índice SVG real
+        (i) => { if (svg) highlightSyllable(svg, svgIndices[i] ?? i + 1); },
+        () => {
+          if (svg) clearHighlight(svg);
+          if (btn) btn.textContent = "Tocar";
+          setStatus("playback: fim");
+        },
+      );
+    },
   });
 
   createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
@@ -395,6 +445,7 @@ async function boot() {
     { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
     { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
     { id: "toggleSplit", label: "Dividir", title: "alternar lado-a-lado / empilhado" },
+    { id: "playToggle", label: "Tocar", title: "playback semiológico (Tuotilo)" },
     { id: "moveLeft", label: "◀", title: "Alt+← — empurrar o neuma à esquerda" },
     { id: "moveDown", label: "▼", title: "Alt+↓ — descer a altura do neuma" },
     { id: "moveUp", label: "▲", title: "Alt+↑ — subir a altura do neuma" },
