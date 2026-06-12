@@ -220,3 +220,26 @@ describe("tuotilo signs — extractAll", () => {
     expect(results[1].signs).not.toContain("mora");
   });
 });
+
+describe("tuotilo signs — acidentes (bemol/natural/sustenido) não são notas", () => {
+  // gabc: letra+x = bemol NA POSIÇÃO da letra; +y = natural; +# = sustenido.
+  // São glifos de acidente, não notas. Bug real: HAec(gxf_e) tocava g-f-e (3
+  // notas descendentes) em vez de f-e (samples Haec dies, Graduale p. 241).
+  it("AC1. bemol: (gxf_e) → pitches ['f','e'] (gx é acidente, não nota)", () => {
+    const r = extractSyllable("HAec(gxf_e)");
+    expect(r.pitches).toEqual(["f", "e"]);
+  });
+  it("AC2. natural e sustenido: (iyj) e (g#h) também não viram nota", () => {
+    expect(extractSyllable("(iyjk)").pitches).toEqual(["j", "k"]);
+    expect(extractSyllable("(g#hi)").pitches).toEqual(["h", "i"]);
+  });
+  it("AC3. acidente não quebra o alinhamento NABC: Haec intercalado alinha", () => {
+    const r = extractSyllable("HAec(gxf_e|///cllst2|/gvFEfd/f_h|cilscw3``````````cl/pq)");
+    // seg0: f,e (2) × cl (2) — alinhado; seg1: g,F,E,f,d,f,h (7) × ci+cl+pq (3+2+2=7)
+    expect(r.pitches).toEqual(["f", "e", "g", "f", "e", "f", "d", "f", "h"]);
+    expect(r.aligned).toBe(true);
+    // pq = oriscus nas 2 últimas notas do seg1
+    expect(r.perPitchSigns[7]).toContain("oriscus");
+    expect(r.perPitchSigns[8]).toContain("oriscus");
+  });
+});

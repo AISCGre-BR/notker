@@ -104,6 +104,14 @@ function parseNotes(gabc: string): NoteToken[] {
       continue; // será detectada como nota normal; marcamos após
     }
 
+    // Acidente: letra de POSIÇÃO seguida de x (bemol), y (natural) ou # (sustenido)
+    // é um glifo de acidente, NÃO uma nota — consumir os dois sem emitir.
+    // Bug real: HAec(gxf_e) tocava g-f-e em vez de f-e (Haec dies, Grad. p. 241).
+    if (/[a-m]/.test(ch) && i + 1 < len && /[xy#]/.test(gabc[i + 1])) {
+      i += 2;
+      continue;
+    }
+
     // Pitch minúsculo (punctum) ou maiúsculo (inclinatum)
     if (/[a-mA-M]/.test(ch)) {
       const pitchLower = ch.toLowerCase();
