@@ -331,14 +331,18 @@ async function boot() {
     docList.render(project);
     updateFamilyIndicator();
     reindex();
-    // Onda: reinicia para o novo canto (persistência chega na Task 7).
-    // TODO(Task 7): restaurar wave = getActiveDoc(project).interpretation ?? emptyWave(hash)
-    const h = gabcBodyHash(getActiveDoc(project).content);
-    wave = emptyWave(h);
+    // Onda: restaura a interpretação persistida, ou cria vazia para o novo canto
+    wave = getActiveDoc(project).interpretation ?? emptyWave(gabcBodyHash(getActiveDoc(project).content));
     if (tabs.active() === 1) syncWaveWithDoc();
   }
   function captureEditorIntoProject(): void {
     project = withActiveContent(project, view.state.doc.toString());
+    const docs = project.docs.map((d) =>
+      d.id === project.activeId
+        ? { ...d, interpretation: Object.keys(wave.factors).length > 0 ? wave : undefined }
+        : d,
+    );
+    project = { ...project, docs };
   }
   function switchToDoc(id: string): void {
     captureEditorIntoProject();

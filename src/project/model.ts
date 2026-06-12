@@ -5,6 +5,8 @@ export interface ProjectDoc {
   title: string;
   family?: Family;   // override do default do projeto
   content: string;   // texto .gabc PURO (em memória)
+  /** Onda de interpretação do playback (spec §7/D4) — opcional. */
+  interpretation?: { gabcBodyHash: string; factors: Record<string, number> };
 }
 export interface NotkerProject {
   schema: 1;
@@ -94,6 +96,11 @@ export function toBundle(p: NotkerProject): { project_json: string; files: Recor
   const documents: ProjectJsonDoc[] = p.docs.map((d, i) => {
     const file = `gabc/${String(i + 1).padStart(3, "0")}-${slug(d.title)}.gabc`;
     files[file] = d.content;
+    // Grava interpretation/<mesmo-nome-base>.json se a onda tem fatores
+    if (d.interpretation && Object.keys(d.interpretation.factors).length > 0) {
+      const baseName = file.replace(/^gabc\//, "").replace(/\.gabc$/, "");
+      files[`interpretation/${baseName}.json`] = JSON.stringify(d.interpretation);
+    }
     return { id: d.id, file, title: d.title, ...(d.family ? { family: d.family } : {}) };
   });
   const meta: ProjectJson = {
@@ -107,12 +114,28 @@ export function fromBundle(projectJson: string, files: Record<string, string>, p
   const meta = JSON.parse(projectJson) as Partial<ProjectJson>;
   if (meta.kind !== "notker-project") throw new Error("não é um projeto Notker");
   const family: Family = meta.family === "laon" ? "laon" : "stgall";
-  const docs: ProjectDoc[] = (meta.documents ?? []).map((d) => ({
-    id: d.id || genId(),
-    title: d.title || "Sem título",
-    family: d.family === "laon" || d.family === "stgall" ? d.family : undefined,
-    content: files[d.file] ?? "",
-  }));
+  const docs: ProjectDoc[] = (meta.documents ?? []).map((d) => {
+    const baseName = d.file.replace(/^gabc\//, "").replace(/\.gabc$/, "");
+    const interpFile = `interpretation/${baseName}.json`;
+    let interpretation: ProjectDoc["interpretation"] = undefined;
+    if (files[interpFile] !== undefined) {
+      try {
+        const parsed = JSON.parse(files[interpFile]) as { gabcBodyHash: string; factors: Record<string, number> };
+        if (parsed && typeof parsed.gabcBodyHash === "string" && typeof parsed.factors === "object") {
+          interpretation = parsed;
+        }
+      } catch {
+        // JSON inválido → interpretation fica undefined; nunca quebra o load
+      }
+    }
+    return {
+      id: d.id || genId(),
+      title: d.title || "Sem título",
+      family: d.family === "laon" || d.family === "stgall" ? d.family : undefined,
+      content: files[d.file] ?? "",
+      ...(interpretation !== undefined ? { interpretation } : {}),
+    };
+  });
   if (docs.length === 0) docs.push({ id: genId(), title: "Sem título", content: "name: Novo;\n%%\n(c4) " });
   const activeId = docs.some((d) => d.id === meta.active) ? (meta.active as string) : docs[0].id;
   return { schema: 1, kind: "notker-project", title: meta.title || docs[0].title, family, docs, activeId, path };

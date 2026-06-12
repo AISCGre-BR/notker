@@ -86,3 +86,61 @@ describe("modelo de projeto", () => {
     expect(effectiveFamily(p2, p2.activeId)).toBe("stgall");
   });
 });
+
+describe("interpretation (onda) no bundle", () => {
+  it("I1. toBundle grava interpretation/<file>.json para docs com onda; fromBundle restaura", () => {
+    // Cria projeto com 1 doc e atribui interpretation com fatores não-vazios
+    let p = newProject({ family: "stgall", name: "Rorate" });
+    const docId = p.activeId;
+    // Injeta interpretation diretamente no doc (simula o que captureEditorIntoProject faz)
+    p = {
+      ...p,
+      docs: p.docs.map((d) =>
+        d.id === docId
+          ? { ...d, interpretation: { gabcBodyHash: "cafe1234", factors: { "0:1": 1.6 } } }
+          : d,
+      ),
+    };
+
+    const bundle = toBundle(p);
+
+    // Espera que haja exatamente uma chave interpretation/ nos files
+    const interpKeys = Object.keys(bundle.files).filter((k) => k.startsWith("interpretation/"));
+    expect(interpKeys).toHaveLength(1);
+
+    // O nome deve ser o mesmo slug do gabc com .json no lugar de .gabc
+    const gabcKey = Object.keys(bundle.files).find((k) => k.startsWith("gabc/"))!;
+    const baseName = gabcKey.replace(/^gabc\//, "").replace(/\.gabc$/, "");
+    expect(interpKeys[0]).toBe(`interpretation/${baseName}.json`);
+
+    // O conteúdo JSON deve ter os campos esperados
+    const parsed = JSON.parse(bundle.files[interpKeys[0]]);
+    expect(parsed.gabcBodyHash).toBe("cafe1234");
+    expect(parsed.factors["0:1"]).toBe(1.6);
+
+    // fromBundle restaura interpretation corretamente
+    const p2 = fromBundle(bundle.project_json, bundle.files, undefined);
+    expect(getActiveDoc(p2).interpretation?.factors["0:1"]).toBe(1.6);
+    expect(getActiveDoc(p2).interpretation?.gabcBodyHash).toBe("cafe1234");
+  });
+
+  it("I2. doc SEM onda não gera arquivo de interpretação; bundle antigo (sem o arquivo) carrega com interpretation undefined", () => {
+    // toBundle de doc sem interpretation → nenhuma chave interpretation/ em files
+    const p = newProject({ family: "stgall", name: "Rorate" });
+    const bundle = toBundle(p);
+    const interpKeys = Object.keys(bundle.files).filter((k) => k.startsWith("interpretation/"));
+    expect(interpKeys).toHaveLength(0);
+
+    // fromBundle de bundle SEM arquivos interpretation/ → docs[*].interpretation undefined
+    const p2 = fromBundle(bundle.project_json, bundle.files, undefined);
+    expect(getActiveDoc(p2).interpretation).toBeUndefined();
+
+    // Robustez: JSON inválido no arquivo interpretation → interpretation undefined (não quebra)
+    const bundleWithInvalidJson = { ...bundle, files: { ...bundle.files } };
+    const gabcKey = Object.keys(bundle.files).find((k) => k.startsWith("gabc/"))!;
+    const baseName = gabcKey.replace(/^gabc\//, "").replace(/\.gabc$/, "");
+    bundleWithInvalidJson.files[`interpretation/${baseName}.json`] = "{ invalid json !!!";
+    const p3 = fromBundle(bundleWithInvalidJson.project_json, bundleWithInvalidJson.files, undefined);
+    expect(getActiveDoc(p3).interpretation).toBeUndefined();
+  });
+});
