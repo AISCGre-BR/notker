@@ -11,10 +11,11 @@ function syl(
   perPitchSigns?: RhythmSign[][],
   divisio: SyllableRhythm["divisio"] = null,
   wordFinal = false,
+  accented = false,
 ): SyllableRhythm {
   const pps = perPitchSigns ?? pitches.map(() => []);
   const signs = Array.from(new Set(pps.flat()));
-  return { pitches, signs, perPitchSigns: pps, aligned: true, divisio, wordFinal };
+  return { pitches, signs, perPitchSigns: pps, aligned: true, accented, divisio, wordFinal };
 }
 const P = DEFAULT_PROFILE;
 function timed(syls: SyllableRhythm[], mode: PlaybackMode = "interpretado", seed = 42) {

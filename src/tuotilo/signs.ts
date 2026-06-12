@@ -41,6 +41,7 @@ export interface SyllableRhythm {
   signs: RhythmSign[];            // união dos sinais da sílaba (sem duplicatas)
   perPitchSigns: RhythmSign[][];  // paralelo a pitches — FONTE para a timeline
   aligned: boolean;               // false se algum segmento caiu no fallback D3
+  accented: boolean;              // vogal com acento gráfico no TEXTO da sílaba
   divisio: "minima" | "minor" | "maior" | "finalis" | null;
   wordFinal: boolean;
 }
@@ -165,13 +166,24 @@ function parseNotes(gabc: string): NoteToken[] {
 
 // ── API pública ──────────────────────────────────────────────────────────────
 
+/** Vogais com acento agudo do latim litúrgico (precompostas) ou acento
+ *  combinante U+0301 — marcam a sílaba TÔNICA nos livros de canto. */
+const ACCENT_RE = /[áéíóúýÁÉÍÓÚÝǽǼ́]/;
+
+/** Texto cantado da sílaba = tudo antes do primeiro `(` (pode ser ""). */
+function syllableText(s: string): string {
+  const i = s.indexOf("(");
+  return i < 0 ? s : s.slice(0, i);
+}
+
 /** Extrai sinais rítmicos de uma sílaba gabc.
  *  @param src — string no formato "texto(gabc)" ou "(gabc|nabc)" ou intercalado */
 export function extractSyllable(src: string, wordFinal = false): SyllableRhythm {
+  const accented = ACCENT_RE.test(syllableText(src));
   const segments = extractSegments(src);
   if (!segments) {
     // Sem grupo gabc — retorna estrutura vazia
-    return { pitches: [], signs: [], perPitchSigns: [], aligned: true, divisio: null, wordFinal };
+    return { pitches: [], signs: [], perPitchSigns: [], aligned: true, accented, divisio: null, wordFinal };
   }
 
   const joined = segments.map((s) => s.gabc).join("/");
@@ -183,6 +195,7 @@ export function extractSyllable(src: string, wordFinal = false): SyllableRhythm 
       signs: [],
       perPitchSigns: [],
       aligned: true,
+      accented,
       divisio: parseDivisio(joined),
       wordFinal,
     };
@@ -216,7 +229,7 @@ export function extractSyllable(src: string, wordFinal = false): SyllableRhythm 
   const signsSet = new Set<RhythmSign>();
   for (const list of perPitchSigns) for (const s of list) signsSet.add(s);
 
-  return { pitches, signs: Array.from(signsSet), perPitchSigns, aligned, divisio, wordFinal };
+  return { pitches, signs: Array.from(signsSet), perPitchSigns, aligned, accented, divisio, wordFinal };
 }
 
 /** Extrai sinais rítmicos de todas as sílabas reais do documento.

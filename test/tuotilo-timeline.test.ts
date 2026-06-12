@@ -5,13 +5,14 @@ import type { SyllableRhythm } from "../src/tuotilo/signs";
 
 function syl(
   pitches: string[],
-  opts: Partial<Pick<SyllableRhythm, "divisio" | "wordFinal" | "aligned" | "perPitchSigns">> = {},
+  opts: Partial<Pick<SyllableRhythm, "divisio" | "wordFinal" | "aligned" | "perPitchSigns" | "accented">> = {},
 ): SyllableRhythm {
   return {
     pitches,
     signs: [],
     perPitchSigns: opts.perPitchSigns ?? pitches.map(() => []),
     aligned: opts.aligned ?? true,
+    accented: opts.accented ?? false,
     divisio: opts.divisio ?? null,
     wordFinal: opts.wordFinal ?? false,
   };

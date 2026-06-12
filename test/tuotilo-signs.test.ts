@@ -138,6 +138,30 @@ describe("tuotilo signs — extractSyllable", () => {
   });
 });
 
+describe("tuotilo signs — accented (acento gráfico no texto)", () => {
+  it("A-1. sílaba com vogal acentuada → accented=true: rá(h), lú(fg), Dó(f)", () => {
+    expect(extractSyllable("rá(h)").accented).toBe(true);
+    expect(extractSyllable("lú(fg)").accented).toBe(true);
+    expect(extractSyllable("Dó(f)").accented).toBe(true);
+  });
+  it("A-2. sílaba sem acento → false: te(h), et(h), no(f!hh)", () => {
+    expect(extractSyllable("te(h)").accented).toBe(false);
+    expect(extractSyllable("et(h)").accented).toBe(false);
+    expect(extractSyllable("no(f!hh)").accented).toBe(false);
+  });
+  it("A-3. acento combinante (é) também conta", () => {
+    expect(extractSyllable("ré(f)").accented).toBe(true);
+  });
+  it("A-4. sem texto (melisma puro ou divisio) → false", () => {
+    expect(extractSyllable("(fgh)").accented).toBe(false);
+    expect(extractSyllable("(::)").accented).toBe(false);
+  });
+  it("A-5. acento dentro dos parênteses NÃO conta (só o texto)", () => {
+    // hipotético defensivo: caractere acentuado no grupo não marca a sílaba
+    expect(extractSyllable("ut(fá)".replace("á", "a")).accented).toBe(false);
+  });
+});
+
 // ── Teste 11: extractAll com wordFinal ────────────────────────────────────────
 describe("tuotilo signs — extractAll", () => {
   it("11. wordFinal por sílaba em doc multi-palavra", () => {
