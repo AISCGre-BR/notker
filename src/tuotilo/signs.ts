@@ -1,4 +1,4 @@
-/** signs.ts — Extração de sinais rítmicos gabc por sílaba para o motor Tuotilo.
+/** signs.ts — Extração de sinais rítmicos gabc+nabc por sílaba para o motor Tuotilo.
  *
  * Sintaxe gabc confirmada via nabc-lib/dist/nabc-renderer.es6.js (linhas 17943-18016):
  *   pitch minúsculo a-m = punctum   | maiúsculo A-M = inclinatum (→ currentes v1)
@@ -8,6 +8,14 @@
  *   `-`  antes de nota = initio debilis
  *   `,`→"minima"  `;`→"minor"  `:`→"maior"  `::`→"finalis"  `` ` ``→null (virgula, sem efeito v1)
  *   demais símbolos (~><'vVsx#@r=Ryo^qQ!) ignorados sem quebrar.
+ *
+ * Modificadores NABC (synopsis-neumes.json → "modifiers"; GregorioNabcRef §241–250):
+ *   "-" = episema (nível sílaba)    ">" = liqAug (liquescência aumentativa)
+ *   "~" = liqDim (diminutiva)       "S"/"G"/"M" = modificações visuais (ignoradas v1)
+ *
+ * Bases NABC relevantes para ritmo (nível sílaba — sem alinhamento nota-a-nota):
+ *   or, pq, pt, oc   → "oriscus"   |   st, ds, ts, bv, tv → "strophae"
+ *   ql, qi           → "quilisma"  (reforço do sinal gabc quando presente)
  */
 
 import type { SyllableSource } from "../preview/engine";
@@ -18,7 +26,11 @@ export type RhythmSign =
   | "quilisma"
   | "preQuilisma"
   | "currentes"
-  | "initioDebilis";
+  | "initioDebilis"
+  | "liqAug"
+  | "liqDim"
+  | "oriscus"
+  | "strophae";
 
 export interface SyllableRhythm {
   pitches: string[];              // minúsculas, na ordem; repercussões PRESERVADAS
@@ -64,7 +76,6 @@ function isDivisioOnly(gabc: string): boolean {
 interface NoteToken {
   pitch: string;        // minúsculo
   signs: RhythmSign[];
-  initioDebilis: boolean;
 }
 
 /** Analisa a parte gabc e devolve array de tokens de nota. */
@@ -126,7 +137,7 @@ function parseNotes(gabc: string): NoteToken[] {
       // Liquescência: `~`, `>`, `<` — ignorados v1
       if (i < len && /[~><]/.test(gabc[i])) i++;
 
-      tokens.push({ pitch: pitchLower, signs: noteSigns, initioDebilis: prevChar === "-" });
+      tokens.push({ pitch: pitchLower, signs: noteSigns });
       continue;
     }
 
@@ -144,10 +155,78 @@ function parseNotes(gabc: string): NoteToken[] {
   return tokens;
 }
 
+// ── Enriquecimento NABC ───────────────────────────────────────────────────────
+
+/** Bases NABC que indicam oriscus (GregorioNabcRef; tables.ts KIND_NAMES). */
+const ORISCUS_BASES = new Set(["or", "pq", "pt", "oc"]);
+
+/** Bases NABC que indicam strophae (apostropha e seus compostos). */
+const STROPHAE_BASES = new Set(["st", "ds", "ts", "bv", "tv"]);
+
+/** Bases NABC que indicam quilisma. */
+const QUILISMA_BASES = new Set(["ql", "qi"]);
+
+/** Extrai a parte nabc de dentro dos parênteses (após `|`).
+ *  Retorna null se não houver separador `|`. */
+function extractNabcGroup(src: string): string | null {
+  const m = src.match(/\(([^)]*)\)\s*$/);
+  if (!m) return null;
+  const idx = m[1].indexOf("|");
+  if (idx < 0) return null;
+  return m[1].slice(idx + 1);
+}
+
+/** Remove prefixos de letras significativas (ls.../lt...) e hh-pitch (h[a-m])
+ *  do token para isolar bases e modificadores de glifo.
+ *  Estratégia leve: substitui padrões conhecidos por ""; não usa tabelas externas. */
+function stripNonGlyphParts(token: string): string {
+  // Remove letras significativas: ls<letras><dígito> e lt<letras><dígito>
+  let s = token.replace(/l[st][a-z]+[0-9]/g, "");
+  // Remove pitch relativo: h[a-m]
+  s = s.replace(/h[a-m]/g, "");
+  // Remove ajuste horizontal: /+ e `+
+  s = s.replace(/[/`]+/g, "");
+  return s;
+}
+
+/** Extrai sinais rítmicos do token NABC e os adiciona a `s` (nível sílaba v1).
+ *  Reutiliza NEUME_KINDS/KIND_NAMES indiretamente via ORISCUS_BASES/STROPHAE_BASES.
+ *  NÃO tenta alinhar nota-a-nota; decisão "sentido geral" por divergência gabc×nabc. */
+export function enrichFromNabc(s: SyllableRhythm, nabcSrc: string): SyllableRhythm {
+  if (!nabcSrc) return s;
+
+  const signsSet = new Set<RhythmSign>(s.signs);
+
+  // Cada neuma do token é separado por "!" (NABC_COMPLEX_NEUME_SEPARATOR).
+  // Iterar sobre todos para detectar bases semiológicas em qualquer posição.
+  for (const part of nabcSrc.split("!")) {
+    const clean = stripNonGlyphParts(part);
+
+    // Extrair base de 2 letras de cada segmento (pode ter vários glifos concatenados)
+    // Padrão: letras minúsculas seguidas de modificadores SGM->~1-9
+    const baseMatches = clean.match(/[a-z]{2}/g) ?? [];
+    for (const base of baseMatches) {
+      if (ORISCUS_BASES.has(base))  signsSet.add("oriscus");
+      if (STROPHAE_BASES.has(base)) signsSet.add("strophae");
+      if (QUILISMA_BASES.has(base)) signsSet.add("quilisma");
+    }
+
+    // Detectar modificadores de glifo (GregorioNabcRef §241–250):
+    //   ">"  = liquescência aumentativa
+    //   "~"  = liquescência diminutiva
+    // Nota: "-" no NABC é episema de neuma, mas já capturamos episema pelo GABC;
+    //       não adicionamos duplicata — omitido intencionalmente v1.
+    if (clean.includes(">")) signsSet.add("liqAug");
+    if (clean.includes("~")) signsSet.add("liqDim");
+  }
+
+  return { ...s, signs: Array.from(signsSet) };
+}
+
 // ── API pública ──────────────────────────────────────────────────────────────
 
 /** Extrai sinais rítmicos de uma sílaba gabc.
- *  @param src — string no formato "texto(gabc)" ou "(gabc)" */
+ *  @param src — string no formato "texto(gabc)" ou "(gabc|nabc)" */
 export function extractSyllable(src: string, wordFinal = false): SyllableRhythm {
   const gabcGroup = extractGabcGroup(src);
 
@@ -190,7 +269,13 @@ export function extractSyllable(src: string, wordFinal = false): SyllableRhythm 
   }
   const signs = Array.from(signsSet);
 
-  return { pitches, signs, perPitchSigns, divisio, wordFinal };
+  let result: SyllableRhythm = { pitches, signs, perPitchSigns, divisio, wordFinal };
+
+  // Enriquecimento NABC: se houver parte após `|`, extrai sinais semiológicos adicionais
+  const nabcGroup = extractNabcGroup(src);
+  if (nabcGroup) result = enrichFromNabc(result, nabcGroup);
+
+  return result;
 }
 
 /** Extrai sinais rítmicos de todas as sílabas reais do documento.
