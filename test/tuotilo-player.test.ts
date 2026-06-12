@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createPlayer, pitchToFreq } from "../src/tuotilo/player";
+import { createPlayer, pitchToFreq, PEAK_GAIN, PULSE_DIP } from "../src/tuotilo/player";
 import type { TimedNote, TimedPlayback, Articulation } from "../src/tuotilo/duration";
 
 // ── Fake AudioContext ─────────────────────────────────────────────────────────
@@ -288,5 +288,50 @@ describe("Player v2 — grupos legato", () => {
     // dois grupos: a pausa força current=null mesmo sem articulation=full
     expect(ctx()._oscillators).toHaveLength(2);
     expect(ctx()._oscillators[1].start).toHaveBeenCalledWith(expect.closeTo(0.05 + 0.3, 9));
+  });
+
+  it("P11. tristropha: 3 notas [full,pulse,pulse] → 1 oscilador com 2 mergulhos de gain", () => {
+    const { player, ctx } = makePlayer();
+    player.play(pb([
+      tn({ pitch: "f", ms: 300 }),
+      tn({ pitch: "f", ms: 300, articulation: "pulse" }),
+      tn({ pitch: "f", ms: 300, articulation: "pulse" }),
+    ]), vi.fn(), vi.fn());
+    expect(ctx()._oscillators).toHaveLength(1);
+    const gain = ctx()._gains[0];
+    const ramps = gain.gain.linearRampToValueAtTime.mock.calls as [number, number][];
+    // 2 mergulhos para PEAK_GAIN×PULSE_DIP — valores exportados pelo player
+    const dips = ramps.filter(([v]) => Math.abs(v - PEAK_GAIN * PULSE_DIP) < 1e-9);
+    expect(dips).toHaveLength(2);
+    // fronteiras corretas: BASE+0.3 e BASE+0.6
+    expect(dips[0][1]).toBeCloseTo(0.05 + 0.3, 9);
+    expect(dips[1][1]).toBeCloseTo(0.05 + 0.6, 9);
+    // cada fluxo de automação é cronologicamente não-decrescente
+    // (setValueAtTime e ramps são streams separados nos mocks — verificar cada um)
+    const setTs = (gain.gain.setValueAtTime.mock.calls as [number, number][]).map(([, t]) => t);
+    const rampTs = ramps.map(([, t]) => t);
+    for (let i = 1; i < setTs.length; i++) expect(setTs[i]).toBeGreaterThan(setTs[i - 1]);
+    for (let i = 1; i < rampTs.length; i++) expect(rampTs[i]).toBeGreaterThan(rampTs[i - 1]);
+  });
+
+  it("P12. REGRA SAGRADA: pulso que não cabe (nota curta) vira re-ataque pleno (2 osciladores)", () => {
+    const { player, ctx } = makePlayer();
+    player.play(pb([
+      tn({ pitch: "f", ms: 40 }),
+      tn({ pitch: "f", ms: 40, articulation: "pulse" }),
+    ]), vi.fn(), vi.fn());
+    expect(ctx()._oscillators).toHaveLength(2);
+  });
+
+  it("P13. pulse não quebra o pitch em degrau das notas legato seguintes", () => {
+    const { player, ctx } = makePlayer();
+    player.play(pb([
+      tn({ pitch: "f", ms: 300 }),
+      tn({ pitch: "f", ms: 300, articulation: "pulse" }),
+      tn({ pitch: "g", ms: 300, articulation: "legato" }),
+    ]), vi.fn(), vi.fn());
+    expect(ctx()._oscillators).toHaveLength(1);
+    const osc = ctx()._oscillators[0];
+    expect(osc.frequency.setValueAtTime).toHaveBeenCalledTimes(3);
   });
 });

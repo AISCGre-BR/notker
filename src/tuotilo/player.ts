@@ -8,6 +8,7 @@
  *   - articulation="full" sempre cria um oscilador NOVO (repercussão sagrada do projeto:
  *     distropha/tristropha/bis-punctum são re-articulações explícitas, nunca fundir).
  *   - articulation="pulse" = repercussão intra-sílaba: continuidade + pulso de gain (B1.2).
+ *     Fallback sagrado: pulso inviável (notas curtas) → re-ataque pleno.
  *   - Divisio (pauseAfterMs > 0) também quebra o grupo (cursor recomeça sem carry).
  *
  * Envelope por GRUPO (D2):
@@ -54,14 +55,17 @@ export function pitchToFreq(pitch: string): number {
 const ATTACK_MS   = 18;   // 0 → 0.8 via linearRamp
 const RELEASE_MS  = 70;   // → 0 via linearRamp
 const GAP_MS      = 22;   // gap antes do fim nominal do GRUPO (re-ataque audível)
-const PEAK_GAIN   = 0.8;
+export const PEAK_GAIN  = 0.8;
+export const PULSE_DIP  = 0.34;  // nível do mergulho na repercussão (× PEAK_GAIN)
+export const PULSE_MS   = 56;    // duração total do mergulho vai-e-volta (ms)
 
 // ── Grupo legato ──────────────────────────────────────────────────────────────
 
-interface GroupNote { freq: number; atMs: number; durMs: number; }
+interface GroupNote { freq: number; atMs: number; durMs: number; pulse: boolean; }
 
 /** Agenda um grupo legato: 1 oscilador, pitch em degrau nas fronteiras de nota,
- *  envelope único no grupo (D2). Grupos de 1 nota reproduzem o envelope v1. */
+ *  envelope único no grupo (D2). Grupos de 1 nota reproduzem o envelope v1.
+ *  Notas com pulse=true recebem mergulho de volume na fronteira (B1.2). */
 function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[]): void {
   const first = notes[0];
   const last = notes[notes.length - 1];
@@ -81,6 +85,20 @@ function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[]):
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(0, startSec);
   gain.gain.linearRampToValueAtTime(PEAK_GAIN, attackEndSec);
+
+  // Pulsos de repercussão intra-sílaba (B1.2): mergulho de volume na
+  // fronteira de cada nota `pulse` — som contínuo, rearticulação audível.
+  // Emitidos em ordem cronológica crescente ANTES das linhas de release
+  // (garantido pelo pulseFits que assegura tSec ± PULSE_MS/2000 dentro do grupo).
+  for (const n of notes) {
+    if (!n.pulse) continue;
+    const tSec = baseTime + n.atMs / 1000;
+    gain.gain.setValueAtTime(PEAK_GAIN, tSec - PULSE_MS / 2000);
+    gain.gain.linearRampToValueAtTime(PEAK_GAIN * PULSE_DIP, tSec);
+    gain.gain.linearRampToValueAtTime(PEAK_GAIN, tSec + PULSE_MS / 2000);
+  }
+
+  // Release emitido DEPOIS dos pulsos para garantir ordem cronológica no stream
   if (releaseSec > attackEndSec) gain.gain.setValueAtTime(PEAK_GAIN, releaseSec);
   const releaseEndSec = Math.max(releaseSec + RELEASE_MS / 1000, attackEndSec + 0.001);
   gain.gain.linearRampToValueAtTime(0, releaseEndSec);
@@ -137,11 +155,29 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
       const groups: GroupNote[][] = [];
       let current: GroupNote[] | null = null;
       for (const note of playback.notes) {
-        if (note.articulation !== "legato" || current === null) {
+        const prev = current !== null && current.length > 0 ? current[current.length - 1] : null;
+        // Pulso só cabe se as duas notas comportam o vai-e-volta do gain
+        // SEM violar a ordem da automação (ataque no início do grupo e
+        // release no fim). Não coube → re-ataque pleno (regra sagrada).
+        const pulseFits =
+          note.articulation === "pulse" &&
+          prev !== null &&
+          prev.durMs >= ATTACK_MS + PULSE_MS / 2 &&
+          note.ms >= GAP_MS + RELEASE_MS + PULSE_MS / 2;
+        const startsGroup =
+          current === null ||
+          note.articulation === "full" ||
+          (note.articulation === "pulse" && !pulseFits);
+        if (startsGroup) {
           current = [];
           groups.push(current);
         }
-        current.push({ freq: pitchToFreq(note.pitch), atMs: cursor, durMs: note.ms });
+        current!.push({
+          freq: pitchToFreq(note.pitch),
+          atMs: cursor,
+          durMs: note.ms,
+          pulse: !startsGroup && note.articulation === "pulse",
+        });
         const t = setTimeout(() => onNote(note), cursor);
         _timers.push(t);
         cursor += note.ms;
