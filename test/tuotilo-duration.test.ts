@@ -49,8 +49,8 @@ describe("tuotilo duration — computeDurations", () => {
 
     const cap = DEFAULT_PROFILE.caps.phrase;
     const base = DEFAULT_PROFILE.baseMs;
-    // tolerance: +5% para jitter
-    expect(ev.notes[0].ms).toBeLessThanOrEqual(base * cap * 1.05);
+    // tolerance: +9% cobre jitter gaussiano até +2σ (clamp máximo do gaussSample)
+    expect(ev.notes[0].ms).toBeLessThanOrEqual(base * cap * 1.09);
   });
 
   // ── Teste 3: determinismo de seed ──────────────────────────────────────────

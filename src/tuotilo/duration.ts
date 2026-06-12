@@ -2,7 +2,7 @@
  * duration.ts — Modelo de duração log-aditivo saturado do Tuotilo.
  *
  * Fórmula nuclear por nota:
- *   D = baseMs × exp( sat( Σ log(f_i) ) ) × jitter
+ *   D = baseMs × exp( sat( Σ log(f_i) ) ) × (1+g)
  *
  * Onde:
  *   - f_i = fatores do perfil para cada sinal ativo na nota/sílaba
@@ -46,12 +46,12 @@ function makePrng(seed: number): () => number {
 }
 
 /** Amostra gaussiana aproximada pela média de 4 uniformes (teorema central do limite leve).
- *  Resultado centrado em 0, com σ ≈ 1. Clamp ±2σ. */
+ *  Resultado centrado em 0, com σ ≈ 0.97 (clamp ±2 encolhe o σ efetivo de 1 para ≈0.97). */
 function gaussSample(rng: () => number): number {
   // soma de 4 uniformes iid ~ N(2, 1/3) → centrar subtraindo 2, escala ×sqrt(3)
   const u = rng() + rng() + rng() + rng();
-  const g = (u - 2) * Math.sqrt(3); // σ ≈ 1 após escala
-  return Math.max(-2, Math.min(2, g)); // clamp ±2σ
+  const g = (u - 2) * Math.sqrt(3); // σ ≈ 1 antes do clamp
+  return Math.max(-2, Math.min(2, g)); // clamp ±2σ; reduz σ efetivo para ≈0.97
 }
 
 // ── Mapeamento sinal → factor key ────────────────────────────────────────────
