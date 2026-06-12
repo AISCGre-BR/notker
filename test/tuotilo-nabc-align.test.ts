@@ -4,7 +4,7 @@
 // (linhas 207–238), Cardine St. Gall (508–545), Cardine Laon (559–592);
 // cross-check gregoriotex-nabc.lua:120 e nabc-renderer.es6.js:18030–18048.
 import { describe, it, expect } from "vitest";
-import { NOTE_COUNTS, parseNabcToken } from "../src/tuotilo/nabc-align";
+import { NOTE_COUNTS, parseNabcToken, alignSegment } from "../src/tuotilo/nabc-align";
 
 describe("NOTE_COUNTS — tabela canônica", () => {
   it("A1. bases de 1 nota", () => {
@@ -115,5 +115,46 @@ describe("parseNabcToken — glifos e contagem", () => {
     const ni = parseNabcToken("ni")!;
     expect(ni).toHaveLength(1);
     expect(ni[0].perNote).toEqual([]);
+  });
+});
+
+describe("alignSegment — alinhamento com fallback (D3)", () => {
+  it("C1. contagem bate → sinais por nota, aligned=true: 2 notas × cl-", () => {
+    const a = alignSegment(2, "cl-");
+    expect(a.aligned).toBe(true);
+    expect(a.perNote).toEqual([["episema"], ["episema"]]);
+  });
+  it("C2. composto com '!': 4 notas × cl!pe → aligned, sem sinais", () => {
+    const a = alignSegment(4, "cl!pe");
+    expect(a.aligned).toBe(true);
+    expect(a.perNote).toEqual([[], [], [], []]);
+  });
+  it("C3. sinal vai ao glifo certo: 4 notas × cl-!pe → episema só nas 2 primeiras", () => {
+    const a = alignSegment(4, "cl-!pe");
+    expect(a.perNote).toEqual([["episema"], ["episema"], [], []]);
+  });
+  it("C4. contagem diverge → borrão (união) em todas, aligned=false: 3 notas × vi-", () => {
+    const a = alignSegment(3, "vi-");
+    expect(a.aligned).toBe(false);
+    for (const pn of a.perNote) expect(pn).toContain("episema");
+  });
+  it("C5. token vazio/null → tudo vazio, aligned=true", () => {
+    expect(alignSegment(2, null)).toEqual({ perNote: [[], []], aligned: true });
+    expect(alignSegment(1, "  ")).toEqual({ perNote: [[]], aligned: true });
+  });
+  it("C6. base desconhecida → borrão com sinais detectáveis: 2 notas × zz-", () => {
+    const a = alignSegment(2, "zz-");
+    expect(a.aligned).toBe(false);
+    for (const pn of a.perNote) expect(pn).toContain("episema");
+  });
+  it("C7. ds alinhado: 2 notas → strophae nas duas, aligned=true", () => {
+    const a = alignSegment(2, "ds");
+    expect(a.aligned).toBe(true);
+    expect(a.perNote).toEqual([["strophae"], ["strophae"]]);
+  });
+  it("C8. ni (0 notas) compõe sem consumir: 2 notas × ni!cl → aligned", () => {
+    const a = alignSegment(2, "ni!cl");
+    expect(a.aligned).toBe(true);
+    expect(a.perNote).toHaveLength(2);
   });
 });

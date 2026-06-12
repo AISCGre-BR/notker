@@ -211,3 +211,63 @@ export function parseNabcToken(token: string): NabcGlyph[] | null {
 
   return glyphs;
 }
+
+// ── Alinhador de segmento ───────────────────────────────────────────────────
+
+export interface SegmentAlignment {
+  /** paralelo às notas gabc do segmento */
+  perNote: RhythmSign[][];
+  /** false = contagem divergente (Romanum×St. Gall) — sinais borrados (D3) */
+  aligned: boolean;
+}
+
+/** Alinha o token NABC de um segmento às suas notas gabc.
+ *  Contagem igual → sinal na(s) nota(s) exata(s) do glifo;
+ *  divergente ou imparsável → união de todos os sinais em todas as notas. */
+export function alignSegment(
+  gabcNoteCount: number,
+  nabcToken: string | null,
+): SegmentAlignment {
+  const empty = () => Array.from({ length: gabcNoteCount }, () => [] as RhythmSign[]);
+  if (!nabcToken || !nabcToken.trim()) return { perNote: empty(), aligned: true };
+
+  const perNote: RhythmSign[][] = [];
+  for (const chunk of nabcToken.split("!")) {
+    const glyphs = parseNabcToken(chunk);
+    if (glyphs === null) return smear(gabcNoteCount, nabcToken);
+    for (const g of glyphs) perNote.push(...g.perNote);
+  }
+  if (perNote.length !== gabcNoteCount) return smear(gabcNoteCount, nabcToken);
+  return { perNote: perNote.map((pn) => Array.from(new Set(pn))), aligned: true };
+}
+
+/** Fallback D3: união de todos os sinais do token em todas as notas. */
+function smear(gabcNoteCount: number, nabcToken: string): SegmentAlignment {
+  const all = new Set<RhythmSign>();
+  for (const chunk of nabcToken.split("!")) {
+    const glyphs = parseNabcToken(chunk);
+    if (glyphs) {
+      for (const g of glyphs) for (const pn of g.perNote) for (const x of pn) all.add(x);
+    } else {
+      collectSignsLoose(chunk, all);
+    }
+  }
+  const union = Array.from(all);
+  return {
+    perNote: Array.from({ length: gabcNoteCount }, () => [...union]),
+    aligned: false,
+  };
+}
+
+/** Varredura frouxa p/ chunk imparsável (mesmo espírito do enrichFromNabc v1). */
+function collectSignsLoose(chunk: string, out: Set<RhythmSign>): void {
+  const clean = stripNonGlyph(chunk).replace(/(su|pp)[a-z]?[0-9]+/g, "");
+  for (const m of clean.match(/[a-z]{2}/g) ?? []) {
+    if (ORISCUS_BASES.has(m))  out.add("oriscus");
+    if (STROPHAE_BASES.has(m)) out.add("strophae");
+    if (QUILISMA_BASES.has(m)) out.add("quilisma");
+  }
+  if (clean.includes("-")) out.add("episema");
+  if (clean.includes(">")) out.add("liqAug");
+  if (clean.includes("~")) out.add("liqDim");
+}
