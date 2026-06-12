@@ -294,6 +294,33 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .panel-tab.active { color: var(--ink); border-bottom-color: var(--rubric-soft); }
 .panel-pane { flex: 1 1 0; min-height: 0; overflow: auto; }
 
+/* ── Onda de interpretação ───────────────────────────────────────────────── */
+.wave-host { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.wave-toolbar { flex: 0 0 auto; padding: 6px 10px; border-bottom: 1px solid var(--rule-soft); }
+.wave-reset {
+  font: 500 11px var(--font); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--ink-muted); background: none; border: 1px solid var(--rule);
+  padding: 3px 10px; cursor: pointer;
+}
+.wave-reset:hover { color: var(--ink); border-color: var(--ink-muted); }
+.wave-scroller { flex: 1 1 0; overflow: auto; padding: 10px 0; }
+.wave-svg { display: block; }
+.wave-note { fill: var(--cream-deep); stroke: var(--ink-muted); stroke-width: 1; cursor: ns-resize; }
+.wave-note:hover { fill: var(--rule-soft); }
+.wave-note.playing { fill: var(--rubric-soft); stroke: var(--rubric); }
+.wave-label { font: 12px var(--font); fill: var(--ink-soft); }
+.wave-divisio { stroke: var(--rule); stroke-width: 1.5; }
+.wave-divisio[data-kind="finalis"] { stroke: var(--ink-muted); stroke-width: 3; }
+.wave-stale {
+  display: flex; gap: 8px; align-items: center; padding: 6px 10px;
+  font: 12px var(--font); color: var(--rubric);
+  background: var(--cream); border-bottom: 1px solid var(--rule);
+}
+.wave-stale button {
+  font: 500 11px var(--font); text-transform: uppercase; letter-spacing: 0.08em;
+  background: none; border: 1px solid var(--rule); cursor: pointer; padding: 2px 8px;
+}
+
 /* ── Lista lateral de documentos ──────────────────────────────────────────── */
 .doc-list { display: flex; flex-direction: column; font-family: serif; font-size: 13px; height: 100%; }
 .doc-list-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--rule); }
