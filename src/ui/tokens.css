@@ -279,6 +279,21 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .newdlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .newdlg-actions button { padding: 6px 12px; cursor: pointer; }
 
+/* ── Abas do painel direito (Partitura | Interpretação) ─────────────────── */
+.panel-tabs-host { display: flex; flex-direction: column; min-height: 0; }
+.panel-tabs {
+  display: flex; gap: 0; flex: 0 0 auto;
+  border-bottom: 1px solid var(--rule);
+  background: linear-gradient(var(--cream), var(--cream-deep));
+}
+.panel-tab {
+  font: 500 11px var(--font); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--ink-muted); background: none; border: none;
+  border-bottom: 2px solid transparent; padding: 6px 14px; cursor: pointer;
+}
+.panel-tab.active { color: var(--ink); border-bottom-color: var(--rubric-soft); }
+.panel-pane { flex: 1 1 0; min-height: 0; overflow: auto; }
+
 /* ── Lista lateral de documentos ──────────────────────────────────────────── */
 .doc-list { display: flex; flex-direction: column; font-family: serif; font-size: 13px; height: 100%; }
 .doc-list-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--rule); }

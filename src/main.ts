@@ -35,6 +35,7 @@ import { syllableRangeOfSelection } from "./preview/source-map";
 import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel } from "./overlay-ui/panel";
 import { createSplit, type Split } from "./ui/split";
+import { createTabs } from "./ui/tabs";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
 import {
@@ -190,12 +191,15 @@ async function boot() {
   // try/catch para que as assistências (hover/completion/paleta) carreguem sempre,
   // mesmo que o motor de preview (webview-only) falhe.
   const previewHost = document.querySelector<HTMLElement>("#preview")!;
+  const tabs = createTabs(previewHost, ["Partitura", "Interpretação"]);
+  const partituraPane = tabs.pane(0);
+  const wavePane = tabs.pane(1); // preenchido na Task 5/6
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
   try {
     const engine = new NabcLibEngine();
-    panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
+    panel = createPreviewPanel(partituraPane, engine, { debounceMs: 150 });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
