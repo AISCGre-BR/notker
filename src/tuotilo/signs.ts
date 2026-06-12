@@ -43,15 +43,19 @@ export interface SyllableRhythm {
 // ── Helpers internos ─────────────────────────────────────────────────────────
 
 /** Extrai a string gabc de dentro dos parênteses da última `(...)` da sílaba.
- *  Retorna null se não houver grupo gabc. */
+ *  Retorna null se não houver grupo gabc.
+ *
+ *  Sintaxe intercalada: quando o melisma é longo, o conteúdo alterna segmentos
+ *  gabc|nabc|gabc|nabc|...  (índices PARES = gabc, ÍMPARES = nabc).
+ *  Caso simples (sem `|` ou único `|`): comportamento anterior preservado. */
 function extractGabcGroup(src: string): string | null {
-  // Pega o conteúdo do ÚLTIMO grupo `(...)` — sílabas têm exatamente um grupo;
-  // se houver barra `|` (nabc), toma só a parte antes da barra.
   const m = src.match(/\(([^)]*)\)\s*$/);
   if (!m) return null;
   const inner = m[1];
-  // gabc puro = antes da barra `|` (nabc vem depois)
-  return inner.split("|")[0];
+  const segs = inner.split("|");
+  if (segs.length <= 1) return inner; // sem pipe: gabc puro
+  // Concatenar todos os segmentos de índice PAR (0, 2, 4, …)
+  return segs.filter((_, i) => i % 2 === 0).join("/");
 }
 
 /** Detecta divisio pelo conteúdo gabc (sem notas).
@@ -166,14 +170,20 @@ const STROPHAE_BASES = new Set(["st", "ds", "ts", "bv", "tv"]);
 /** Bases NABC que indicam quilisma. */
 const QUILISMA_BASES = new Set(["ql", "qi"]);
 
-/** Extrai a parte nabc de dentro dos parênteses (após `|`).
- *  Retorna null se não houver separador `|`. */
+/** Extrai a parte nabc de dentro dos parênteses (segmentos de índice ÍMPAR).
+ *  Retorna null se não houver separador `|`.
+ *
+ *  Sintaxe intercalada: `gabc0|nabc0|gabc1|nabc1|...` — todos os segmentos ímpares
+ *  são concatenados com `!` (separador de neumas compostos NABC), que enrichFromNabc
+ *  já sabe dividir. */
 function extractNabcGroup(src: string): string | null {
   const m = src.match(/\(([^)]*)\)\s*$/);
   if (!m) return null;
-  const idx = m[1].indexOf("|");
-  if (idx < 0) return null;
-  return m[1].slice(idx + 1);
+  const segs = m[1].split("|");
+  if (segs.length <= 1) return null;
+  // Segmentos ímpares (1, 3, 5, …)
+  const nabcSegs = segs.filter((_, i) => i % 2 === 1);
+  return nabcSegs.join("!");
 }
 
 /** Remove prefixos de letras significativas (ls.../lt...) e hh-pitch (h[a-m])
