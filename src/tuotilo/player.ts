@@ -159,11 +159,13 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
         // Pulso só cabe se as duas notas comportam o vai-e-volta do gain
         // SEM violar a ordem da automação (ataque no início do grupo e
         // release no fim). Não coube → re-ataque pleno (regra sagrada).
+        // Folga estrita (>): no caso-limite exato, mergulho e release coincidiriam
+        // no mesmo timestamp — limite estrito garante folga audível entre eles.
         const pulseFits =
           note.articulation === "pulse" &&
           prev !== null &&
-          prev.durMs >= ATTACK_MS + PULSE_MS / 2 &&
-          note.ms >= GAP_MS + RELEASE_MS + PULSE_MS / 2;
+          prev.durMs > ATTACK_MS + PULSE_MS / 2 &&
+          note.ms > GAP_MS + RELEASE_MS + PULSE_MS / 2;
         const startsGroup =
           current === null ||
           note.articulation === "full" ||

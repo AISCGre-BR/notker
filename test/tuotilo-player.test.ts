@@ -323,6 +323,15 @@ describe("Player v2 — grupos legato", () => {
     expect(ctx()._oscillators).toHaveLength(2);
   });
 
+  it("P12b. caso-limite exato (46ms+120ms) recua a re-ataque pleno (folga estrita)", () => {
+    const { player, ctx } = makePlayer();
+    player.play(pb([
+      tn({ pitch: "f", ms: 46 }),
+      tn({ pitch: "f", ms: 120, articulation: "pulse" }),
+    ]), vi.fn(), vi.fn());
+    expect(ctx()._oscillators).toHaveLength(2);
+  });
+
   it("P13. pulse não quebra o pitch em degrau das notas legato seguintes", () => {
     const { player, ctx } = makePlayer();
     player.play(pb([
