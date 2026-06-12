@@ -14,6 +14,7 @@
 
 import type { SyllableRhythm, RhythmSign } from "./signs";
 import type { RhythmProfile } from "./profile";
+import type { NoteTimeline } from "./timeline";
 
 // ── Tipos exportados ─────────────────────────────────────────────────────────
 
@@ -192,4 +193,72 @@ export function computeDurations(
 
     return { notes, pauseMs, syllableIndex };
   });
+}
+
+// ── API v2: computeTimedNotes ─────────────────────────────────────────────────
+
+export type PlaybackMode = "interpretado" | "solfejo";
+
+export interface TimedNote {
+  idx: number;
+  pitch: string;
+  ms: number;
+  pauseAfterMs: number;   // pausa de divisio após ESTA nota
+  attack: boolean;        // true = novo envelope/oscilador (início de grupo legato)
+  syllableIndex: number;
+}
+export interface TimedPlayback { notes: TimedNote[]; leadInMs: number; }
+
+/** Duração por nota sobre a NoteTimeline (spec §4).
+ *  interpretado: log-aditivo saturado com sinais DA NOTA + contexto da sílaba;
+ *  solfejo: baseMs fixo, sem jitter, re-ataque por nota, pausas mantidas. */
+export function computeTimedNotes(
+  tl: NoteTimeline,
+  p: RhythmProfile,
+  seed: number,
+  mode: PlaybackMode,
+): TimedPlayback {
+  const rng = makePrng(seed);
+  const pauseAfter = new Map<number, number>();
+  let leadInMs = 0;
+  for (const d of tl.divisiones) {
+    const ms = p.pauseBeats[d.kind] * p.baseMs;
+    if (d.afterNoteIdx < 0) leadInMs += ms;
+    else pauseAfter.set(d.afterNoteIdx, (pauseAfter.get(d.afterNoteIdx) ?? 0) + ms);
+  }
+
+  const notes: TimedNote[] = tl.notes.map((n, i) => {
+    let ms: number;
+    let attack: boolean;
+    if (mode === "solfejo") {
+      ms = p.baseMs;
+      attack = true;
+    } else {
+      let L = 0;
+      for (const sign of n.signs) {
+        const key = signToKey(sign);
+        if (key !== null) L += Math.log(p.factors[key]);
+      }
+      if (n.wordFinal)             L += Math.log(p.factors.wordFinal);
+      if (n.divisio === "minima")  L += Math.log(p.factors.divisioMinima);
+      if (n.divisio === "minor")   L += Math.log(p.factors.divisioMinor);
+      if (n.divisio === "maior")   L += Math.log(p.factors.divisioMaior);
+      if (n.divisio === "finalis") L += Math.log(p.factors.divisioFinalis);
+
+      const cap = selectCap(p.caps, n.divisio, n.wordFinal);
+      const D = p.baseMs * Math.exp(saturate(L, cap));
+      const g = gaussSample(rng) * p.jitterSigma;
+      ms = Math.max(1, D * (1 + g));
+
+      const prev = tl.notes[i - 1];
+      attack = !prev || prev.incisumIndex !== n.incisumIndex || n.repercussion;
+    }
+    return {
+      idx: n.idx, pitch: n.pitch, ms,
+      pauseAfterMs: pauseAfter.get(n.idx) ?? 0,
+      attack, syllableIndex: n.syllableIndex,
+    };
+  });
+
+  return { notes, leadInMs };
 }
