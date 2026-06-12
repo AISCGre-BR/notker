@@ -122,4 +122,24 @@ describe("tuotilo signs NABC — enriquecimento por enrichFromNabc", () => {
     expect(r.pitches).toEqual(["f", "g", "h"]);
     expect(r.signs).toEqual([]);
   });
+
+  // ── NABC-12: episema detectado via '-' no NABC (sem '_' no gabc) ─────────────
+  // NABC é a fonte primária de ritmo (St. Gall/Laon); um manuscrito transcrito
+  // apenas com nabc não teria o '_' editorial do gabc.
+  // "Ro(fg|vi-)": GABC fg (sem episema), NABC vi- (virga com episema)
+  // → signs deve conter "episema"
+  it("NABC-12: episema detectado via '-' no nabc quando gabc não tem '_'", () => {
+    const r = extractSyllable("Ro(fg|vi-)");
+    expect(r.signs).toContain("episema");
+    expect(r.pitches).toEqual(["f", "g"]);
+  });
+
+  // ── NABC-13: episema não duplicado quando gabc '_' e nabc '-' concordam ──────
+  // "Ro(fg_|vi-)": GABC fg_ (episema editorial), NABC vi- (episema manuscrito)
+  // → "episema" aparece exatamente UMA vez nos signs (Set garante)
+  it("NABC-13: episema não duplicado quando gabc '_' e nabc '-' concordam", () => {
+    const r = extractSyllable("Ro(fg_|vi-)");
+    const count = r.signs.filter((s) => s === "episema").length;
+    expect(count).toBe(1);
+  });
 });

@@ -5,13 +5,13 @@
  *   `_`  após nota = episema horizontal (H_EPISEMA; pode ter dígitos 0-5 de posição)
  *   `.`  após nota = punctum mora   (PUNCTUM_MORA)
  *   `w`  após nota = quilisma       (S_QUILISMA)
- *   `-`  antes de nota = initio debilis
+ *   `-`  antes de nota gabc = initio debilis (diferente de `-` no NABC = episema)
  *   `,`→"minima"  `;`→"minor"  `:`→"maior"  `::`→"finalis"  `` ` ``→null (virgula, sem efeito v1)
  *   demais símbolos (~><'vVsx#@r=Ryo^qQ!) ignorados sem quebrar.
  *
  * Modificadores NABC (synopsis-neumes.json → "modifiers"; GregorioNabcRef §241–250):
- *   "-" = episema (nível sílaba)    ">" = liqAug (liquescência aumentativa)
- *   "~" = liqDim (diminutiva)       "S"/"G"/"M" = modificações visuais (ignoradas v1)
+ *   "-" = episema (fonte primária: St. Gall/Laon)  ">" = liqAug (liquescência aumentativa)
+ *   "~" = liqDim (diminutiva)                       "S"/"G"/"M" = modificações visuais (ignoradas v1)
  *
  * Bases NABC relevantes para ritmo (nível sílaba — sem alinhamento nota-a-nota):
  *   or, pq, pt, oc   → "oriscus"   |   st, ds, ts, bv, tv → "strophae"
@@ -212,10 +212,11 @@ export function enrichFromNabc(s: SyllableRhythm, nabcSrc: string): SyllableRhyt
     }
 
     // Detectar modificadores de glifo (GregorioNabcRef §241–250):
+    //   "-"  = episema (NABC é a fonte primária de ritmo — St. Gall/Laon)
     //   ">"  = liquescência aumentativa
     //   "~"  = liquescência diminutiva
-    // Nota: "-" no NABC é episema de neuma, mas já capturamos episema pelo GABC;
-    //       não adicionamos duplicata — omitido intencionalmente v1.
+    // O Set garante que "episema" não duplica mesmo se o GABC também tiver `_`.
+    if (clean.includes("-")) signsSet.add("episema");
     if (clean.includes(">")) signsSet.add("liqAug");
     if (clean.includes("~")) signsSet.add("liqDim");
   }
