@@ -212,6 +212,16 @@ async function boot() {
   // O panel pode ser null se o preview falhou — todos os caminhos degradam com setStatus.
   const player = createPlayer(() => new AudioContext());
 
+  /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
+  function stopPlayback(reason?: string): void {
+    player.stop();
+    const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
+    if (btn) btn.textContent = "Tocar";
+    const svg = panel?.svgEl?.() ?? null;
+    if (svg) clearHighlight(svg);
+    setStatus(reason ?? "playback: parado");
+  }
+
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
   const dialogHost = document.querySelector<HTMLElement>("#dialog-host")!;
   const docList = createDocList(docListHost, {
@@ -222,7 +232,7 @@ async function boot() {
 
   /** Reflete o doc ativo do projeto no editor + indicadores. */
   function syncFromProject(): void {
-    if (player.playing) player.stop(); // para o playback ao trocar/criar/abrir doc
+    if (player.playing) stopPlayback("playback: interrompido (troca de canto)");
     replaceDoc(getActiveDoc(project).content);
     docList.render(project);
     updateFamilyIndicator();
@@ -394,11 +404,8 @@ async function boot() {
     moveReset: () => { runMove(view, () => getTree(), "reset"); },
     // Tuotilo: alterna Tocar↔Parar no playback semiológico.
     playToggle: () => {
-      const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
       if (player.playing) {
-        player.stop();
-        if (btn) btn.textContent = "Tocar";
-        setStatus("playback: parado");
+        stopPlayback();
         return;
       }
       // Obtém mapa de sílabas do preview; sem preview → degrada com status
@@ -417,17 +424,14 @@ async function boot() {
       }
       const events = computeDurations(syls, DEFAULT_PROFILE, Date.now() % 9973);
       const svg = panel?.svgEl?.() ?? null;
+      const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
       if (btn) btn.textContent = "Parar";
       setStatus("playback: tocando…");
       player.play(
         events,
         // i = posição 0-based no array de eventos; mapear para índice SVG real
         (i) => { if (svg) highlightSyllable(svg, svgIndices[i] ?? i + 1); },
-        () => {
-          if (svg) clearHighlight(svg);
-          if (btn) btn.textContent = "Tocar";
-          setStatus("playback: fim");
-        },
+        () => { stopPlayback("playback: fim"); },
       );
     },
   });
