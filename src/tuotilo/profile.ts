@@ -3,7 +3,7 @@
 export interface RhythmProfile {
   baseMs: number;                       // valor silábico de referência
   factors: {
-    episema: number; mora: number; preQuilisma: number; quilisma: number;
+    episema: number; preQuilisma: number; quilisma: number;
     wordFinal: number;
     divisioMinima: number; divisioMinor: number; divisioMaior: number; divisioFinalis: number;
     currentes: number; initioDebilis: number;
@@ -16,7 +16,7 @@ export interface RhythmProfile {
 }
 export const DEFAULT_PROFILE: RhythmProfile = {
   baseMs: 380,
-  factors: { episema: 1.31, mora: 1.83, preQuilisma: 1.27, quilisma: 0.92,
+  factors: { episema: 1.31, preQuilisma: 1.27, quilisma: 0.92,
     wordFinal: 1.12,
     divisioMinima: 1.21, divisioMinor: 1.34, divisioMaior: 1.52, divisioFinalis: 1.78,
     currentes: 0.86, initioDebilis: 0.88,

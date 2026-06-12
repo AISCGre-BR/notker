@@ -1,19 +1,22 @@
 /**
- * player.ts — Player Web Audio do Tuotilo.
+ * player.ts — Player Web Audio do Tuotilo v2 (grupos legato por incisum).
  *
- * Sintetiza SyllableEvents[] via Web Audio API (uma voz, oscilador triangle).
- * Regra do projeto: NUNCA ligar notas de mesmo pitch num gain contínuo —
- * cada nota cria seu próprio OscillatorNode+GainNode (re-ataque explícito,
- * repercussão audível em distropha/tristropha/bis-punctum).
+ * Modelo de agendamento:
+ *   - Notas consecutivas com attack=false formam um GRUPO LEGATO: 1 oscilador,
+ *     pitch muda em degrau via frequency.setValueAtTime nas fronteiras de nota,
+ *     envelope único cobre todo o grupo.
+ *   - attack=true sempre cria um oscilador NOVO (repercussão sagrada do projeto:
+ *     distropha/tristropha/bis-punctum são re-articulações explícitas, nunca fundir).
+ *   - Divisio (pauseAfterMs > 0) também quebra o grupo (cursor recomeça sem carry).
  *
- * Envelope ADSR simplificado por nota:
+ * Envelope por GRUPO (D2):
  *   attack  18ms: 0 → 0.8 (linearRamp)
  *   sustain  até release point
- *   release 70ms: → 0  terminando 22ms ANTES do fim nominal (gap de re-ataque)
+ *   release 70ms: → 0  terminando 22ms ANTES do fim do GRUPO (gap de re-ataque)
  */
 
 import { staffOffset } from "../gabc/gabc-pitch";
-import type { SyllableEvents } from "./duration";
+import type { TimedNote, TimedPlayback } from "./duration";
 
 // ── Pitch → Frequência ────────────────────────────────────────────────────────
 
@@ -49,17 +52,49 @@ export function pitchToFreq(pitch: string): number {
 
 const ATTACK_MS   = 18;   // 0 → 0.8 via linearRamp
 const RELEASE_MS  = 70;   // → 0 via linearRamp
-const GAP_MS      = 22;   // gap antes do fim nominal (re-ataque audível)
+const GAP_MS      = 22;   // gap antes do fim nominal do GRUPO (re-ataque audível)
 const PEAK_GAIN   = 0.8;
+
+// ── Grupo legato ──────────────────────────────────────────────────────────────
+
+interface GroupNote { freq: number; atMs: number; durMs: number; }
+
+/** Agenda um grupo legato: 1 oscilador, pitch em degrau nas fronteiras de nota,
+ *  envelope único no grupo (D2). Grupos de 1 nota reproduzem o envelope v1. */
+function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[]): void {
+  const first = notes[0];
+  const last = notes[notes.length - 1];
+  const startSec = baseTime + first.atMs / 1000;
+  const endSec = baseTime + (last.atMs + last.durMs) / 1000;
+  const attackEndSec = startSec + ATTACK_MS / 1000;
+  const releaseSec = endSec - (GAP_MS + RELEASE_MS) / 1000;
+
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  for (const n of notes) osc.frequency.setValueAtTime(n.freq, baseTime + n.atMs / 1000);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1200, startSec);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, startSec);
+  gain.gain.linearRampToValueAtTime(PEAK_GAIN, attackEndSec);
+  if (releaseSec > attackEndSec) gain.gain.setValueAtTime(PEAK_GAIN, releaseSec);
+  const releaseEndSec = Math.max(releaseSec + RELEASE_MS / 1000, attackEndSec + 0.001);
+  gain.gain.linearRampToValueAtTime(0, releaseEndSec);
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(startSec);
+  osc.stop(endSec);
+}
 
 // ── API pública ───────────────────────────────────────────────────────────────
 
 export interface Player {
-  play(
-    events: SyllableEvents[],
-    onSyllable: (i: number) => void,
-    onEnd: () => void,
-  ): void;
+  play(playback: TimedPlayback, onNote: (note: TimedNote) => void, onEnd: () => void): void;
   stop(): void;
   readonly playing: boolean;
 }
@@ -81,52 +116,6 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
     _playing = false;
   }
 
-  function scheduleNote(
-    ctx: AudioContext,
-    freq: number,
-    startSec: number,
-    durationMs: number,
-  ): void {
-    const endSec      = startSec + durationMs / 1000;
-    const releaseSec  = endSec - (GAP_MS + RELEASE_MS) / 1000;
-    const attackEndSec = startSec + ATTACK_MS / 1000;
-
-    // Oscilador triangle → filtro lowpass → gain → destination
-    const osc = ctx.createOscillator();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(freq, startSec);
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(1200, startSec);
-
-    const gain = ctx.createGain();
-    // Inicia em 0
-    gain.gain.setValueAtTime(0, startSec);
-    // Attack: 0 → PEAK_GAIN em 18ms
-    gain.gain.linearRampToValueAtTime(PEAK_GAIN, attackEndSec);
-    // Sustain até release point (ganho constante — não precisa de setValueAtTime explícito)
-    // Release: PEAK_GAIN → 0 em 70ms, terminando 22ms antes do fim nominal
-    if (releaseSec > attackEndSec) {
-      gain.gain.setValueAtTime(PEAK_GAIN, releaseSec);
-    }
-    // Guard de nota curta: garante que o ramp→0 nunca fique ANTES do fim do attack.
-    // Para notas < 40ms, releaseSec + RELEASE_MS/1000 pode ser menor que attackEndSec,
-    // colocando eventos AudioParam fora de ordem (comportamento indefinido na Web Audio API).
-    const releaseEndSec = Math.max(
-      releaseSec + RELEASE_MS / 1000,
-      attackEndSec + 0.001,
-    );
-    gain.gain.linearRampToValueAtTime(0, releaseEndSec);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(startSec);
-    osc.stop(endSec);
-  }
-
   return {
     get playing(): boolean {
       return _playing;
@@ -136,47 +125,32 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
       stopInternal();
     },
 
-    play(
-      events: SyllableEvents[],
-      onSyllable: (i: number) => void,
-      onEnd: () => void,
-    ): void {
-      // Re-play seguro: para tudo antes de recomeçar
+    play(playback, onNote, onEnd) {
       if (_playing) stopInternal();
-
       _ctx = ctxFactory();
       _playing = true;
       const ctx = _ctx;
-
-      // Tempo de início com margem de 50ms (= pré-fire da UI).
-      // onSyllable dispara no cursor lógico (setTimeout com delay=cursor ms),
-      // que é 50ms ANTES do áudio real de cada sílaba (pre-fire para UI).
       const baseTime = ctx.currentTime + 0.05;
-      let cursor = 0; // acumulador em ms
 
-      for (const syl of events) {
-        // Agenda callback onSyllable no início da sílaba
-        const sylTimer = setTimeout(
-          () => onSyllable(syl.syllableIndex),
-          cursor,
-        );
-        _timers.push(sylTimer);
-
-        // Agenda cada nota da sílaba sequencialmente
-        for (const note of syl.notes) {
-          scheduleNote(ctx, pitchToFreq(note.pitch), baseTime + cursor / 1000, note.ms);
-          cursor += note.ms;
+      let cursor = playback.leadInMs;
+      const groups: GroupNote[][] = [];
+      let current: GroupNote[] | null = null;
+      for (const note of playback.notes) {
+        if (note.attack || current === null) {
+          current = [];
+          groups.push(current);
         }
-
-        // Pausa pós-sílaba
-        cursor += syl.pauseMs;
+        current.push({ freq: pitchToFreq(note.pitch), atMs: cursor, durMs: note.ms });
+        const t = setTimeout(() => onNote(note), cursor);
+        _timers.push(t);
+        cursor += note.ms;
+        if (note.pauseAfterMs > 0) {
+          cursor += note.pauseAfterMs;
+          current = null; // divisio: próximo grupo recomeça mesmo sem attack
+        }
       }
-
-      // Callback onEnd após o fim total
-      const endTimer = setTimeout(() => {
-        _playing = false;
-        onEnd();
-      }, cursor);
+      for (const g of groups) scheduleGroup(ctx, baseTime, g);
+      const endTimer = setTimeout(() => { _playing = false; onEnd(); }, cursor);
       _timers.push(endTimer);
     },
   };

@@ -29,7 +29,8 @@ import { installSync, syncFromCursor } from "./preview/sync";
 import { highlightSyllable, clearHighlight } from "./preview/highlight";
 import { createPlayer } from "./tuotilo/player";
 import { extractAll } from "./tuotilo/signs";
-import { computeDurations } from "./tuotilo/duration";
+import { buildTimeline } from "./tuotilo/timeline";
+import { computeTimedNotes, type PlaybackMode } from "./tuotilo/duration";
 import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel } from "./overlay-ui/panel";
 import { createSplit, type Split } from "./ui/split";
@@ -211,6 +212,7 @@ async function boot() {
   // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
   // O panel pode ser null se o preview falhou — todos os caminhos degradam com setStatus.
   const player = createPlayer(() => new AudioContext());
+  let playbackMode: PlaybackMode = "interpretado";
 
   /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
   function stopPlayback(reason?: string): void {
@@ -415,22 +417,26 @@ async function boot() {
         return;
       }
       const texto = view.state.doc.toString();
-      // Índices SVG 1-based das sílabas reais (mesma filtragem de extractAll)
       const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
       const syls = extractAll(texto, map);
       if (syls.length === 0) {
         setStatus("playback: nenhuma sílaba encontrada");
         return;
       }
-      const events = computeDurations(syls, DEFAULT_PROFILE, Date.now() % 9973);
+      const tl = buildTimeline(syls);
+      const playback = computeTimedNotes(tl, DEFAULT_PROFILE, Date.now() % 9973, playbackMode);
       const svg = panel?.svgEl?.() ?? null;
       const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
       if (btn) btn.textContent = "Parar";
       setStatus("playback: tocando…");
+      let lastSyl = -1;
       player.play(
-        events,
-        // i = posição 0-based no array de eventos; mapear para índice SVG real
-        (i) => { if (svg) highlightSyllable(svg, svgIndices[i] ?? i + 1); },
+        playback,
+        (note) => {
+          if (note.syllableIndex === lastSyl) return;
+          lastSyl = note.syllableIndex;
+          if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
+        },
         () => { stopPlayback("playback: fim"); },
       );
     },

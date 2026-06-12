@@ -27,7 +27,6 @@ import { alignSegment } from "./nabc-align";
 
 export type RhythmSign =
   | "episema"
-  | "mora"
   | "quilisma"
   | "preQuilisma"
   | "currentes"
