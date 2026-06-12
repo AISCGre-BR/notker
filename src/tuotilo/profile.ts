@@ -11,6 +11,7 @@ export interface RhythmProfile {
     oriscus: number; liqAug: number; liqDim: number; strophae: number;
     // unísono silábico / recitação — run ≥3 sílabas de 1 nota na mesma altura (D-23)
     recitation: number;
+    recitationTonic: number;  // realce da sílaba tônica DENTRO de um run de récita
   };
   caps: { sign: number; incisum: number; phrase: number }; // tetos de saturação por nível
   jitterSigma: number;                  // fração de D (ex.: 0.04)
@@ -25,7 +26,8 @@ export const DEFAULT_PROFILE: RhythmProfile = {
     // valores em decimais irregulares: semiologia, não mensuralismo (D-23)
     oriscus: 0.93, liqAug: 1.24, liqDim: 0.84, strophae: 0.91,
     // recitação silábica em corda flui mais ligeira que o valor pleno (D-23)
-    recitation: 0.83 },
+    recitation: 0.83,
+    recitationTonic: 1.18 },
   caps: { sign: 1.35, incisum: 1.7, phrase: 2.05 },
   jitterSigma: 0.04,
   pauseBeats: { minima: 0.2, minor: 0.45, maior: 0.95, finalis: 1.6 },

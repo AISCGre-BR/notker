@@ -79,6 +79,18 @@ describe("computeTimedNotes — interpretado (fidelidade por nota)", () => {
     // e continuam rearticuladas (regra sagrada)
     expect(run.map((n) => n.attack)).toEqual([true, true, true, true]);
   });
+  it("D10. récita: tônica pesa mais que átonas do MESMO run (a-do-rá-te)", () => {
+    const { notes } = timed([
+      syl(["h"]), syl(["h"]), syl(["h"], undefined, null, false, true), // rá: accented
+      syl(["h"], undefined, null, true),
+    ]);
+    const [a, b, tonic, c] = notes.map((n) => n.ms);
+    expect(tonic).toBeGreaterThan(a);
+    expect(tonic).toBeGreaterThan(b);
+    expect(tonic).toBeGreaterThan(c);
+    // tônica continua ≤ valor silábico pleno alargado (não vira episema)
+    expect(tonic).toBeLessThan(P.baseMs * 1.15);
+  });
   it("D8. ANTI-MENSURALISTA (D-23): razão dos 2 clusters fora de [1.9, 2.1]", () => {
     const signsPool: RhythmSign[][] = [
       [], ["episema"], ["currentes"], ["quilisma"], ["preQuilisma"],
