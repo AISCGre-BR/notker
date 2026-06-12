@@ -15,7 +15,7 @@ function syl(
 ): SyllableRhythm {
   const pps = perPitchSigns ?? pitches.map(() => []);
   const signs = Array.from(new Set(pps.flat()));
-  return { pitches, signs, perPitchSigns: pps, aligned: true, accented, divisio, wordFinal };
+  return { pitches, signs, perPitchSigns: pps, perPitchAlt: pitches.map(() => 0), aligned: true, accented, divisio, wordFinal };
 }
 const P = DEFAULT_PROFILE;
 function timed(syls: SyllableRhythm[], mode: PlaybackMode = "interpretado", seed = 42) {
@@ -112,6 +112,23 @@ describe("computeTimedNotes — interpretado (fidelidade por nota)", () => {
     const allMs = timed(syls, "interpretado", 12345).notes.map((n) => n.ms);
     const ratio = twoMeansRatio(allMs);
     expect(ratio >= 1.9 && ratio <= 2.1).toBe(false);
+  });
+});
+
+describe("computeTimedNotes — alt (acidente)", () => {
+  it("ALT2. alt flui de perPitchAlt até TimedNote", () => {
+    const sylAlt: SyllableRhythm = {
+      pitches: ["g", "f", "g"],
+      signs: [],
+      perPitchSigns: [[], [], []],
+      perPitchAlt: [-1, 0, -1],
+      aligned: true,
+      accented: false,
+      divisio: null,
+      wordFinal: false,
+    };
+    const { notes } = computeTimedNotes(buildTimeline([sylAlt]), P, 42, "solfejo");
+    expect(notes.map((n) => n.alt)).toEqual([-1, 0, -1]);
   });
 });
 

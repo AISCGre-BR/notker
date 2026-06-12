@@ -39,14 +39,14 @@ import type { TimedNote, TimedPlayback } from "./duration";
 const MAJOR_SEMITONES = [0, 2, 4, 5, 7, 9, 11]; // semitons dos 7 graus diatônicos
 const A3_HZ = 220;
 
-export function pitchToFreq(pitch: string): number {
+export function pitchToFreq(pitch: string, alt = 0): number {
   const offset = staffOffset(pitch);
   if (Number.isNaN(offset)) return A3_HZ; // fallback
 
   // Divide o offset em oitava diatônica e grau dentro da oitava
   const octave = Math.floor(offset / 7);
   const degree = offset % 7;
-  const semitones = octave * 12 + MAJOR_SEMITONES[degree];
+  const semitones = octave * 12 + MAJOR_SEMITONES[degree] + alt;
   return A3_HZ * Math.pow(2, semitones / 12);
 }
 
@@ -215,7 +215,7 @@ export function createPlayer(ctxFactory: () => AudioContext, timbre: SynthTimbre
           groups.push(current);
         }
         current!.push({
-          freq: pitchToFreq(note.pitch),
+          freq: pitchToFreq(note.pitch, note.alt),
           atMs: cursor,
           durMs: note.ms,
           pulse: !startsGroup && note.articulation === "pulse",

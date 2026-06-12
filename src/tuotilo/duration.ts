@@ -97,6 +97,7 @@ export type Articulation = "full" | "pulse" | "legato";
 export interface TimedNote {
   idx: number;
   pitch: string;
+  alt: number;             // deslocamento em semitons: -1 (bemol) | 0 | +1 (sustenido)
   ms: number;
   pauseAfterMs: number;   // pausa de divisio após ESTA nota
   articulation: Articulation;  // articulação da nota no fluxo
@@ -160,8 +161,8 @@ export function computeTimedNotes(
       }
     }
     return {
-      idx: n.idx, pitch: n.pitch, ms,
-      pauseAfterMs: pauseAfter.get(n.idx) ?? 0,
+      idx: n.idx, pitch: n.pitch, alt: n.alt,
+      ms, pauseAfterMs: pauseAfter.get(n.idx) ?? 0,
       articulation, syllableIndex: n.syllableIndex,
       noteInSyllable: n.noteInSyllable,
     };

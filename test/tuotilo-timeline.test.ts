@@ -5,12 +5,13 @@ import type { SyllableRhythm } from "../src/tuotilo/signs";
 
 function syl(
   pitches: string[],
-  opts: Partial<Pick<SyllableRhythm, "divisio" | "wordFinal" | "aligned" | "perPitchSigns" | "accented">> = {},
+  opts: Partial<Pick<SyllableRhythm, "divisio" | "wordFinal" | "aligned" | "perPitchSigns" | "accented" | "perPitchAlt">> = {},
 ): SyllableRhythm {
   return {
     pitches,
     signs: [],
     perPitchSigns: opts.perPitchSigns ?? pitches.map(() => []),
+    perPitchAlt: opts.perPitchAlt ?? pitches.map(() => 0),
     aligned: opts.aligned ?? true,
     accented: opts.accented ?? false,
     divisio: opts.divisio ?? null,
@@ -78,6 +79,23 @@ describe("buildTimeline — tonic (tônica por palavra)", () => {
     ]);
     // 1ª palavra: f tônica (2 sílabas sem acento); divisio: sem notas; "g": monossílabo átono
     expect(tl.notes.map((n) => n.tonic)).toEqual([true, false, false]);
+  });
+});
+
+describe("buildTimeline — alt (acidente)", () => {
+  it("ALT1. alt de perPitchAlt flui para a nota na timeline", () => {
+    const sylAlt: SyllableRhythm = {
+      pitches: ["g", "f", "g"],
+      signs: [],
+      perPitchSigns: [[], [], []],
+      perPitchAlt: [-1, 0, -1],
+      aligned: true,
+      accented: false,
+      divisio: null,
+      wordFinal: false,
+    };
+    const tl = buildTimeline([sylAlt]);
+    expect(tl.notes.map((n) => n.alt)).toEqual([-1, 0, -1]);
   });
 });
 

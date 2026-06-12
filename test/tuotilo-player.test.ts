@@ -104,7 +104,7 @@ function makeFakeCtx(currentTime = 0): FakeCtx {
 // ── Helpers de construção de TimedNote / TimedPlayback ────────────────────────
 
 function tn(partial: Partial<TimedNote> & { pitch: string; ms: number }): TimedNote {
-  return { idx: 0, pauseAfterMs: 0, articulation: "full" as Articulation, syllableIndex: 0, noteInSyllable: 0, ...partial };
+  return { idx: 0, pauseAfterMs: 0, articulation: "full" as Articulation, syllableIndex: 0, noteInSyllable: 0, alt: 0, ...partial };
 }
 function pb(notes: TimedNote[], leadInMs = 0): TimedPlayback {
   return { notes: notes.map((n, i) => ({ ...n, idx: i })), leadInMs };
@@ -113,6 +113,12 @@ function pb(notes: TimedNote[], leadInMs = 0): TimedPlayback {
 // ── Testes: pitchToFreq ───────────────────────────────────────────────────────
 
 describe("pitchToFreq", () => {
+  it("6b. alt: −1/+1 semitom desloca a frequência por fator 2^(±1/12)", () => {
+    const f = pitchToFreq("g");
+    expect(pitchToFreq("g", -1)).toBeCloseTo(f / Math.pow(2, 1 / 12), 6);
+    expect(pitchToFreq("g", 1)).toBeCloseTo(f * Math.pow(2, 1 / 12), 6);
+  });
+
   it("6. monotônica crescente em a..m", () => {
     const letters = "abcdefghijklm".split("");
     const freqs = letters.map(pitchToFreq);
@@ -343,6 +349,14 @@ describe("Player v2 — grupos legato", () => {
     expect(ctx()._oscillators).toHaveLength(1);
     const osc = ctx()._oscillators[0];
     expect(osc.frequency.setValueAtTime).toHaveBeenCalledTimes(3);
+  });
+
+  it("P14. nota com alt=-1 agenda freq bemolizada", () => {
+    const { player, ctx } = makePlayer();
+    player.play(pb([tn({ pitch: "g", ms: 200, alt: -1 })]), vi.fn(), vi.fn());
+    const osc = ctx()._oscillators[0];
+    expect(osc.frequency.setValueAtTime).toHaveBeenCalledWith(
+      pitchToFreq("g", -1), expect.any(Number));
   });
 });
 

@@ -4,6 +4,7 @@ import {
   extractAll,
   type SyllableRhythm,
 } from "../src/tuotilo/signs";
+import { syllableSpans } from "../src/preview/nabc-lib";
 
 // Sintaxe gabc confirmada via nabc-lib/dist/nabc-renderer.es6.js (linhas 17943-18016):
 //   pitch minúsculo a-m = punctum; maiúsculo A-M = inclinatum (currentes)
@@ -241,5 +242,27 @@ describe("tuotilo signs — acidentes (bemol/natural/sustenido) não são notas"
     // pq = oriscus nas 2 últimas notas do seg1
     expect(r.perPitchSigns[7]).toContain("oriscus");
     expect(r.perPitchSigns[8]).toContain("oriscus");
+  });
+
+  it("AC4. bemol afeta o pitch das notas seguintes NA MESMA LETRA dentro da sílaba", () => {
+    const r = extractSyllable("(gxgfg)");
+    expect(r.pitches).toEqual(["g", "f", "g"]);
+    expect(r.perPitchAlt).toEqual([-1, 0, -1]);
+  });
+  it("AC5. natural cancela; sustenido = +1", () => {
+    const r = extractSyllable("(gxggygg#g)");
+    expect(r.perPitchAlt).toEqual([-1, 0, 1]);
+  });
+  it("AC6. acidente vale pela PALAVRA inteira (extractAll): HAec com gx", () => {
+    const doc = "%%\n(c3) HAec(gxf_e)di(g)es(g) quam(g)";
+    const spans = syllableSpans(doc);
+    const rs = extractAll(doc, spans);
+    // HAec: f,e sem alteração (letra g não aparece); di: g AINDA NA MESMA PALAVRA? NÃO —
+    // HAec di es são sílabas da MESMA palavra? Não: "HAec(...)di(...)es(...)" SEM espaço
+    // = mesma palavra (HAecdies); "quam" é outra palavra.
+    expect(rs[0].perPitchAlt).toEqual([0, 0]);      // f, e
+    expect(rs[1].perPitchAlt).toEqual([-1]);        // di: g bemol (mesma palavra)
+    expect(rs[2].perPitchAlt).toEqual([-1]);        // es: g bemol (mesma palavra)
+    expect(rs[3].perPitchAlt).toEqual([0]);         // quam: palavra nova → reset
   });
 });

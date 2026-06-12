@@ -8,6 +8,7 @@ export type DivisioKind = "minima" | "minor" | "maior" | "finalis";
 export interface TimelineNote {
   idx: number;
   pitch: string;
+  alt: number;             // deslocamento em semitons: -1 (bemol) | 0 | +1 (sustenido)
   syllableIndex: number;   // índice no array de sílabas de entrada (0-based)
   noteInSyllable: number;
   wordIndex: number;
@@ -38,6 +39,7 @@ export function buildTimeline(syls: SyllableRhythm[]): NoteTimeline {
       const prev = notes[notes.length - 1];
       notes.push({
         idx, pitch, syllableIndex, noteInSyllable, wordIndex, incisumIndex,
+        alt: syl.perPitchAlt?.[noteInSyllable] ?? 0,
         signs: syl.perPitchSigns[noteInSyllable] ?? [],
         aligned: syl.aligned,
         repercussion: !!prev && prev.incisumIndex === incisumIndex && prev.pitch === pitch,
