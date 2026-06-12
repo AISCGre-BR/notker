@@ -132,7 +132,7 @@ export function createPlayer(ctxFactory: () => AudioContext): Player {
       const ctx = _ctx;
       const baseTime = ctx.currentTime + 0.05;
 
-      let cursor = playback.leadInMs;
+      let cursor = playback.leadInMs; // acumulador em ms
       const groups: GroupNote[][] = [];
       let current: GroupNote[] | null = null;
       for (const note of playback.notes) {

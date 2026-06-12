@@ -251,4 +251,42 @@ describe("Player v2 — grupos legato", () => {
     expect(onNote).not.toHaveBeenCalled();
     expect(onEnd).not.toHaveBeenCalled();
   });
+
+  it("P8. cadeia de conexão: osc → filter → gain → destination", () => {
+    const { player, ctx } = makePlayer();
+    player.play(pb([tn({ pitch: "g", ms: 200 })]), vi.fn(), vi.fn());
+    const osc = ctx()._oscillators[0];
+    const filter = ctx()._filters[0];
+    const gain = ctx()._gains[0];
+    expect(osc.connect).toHaveBeenCalledWith(filter);
+    expect(filter.connect).toHaveBeenCalledWith(gain);
+    expect(gain.connect).toHaveBeenCalledWith(ctx().destination);
+  });
+
+  it("P9. play() com playing=true faz stop() implícito (fecha o ctx anterior)", () => {
+    let ctx1!: FakeCtx;
+    let calls = 0;
+    const player = createPlayer(() => {
+      calls++;
+      const c = makeFakeCtx(0);
+      if (calls === 1) ctx1 = c;
+      return c as unknown as AudioContext;
+    });
+    player.play(pb([tn({ pitch: "g", ms: 1000 })]), vi.fn(), vi.fn());
+    expect(player.playing).toBe(true);
+    player.play(pb([tn({ pitch: "h", ms: 1000 })]), vi.fn(), vi.fn());
+    expect(ctx1.close).toHaveBeenCalledOnce();
+    expect(player.playing).toBe(true);
+  });
+
+  it("P10. pauseAfterMs fecha o grupo MESMO com attack=false na nota seguinte", () => {
+    const { player, ctx } = makePlayer();
+    player.play(pb([
+      tn({ pitch: "f", ms: 200, pauseAfterMs: 100 }),
+      tn({ pitch: "g", ms: 100, attack: false }),
+    ]), vi.fn(), vi.fn());
+    // dois grupos: a pausa força current=null mesmo sem attack
+    expect(ctx()._oscillators).toHaveLength(2);
+    expect(ctx()._oscillators[1].start).toHaveBeenCalledWith(expect.closeTo(0.05 + 0.3, 9));
+  });
 });

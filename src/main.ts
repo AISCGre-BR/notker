@@ -417,6 +417,9 @@ async function boot() {
         return;
       }
       const texto = view.state.doc.toString();
+      // Contrato de índices: extractAll filtra sílabas reais (syllableIndex>=1) na
+      // MESMA ordem de svgIndices; note.syllableIndex (0-based na timeline) é,
+      // portanto, posição válida em svgIndices.
       const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
       const syls = extractAll(texto, map);
       if (syls.length === 0) {
