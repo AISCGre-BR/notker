@@ -6,7 +6,7 @@
  *   `.`  após nota = punctum mora   (PUNCTUM_MORA)
  *   `w`  após nota = quilisma       (S_QUILISMA)
  *   `-`  antes de nota = initio debilis
- *   `,`→"minor"  `;`→"maior"  `:`/`::`→"finalis"  `` ` ``→null (virgula, sem efeito v1)
+ *   `,`→"minima"  `;`→"minor"  `:`→"maior"  `::`→"finalis"  `` ` ``→null (virgula, sem efeito v1)
  *   demais símbolos (~><'vVsx#@r=Ryo^qQ!) ignorados sem quebrar.
  */
 
@@ -24,7 +24,7 @@ export interface SyllableRhythm {
   pitches: string[];              // minúsculas, na ordem; repercussões PRESERVADAS
   signs: RhythmSign[];            // união dos sinais da sílaba (sem duplicatas)
   perPitchSigns: RhythmSign[][];  // paralelo a pitches
-  divisio: "minor" | "maior" | "finalis" | null;
+  divisio: "minima" | "minor" | "maior" | "finalis" | null;
   wordFinal: boolean;
 }
 
@@ -42,13 +42,15 @@ function extractGabcGroup(src: string): string | null {
   return inner.split("|")[0];
 }
 
-/** Detecta divisio pelo conteúdo gabc (sem notas). */
+/** Detecta divisio pelo conteúdo gabc (sem notas).
+ *  ATENÇÃO: detectar `::` antes de `:` para evitar match parcial. */
 function parseDivisio(gabc: string): SyllableRhythm["divisio"] {
   const s = gabc.trim();
-  if (s === "::" || s === ":") return "finalis";
-  if (s === ";") return "maior";
-  if (s === ",") return "minor";
-  // virgula e outros → null
+  if (s === "::") return "finalis";
+  if (s === ":") return "maior";
+  if (s === ";") return "minor";
+  if (s === ",") return "minima";
+  // virgula (`) e outros → null
   return null;
 }
 

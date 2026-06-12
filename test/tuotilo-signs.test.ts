@@ -11,7 +11,7 @@ import {
 //   `.`  = punctum mora (PUNCTUM_MORA)
 //   `w`  = quilisma (S_QUILISMA) — sufixo imediato após a nota
 //   `-[a-m]` = initio debilis (NOTE_PUNCTUM_INITIO_DEBILIS)
-//   `,`→"minor"  `;`→"maior"  `:`→"finalis"  `::`→"finalis"  `` ` ``→null (v1)
+//   `,`→"minima"  `;`→"minor"  `:`→"maior"  `::`→"finalis"  `` ` ``→null (v1)
 
 describe("tuotilo signs — extractSyllable", () => {
 
@@ -64,17 +64,17 @@ describe("tuotilo signs — extractSyllable", () => {
     expect(r.perPitchSigns[1]).toEqual([]);
   });
 
-  // ── Teste 3: divisiones ─────────────────────────────────────────────────────
-  it("3a. divisio minor ','", () => {
-    expect(extractSyllable("(,)").divisio).toBe("minor");
+  // ── Teste 3: divisiones — nomenclatura canônica nabc-lib ───────────────────
+  it("3a. divisio minima ','", () => {
+    expect(extractSyllable("(,)").divisio).toBe("minima");
   });
 
-  it("3b. divisio maior ';'", () => {
-    expect(extractSyllable("(;)").divisio).toBe("maior");
+  it("3b. divisio minor ';'", () => {
+    expect(extractSyllable("(;)").divisio).toBe("minor");
   });
 
-  it("3c. divisio finalis ':'", () => {
-    expect(extractSyllable("(:)").divisio).toBe("finalis");
+  it("3c. divisio maior ':'", () => {
+    expect(extractSyllable("(:)").divisio).toBe("maior");
   });
 
   it("3d. divisio finalis '::'", () => {
