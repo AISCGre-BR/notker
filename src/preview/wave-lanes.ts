@@ -205,13 +205,28 @@ export function factorFromDrag(startFactor: number, startClientY: number, nowCli
   return Math.min(WAVE_MAX, Math.max(WAVE_MIN, f));
 }
 
-/** Atualiza ao vivo (sem re-render) o segmento de uma nota durante o arrasto. */
+/** Atualiza ao vivo (sem re-render) o segmento de uma nota durante o arrasto.
+ *  Cria o halo na hora se ainda não existir (nota com fator 1 não tem halo inicial). */
 export function deformLiveSegment(svg: SVGSVGElement, key: string, factor: number): void {
   const line = svg.querySelector<SVGPathElement>(`.wave-line[data-key="${key}"]`);
-  if (line) line.setAttribute("stroke-width", String(factorToStrokeWidth(factor)));
-  const halo = svg.querySelector<SVGPathElement>(`.wave-halo[data-key="${key}"]`);
+  if (!line) return;
+  line.setAttribute("stroke-width", String(factorToStrokeWidth(factor)));
+
   const op = factorToHaloOpacity(factor);
-  if (halo) { halo.style.opacity = String(op); halo.setAttribute("stroke-width", String(factorToStrokeWidth(factor) + 3)); }
+  let halo = svg.querySelector<SVGPathElement>(`.wave-halo[data-key="${key}"]`);
+  if (halo) {
+    halo.style.opacity = String(op);
+    halo.setAttribute("stroke-width", String(factorToStrokeWidth(factor) + 3));
+  } else if (op > 0) {
+    halo = document.createElementNS(SVG_NS, "path") as SVGPathElement;
+    halo.setAttribute("class", "wave-halo");
+    halo.setAttribute("data-key", key);
+    halo.setAttribute("d", line.getAttribute("d") ?? "");
+    halo.setAttribute("stroke-width", String(factorToStrokeWidth(factor) + 3));
+    halo.style.opacity = String(op);
+    // Insere como primeiro filho da lane (atrás das linhas) para manter z-order halo→line.
+    line.parentNode!.insertBefore(halo, line.parentNode!.firstChild);
+  }
 }
 
 /** Segmento do contorno: diagonal suave da nota anterior à atual + leve apoio. */

@@ -229,6 +229,7 @@ async function boot() {
     dragState = null;
     rebuildWave();
   });
+  window.addEventListener("pointercancel", () => { dragState = null; });
 
   // Liga a referência mutável usada em stopPlayback.
   waveCursorClear = () => waveLanes.setCursor(null);

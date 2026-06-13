@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
-import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes } from "../src/preview/wave-lanes";
+import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes, deformLiveSegment } from "../src/preview/wave-lanes";
 import { WAVE_MIN, WAVE_MAX } from "../src/tuotilo/wave";
 
 function svgWithSystems() {
@@ -211,5 +211,46 @@ describe("createWaveLanes (controller)", () => {
     expect(svg.querySelector(".wave-lane-layer")).not.toBeNull();
     ctl.setEnabled(false);
     expect(svg.querySelector(".wave-lane-layer")).toBeNull();
+  });
+});
+
+describe("deformLiveSegment — halo ao vivo durante arrasto", () => {
+  it("cria halo na hora para nota com fator 1 (sem halo inicial); esconde ao voltar para 1", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    // Sistema com nota única: syllableIndex=0, noteInSyllable=0 → data-key="0:0"
+    const systems = [
+      {
+        yBaseline: 30,
+        xRange: [10, 60] as [number, number],
+        notes: [
+          { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 20 },
+        ],
+      },
+    ];
+    renderWaveLanes(svg, systems, {});
+
+    // Nota com fator 1 não deve ter halo inicial
+    expect(svg.querySelectorAll(".wave-halo").length).toBe(0);
+
+    // Arrastar para fator 2.0 deve criar o halo ao vivo
+    deformLiveSegment(svg, "0:0", 2.0);
+    const halo = svg.querySelector<SVGPathElement>('.wave-halo[data-key="0:0"]');
+    expect(halo).not.toBeNull();
+    expect(Number(halo!.style.opacity)).toBeGreaterThan(0);
+
+    // Halo deve ser anterior ao wave-line na ordem de filhos da lane
+    const lane = svg.querySelector(".wave-lane")!;
+    const children = Array.from(lane.children);
+    const haloIdx = children.findIndex((el) => el.classList.contains("wave-halo") && el.getAttribute("data-key") === "0:0");
+    const lineIdx = children.findIndex((el) => el.classList.contains("wave-line") && el.getAttribute("data-key") === "0:0");
+    expect(haloIdx).toBeGreaterThanOrEqual(0);
+    expect(lineIdx).toBeGreaterThanOrEqual(0);
+    expect(haloIdx).toBeLessThan(lineIdx);
+
+    // Ao arrastar de volta para fator 1.0: halo deve ter opacidade 0 e não duplicar
+    deformLiveSegment(svg, "0:0", 1.0);
+    expect(svg.querySelectorAll('.wave-halo[data-key="0:0"]').length).toBe(1); // não criou segundo
+    const haloAfter = svg.querySelector<SVGPathElement>('.wave-halo[data-key="0:0"]')!;
+    expect(Number(haloAfter.style.opacity)).toBe(0);
   });
 });
