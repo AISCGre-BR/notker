@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
-import { renderWaveLanes, LANE_HEIGHT, factorFromDrag } from "../src/preview/wave-lanes";
+import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes } from "../src/preview/wave-lanes";
 import { WAVE_MIN, WAVE_MAX } from "../src/tuotilo/wave";
 
 function svgWithSystems() {
@@ -195,5 +195,21 @@ describe("pitchToLaneY", () => {
   });
   it("pitch desconhecido cai no meio sem lançar", () => {
     expect(() => pitchToLaneY("?", 22)).not.toThrow();
+  });
+});
+
+describe("createWaveLanes (controller)", () => {
+  it("desligado por default: não injeta nada; ligar injeta", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    // boxes sintéticas (substitui getBBox, ausente no jsdom)
+    const readBoxes = () => new Map([[1, [{ syllableIndex: 1, x: 10, y: 5, width: 20, height: 10 }]]]);
+    const ctl = createWaveLanes(() => svg, {}, { readBoxes });
+    ctl.refresh([{ syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null }]);
+    expect(svg.querySelector(".wave-lane-layer")).toBeNull(); // default off
+    ctl.setEnabled(true);
+    ctl.refresh([{ syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null }]);
+    expect(svg.querySelector(".wave-lane-layer")).not.toBeNull();
+    ctl.setEnabled(false);
+    expect(svg.querySelector(".wave-lane-layer")).toBeNull();
   });
 });

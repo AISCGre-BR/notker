@@ -220,3 +220,61 @@ function segPath(px: number | null, py: number | null, x: number, y: number): st
   const midX = (px + x) / 2;
   return `M ${px},${py} Q ${midX},${py} ${x},${y}`;
 }
+
+// ─── Controller ───────────────────────────────────────────────────────────────
+
+export interface WaveLanes {
+  refresh(notes: NoteIdent[]): void;
+  setEnabled(on: boolean): void;
+  enabled(): boolean;
+  setCursor(key: string | null): void;
+  destroy(): void;
+}
+
+/** Lê as boxes das sílabas reais do SVG vivo (getBBox). Substituível em teste. */
+export function readSyllableBoxes(svg: SVGSVGElement): Map<number, SylBox[]> {
+  const m = new Map<number, SylBox[]>();
+  svg.querySelectorAll<SVGGraphicsElement>('[class*="syllable-"]').forEach((g) => {
+    const cls = g.getAttribute("class") ?? "";
+    const mm = /(?:^|\s)syllable-(\d+)(?:\s|$)/.exec(cls);
+    if (!mm) return;
+    const idx = Number(mm[1]);
+    const b = g.getBBox();
+    const arr = m.get(idx) ?? [];
+    arr.push({ syllableIndex: idx, x: b.x, y: b.y, width: b.width, height: b.height });
+    m.set(idx, arr);
+  });
+  return m;
+}
+
+export function createWaveLanes(
+  getSvg: () => SVGSVGElement | null,
+  hooks: LaneHooks,
+  opts: { readBoxes?: (svg: SVGSVGElement) => Map<number, SylBox[]> } = {},
+): WaveLanes {
+  const readBoxes = opts.readBoxes ?? readSyllableBoxes;
+  let on = false;
+  let lastNotes: NoteIdent[] = [];
+
+  function draw(): void {
+    const svg = getSvg();
+    if (!svg) return;
+    svg.querySelector(".wave-lane-layer")?.remove();
+    if (!on) return;
+    const systems = mapSystems(lastNotes, readBoxes(svg));
+    renderWaveLanes(svg, systems, hooks);
+  }
+
+  return {
+    refresh(notes) { lastNotes = notes; draw(); },
+    setEnabled(v) { on = v; draw(); },
+    enabled: () => on,
+    setCursor(key) {
+      const svg = getSvg();
+      if (!svg) return;
+      svg.querySelectorAll(".wave-line.playing").forEach((el) => el.classList.remove("playing"));
+      if (key !== null) svg.querySelector(`.wave-line[data-key="${key}"]`)?.classList.add("playing");
+    },
+    destroy() { getSvg()?.querySelector(".wave-lane-layer")?.remove(); },
+  };
+}
