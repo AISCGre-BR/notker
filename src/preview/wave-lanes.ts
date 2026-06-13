@@ -139,28 +139,35 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
     lane.setAttribute("transform", `translate(0,${laneTop})`);
 
     // contorno como polilinha discreta ligando as notas (curvatura suave)
+    // Dois passes: 1ª passagem coleta elementos; 2ª appenda em ordem halo→line→hit
+    // para garantir z-order correto (halos sempre atrás das linhas).
+    const halos: SVGElement[] = [];
+    const lines: SVGElement[] = [];
+    const hits: SVGElement[] = [];
+
     let prevX: number | null = null, prevY: number | null = null;
     for (const n of sys.notes) {
       const y = pitchToLaneY(n.pitch, LANE_HEIGHT);
       const key = waveLaneKey(n.syllableIndex, n.noteInSyllable);
       const halo = factorToHaloOpacity(n.factor);
+      const d = segPath(prevX, prevY, n.x, y);
 
       if (halo > 0) {
         const h = document.createElementNS(SVG_NS, "path");
         h.setAttribute("class", "wave-halo");
         h.setAttribute("data-key", key);
-        h.setAttribute("d", segPath(prevX, prevY, n.x, y));
+        h.setAttribute("d", d);
         h.setAttribute("stroke-width", String(factorToStrokeWidth(n.factor) + 3));
         h.style.opacity = String(halo);
-        lane.appendChild(h);
+        halos.push(h);
       }
 
       const p = document.createElementNS(SVG_NS, "path");
       p.setAttribute("class", "wave-line");
       p.setAttribute("data-key", key);
-      p.setAttribute("d", segPath(prevX, prevY, n.x, y));
+      p.setAttribute("d", d);
       p.setAttribute("stroke-width", String(factorToStrokeWidth(n.factor)));
-      lane.appendChild(p);
+      lines.push(p);
 
       const hit = document.createElementNS(SVG_NS, "rect");
       hit.setAttribute("class", "wave-hit");
@@ -175,10 +182,14 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       });
       hit.addEventListener("pointerenter", () => hooks.onHover?.(n.realSyllableIndex));
       hit.addEventListener("pointerleave", () => hooks.onHover?.(null));
-      lane.appendChild(hit);
+      hits.push(hit);
 
       prevX = n.x; prevY = y;
     }
+
+    for (const el of halos) lane.appendChild(el);
+    for (const el of lines) lane.appendChild(el);
+    for (const el of hits)  lane.appendChild(el);
     layer.appendChild(lane);
   }
   svg.appendChild(layer);

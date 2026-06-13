@@ -139,6 +139,40 @@ describe("codificação visual do fator", () => {
   });
 });
 
+describe("renderWaveLanes — multi-sistema", () => {
+  it("primeira nota do segundo sistema usa segPath de primeira nota (sem bezier Q ligando sistemas)", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const systems = [
+      {
+        yBaseline: 30,
+        xRange: [10, 60] as [number, number],
+        notes: [
+          { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 20 },
+        ],
+      },
+      {
+        yBaseline: 120,
+        xRange: [10, 60] as [number, number],
+        notes: [
+          { syllableIndex: 1, realSyllableIndex: 2, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 15 },
+        ],
+      },
+    ];
+    renderWaveLanes(svg, systems, {});
+
+    const lanes = svg.querySelectorAll(".wave-lane");
+    expect(lanes.length).toBe(2);
+
+    // A primeira linha do segundo sistema deve ser um stub horizontal (sem Q bezier)
+    const secondLaneFirstLine = lanes[1].querySelector(".wave-line");
+    expect(secondLaneFirstLine).not.toBeNull();
+    const d = secondLaneFirstLine!.getAttribute("d")!;
+    // segPath(null, null, 15, y) → "M 10,<y> L 20,<y>"
+    expect(d).toMatch(/^M 10,[\d.]+ L 20,/);
+    expect(d).not.toContain("Q");
+  });
+});
+
 describe("pitchToLaneY", () => {
   it("nota grave fica mais baixa (y maior) que nota aguda", () => {
     const yLow = pitchToLaneY("d", 22);
