@@ -35,7 +35,6 @@ import { syllableRangeOfSelection } from "./preview/source-map";
 import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel } from "./overlay-ui/panel";
 import { createSplit, type Split } from "./ui/split";
-import { createBottomStrip } from "./ui/strip";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
 import {
@@ -43,7 +42,7 @@ import {
   withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
 } from "./project/model";
 import { createDocList } from "./project/doc-list";
-import { createWavePanel } from "./ui/wave-panel";
+import { createWaveLanes, factorFromDrag, deformLiveSegment, type NoteIdent } from "./preview/wave-lanes";
 import type { WaveOverlay } from "./tuotilo/wave";
 import { emptyWave, setWaveFactor, applyWave, gabcBodyHash, waveKey } from "./tuotilo/wave";
 
@@ -194,13 +193,8 @@ async function boot() {
   // try/catch para que as assistências (hover/completion/paleta) carreguem sempre,
   // mesmo que o motor de preview (webview-only) falhe.
   const previewHost = document.querySelector<HTMLElement>("#preview")!;
-  const strip = createBottomStrip(previewHost, "Interpretação");
-  const partituraPane = strip.top();
-  const wavePane = strip.body();
 
   // Referência mutável para limpar o cursor da onda no stopPlayback.
-  // Declarada aqui (antes do wavePanel) para evitar temporal dead zone — setada
-  // logo abaixo após createWavePanel.
   let waveCursorClear: () => void = () => {};
 
   // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
@@ -208,72 +202,59 @@ async function boot() {
   const WAVE_SEED = 12345;
   let wave: WaveOverlay = emptyWave("");
 
-  // Índices reais de sílaba para sincronizar hover da onda com a partitura.
-  let waveSvgIndices: number[] = [];
+  // Estado do arrasto vertical de fator.
+  let dragState: { key: string; syl: number; note: number; startFactor: number; startClientY: number } | null = null;
 
-  const wavePanel = createWavePanel(wavePane, {
-    onFactorChange: (syl, note, factor) => {
-      if (playbackMode !== "interpretado") {
-        setStatus("onda: edição disponível só no modo interpretado");
-        return;
-      }
-      wave = setWaveFactor(wave, syl, note, factor);
-      rebuildWave();
-    },
-    onReset: () => {
-      wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
-      rebuildWave();
-      setStatus("onda: restaurada ao neumático");
+  const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
+    onFactorDrag: (key, syl, note, startFactor, startClientY) => {
+      if (playbackMode !== "interpretado") { setStatus("onda: edição só no modo interpretado"); return; }
+      dragState = { key, syl, note, startFactor, startClientY };
     },
     onHover: (syl) => {
-      const svg = panel?.svgEl?.();
-      if (!svg) return;
+      const svg = panel?.svgEl?.(); if (!svg) return;
       if (syl === null) { clearHighlight(svg); return; }
-      highlightSyllable(svg, waveSvgIndices[syl] ?? syl + 1);
+      highlightSyllable(svg, syl); // syl já é o realSyllableIndex (renderWaveLanes passa o índice real)
     },
   });
 
-  // Após criar wavePanel, liga a referência mutável usada em stopPlayback.
-  waveCursorClear = () => wavePanel.setCursor(null);
+  window.addEventListener("pointermove", (ev) => {
+    if (!dragState) return;
+    const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
+    const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
+  });
+  window.addEventListener("pointerup", (ev) => {
+    if (!dragState) return;
+    const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
+    wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
+    dragState = null;
+    rebuildWave();
+  });
 
-  /** Recomputa a onda a partir do doc atual + overlay WaveOverlay.
-   *  Contrato do render: WaveNoteView.ms = duração BASE neumática (pura, sem fator);
-   *  o wave-panel desenha largura = ms × factor × PX_PER_MS. */
+  // Liga a referência mutável usada em stopPlayback.
+  waveCursorClear = () => waveLanes.setCursor(null);
+
+  /** Recomputa a onda a partir do doc atual + overlay WaveOverlay e repassa para
+   *  o controller de lanes integrado ao SVG da partitura. */
   function rebuildWave(): void {
     const map = panel?.sourceMap?.() ?? [];
     const texto = view.state.doc.toString();
     const reals = map.filter((s) => s.syllableIndex >= 1);
     const syls = extractAll(texto, map);
-    if (syls.length === 0) { wavePanel.render([]); return; }
+    if (syls.length === 0) { waveLanes.refresh([]); return; }
     const tl = buildTimeline(syls);
     // base = durações neumáticas PURAS (sem applyWave); o fator vem do overlay
     const base = computeTimedNotes(tl, DEFAULT_PROFILE, WAVE_SEED, "interpretado");
-    // Mapeia índice interno de sílaba → índice real SVG (para hover sincronizado)
-    waveSvgIndices = reals.map((s) => s.syllableIndex);
-    const views = base.notes.map((n) => {
-      const sylSpan = reals[n.syllableIndex];
-      const text = n.noteInSyllable === 0 && sylSpan
-        ? (() => {
-            const parenIdx = texto.indexOf("(", sylSpan.from);
-            const end = parenIdx >= 0 ? parenIdx : sylSpan.to;
-            return texto.slice(sylSpan.from, end).trim();
-          })()
-        : "";
-      const divisioAfter = n.pauseAfterMs > 0
+    const notes: NoteIdent[] = base.notes.map((n) => ({
+      syllableIndex: n.syllableIndex,                                                         // INTERNO — overlay/cursor/data-key
+      realSyllableIndex: reals[n.syllableIndex]?.syllableIndex ?? (n.syllableIndex + 1),      // REAL (syllable-N)
+      noteInSyllable: n.noteInSyllable,
+      pitch: n.pitch, alt: n.alt,
+      factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
+      divisioAfter: n.pauseAfterMs > 0
         ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
-        : null;
-      return {
-        syllableIndex: n.syllableIndex,
-        noteInSyllable: n.noteInSyllable,
-        ms: n.ms,  // BASE — sem fator (o panel multiplica por factor para largura)
-        factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
-        pitch: n.pitch,
-        alt: n.alt,
-        text,
-        divisioAfter,
-      };
-    });
-    wavePanel.render(views);
+        : null,
+    }));
+    waveLanes.refresh(notes);
   }
 
   /** Verifica hash do canto e sinaliza onda desatualizada (D4). */
@@ -281,19 +262,17 @@ async function boot() {
     const h = gabcBodyHash(view.state.doc.toString());
     // Primeira vez (hash vazio): adota o hash sem marcar como stale
     if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
-    wavePanel.setStale(Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h);
+    if (Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h)
+      setStatus("interpretação desatualizada — o canto foi editado");
     rebuildWave();
   }
-
-  // Ao expandir a faixa Interpretação, sincroniza a onda com o doc atual.
-  strip.onToggle((e) => { if (e) syncWaveWithDoc(); });
 
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
   try {
     const engine = new NabcLibEngine();
-    panel = createPreviewPanel(partituraPane, engine, { debounceMs: 150 });
+    panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
@@ -301,8 +280,8 @@ async function boot() {
     onDocChange = () => {
       prevOnDocChange();
       panel!.update(view.state.doc.toString());
-      // Onda: re-sincroniza apenas se a faixa Interpretação estiver expandida.
-      if (strip.expanded()) syncWaveWithDoc();
+      // Onda: re-sincroniza apenas se as lanes estiverem habilitadas.
+      if (waveLanes.enabled()) syncWaveWithDoc();
     };
     // Realce de sílaba segue o cursor.
     view.dom.addEventListener("keyup", () => syncFromCursor(view, panel!));
@@ -350,7 +329,7 @@ async function boot() {
     reindex();
     // Onda: restaura a interpretação persistida, ou cria vazia para o novo canto
     wave = getActiveDoc(project).interpretation ?? emptyWave(gabcBodyHash(getActiveDoc(project).content));
-    if (strip.expanded()) syncWaveWithDoc();
+    if (waveLanes.enabled()) syncWaveWithDoc();
   }
   function captureEditorIntoProject(): void {
     project = withActiveContent(project, view.state.doc.toString());
@@ -579,10 +558,21 @@ async function boot() {
             if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
           }
           // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
-          wavePanel.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
+          waveLanes.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
         },
         () => { stopPlayback("playback: fim"); },
       );
+    },
+    toggleWave: () => {
+      const on = !waveLanes.enabled();
+      waveLanes.setEnabled(on);
+      if (on) syncWaveWithDoc();
+      setStatus(on ? "onda: visível" : "onda: oculta");
+    },
+    resetWave: () => {
+      wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
+      rebuildWave();
+      setStatus("onda: restaurada ao neumático");
     },
   });
 
@@ -599,6 +589,8 @@ async function boot() {
     { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
     { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
     { id: "toggleSplit", label: "Dividir", title: "alternar lado-a-lado / empilhado" },
+    { id: "toggleWave", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
+    { id: "resetWave", label: "Resetar onda", title: "restaurar interpretação ao neumático puro" },
     { id: "modeToggle", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
     { id: "playToggle", label: "Tocar", title: "playback semiológico (Tuotilo)" },
     { id: "moveLeft", label: "◀", title: "Alt+← — empurrar o neuma à esquerda" },

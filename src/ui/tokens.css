@@ -279,48 +279,13 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .newdlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .newdlg-actions button { padding: 6px 12px; cursor: pointer; }
 
-/* ── Faixa inferior da onda (B2a-fix1) ───────────────────────────────────── */
-.strip-host { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.strip-top { flex: 1 1 0; min-height: 0; overflow: auto; }
-.strip-header {
-  flex: 0 0 auto; display: flex; gap: 8px; align-items: center;
-  font: 500 11px var(--font); text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--ink-muted); background: linear-gradient(var(--cream), var(--cream-deep));
-  border: none; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule-soft);
-  padding: 4px 12px; cursor: pointer; text-align: left;
-}
-.strip-header:hover { color: var(--ink); }
-.strip-caret { color: var(--rubric-soft); }
-.strip-expanded .strip-body { flex: 0 0 40%; min-height: 0; overflow: auto; }
-
-/* ── Onda de interpretação ───────────────────────────────────────────────── */
-.wave-host { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.wave-toolbar { flex: 0 0 auto; padding: 6px 10px; border-bottom: 1px solid var(--rule-soft); }
-.wave-reset {
-  font: 500 11px var(--font); text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--ink-muted); background: none; border: 1px solid var(--rule);
-  padding: 3px 10px; cursor: pointer;
-}
-.wave-reset:hover { color: var(--ink); border-color: var(--ink-muted); }
-.wave-scroller { flex: 1 1 0; overflow: auto; padding: 10px 0; }
-.wave-svg { display: block; }
-.wave-line { stroke: var(--ink-soft); stroke-width: 2; fill: none; }
-.wave-line.edited { stroke: var(--rubric-soft); }
-.wave-line.hovered { stroke-width: 3.5; }
-.wave-line.playing { stroke: var(--rubric); stroke-width: 4; }
+/* ── Onda integrada (lanes sob cada sistema) ──────────────────────────────── */
+.wave-lane-layer { pointer-events: none; }
+.wave-lane { pointer-events: auto; }
+.wave-line { fill: none; stroke: var(--ink-muted); vector-effect: non-scaling-stroke; }
+.wave-line.playing { stroke: var(--rubric); }
+.wave-halo { fill: none; stroke: var(--rubric-soft); stroke-linecap: round; }
 .wave-hit { fill: transparent; cursor: ns-resize; }
-.wave-label { font: 12px var(--font); fill: var(--ink-soft); }
-.wave-divisio { stroke: var(--rule); stroke-width: 1.5; }
-.wave-divisio[data-kind="finalis"] { stroke: var(--ink-muted); stroke-width: 3; }
-.wave-stale {
-  display: flex; gap: 8px; align-items: center; padding: 6px 10px;
-  font: 12px var(--font); color: var(--rubric);
-  background: var(--cream); border-bottom: 1px solid var(--rule);
-}
-.wave-stale button {
-  font: 500 11px var(--font); text-transform: uppercase; letter-spacing: 0.08em;
-  background: none; border: 1px solid var(--rule); cursor: pointer; padding: 2px 8px;
-}
 
 /* ── Lista lateral de documentos ──────────────────────────────────────────── */
 .doc-list { display: flex; flex-direction: column; font-family: serif; font-size: 13px; height: 100%; }

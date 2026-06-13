@@ -24,6 +24,9 @@ export interface CommandHandlers {
   playToggle?: () => void | Promise<void>;
   // Tuotilo: alterna modo de playback (interpretado ↔ solfejo)
   modeToggle?: () => void | Promise<void>;
+  // Tuotilo B2a: onda de interpretação integrada ao SVG da partitura
+  toggleWave?: () => void | Promise<void>;
+  resetWave?: () => void | Promise<void>;
 }
 export type CommandId = keyof CommandHandlers;
 
