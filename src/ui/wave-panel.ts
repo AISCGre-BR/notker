@@ -92,6 +92,8 @@ export function createWavePanel(host: HTMLElement, hooks: WavePanelHooks): WaveP
     svg.classList.add("wave-svg");
 
     let x = 12;
+    let yPrev: number | null = null;   // y da nota anterior no mesmo inciso
+    let incisoBreak = false;           // verdadeiro quando a nota anterior tinha divisio
 
     for (let i = 0; i < notes.length; i++) {
       const n = notes[i];
@@ -99,13 +101,20 @@ export function createWavePanel(host: HTMLElement, hooks: WavePanelHooks): WaveP
       const key = `${n.syllableIndex}:${n.noteInSyllable}`;
       const y = pitchY(n.pitch);
 
-      // ── path da nota (linha contínua horizontal = segmento da voz) ──────
+      // yPrev efetivo: só herda do inciso anterior; quebra de inciso ou 1ª nota = próprio y
+      const yStart = (yPrev !== null && !incisoBreak) ? yPrev : y;
+      const ramp = (yStart !== y) ? Math.min(w * 0.4, 12) : 0;
+
+      // ── path da nota (diagonal de entrada + horizontal) ─────────────────
       const path = document.createElementNS(svgNS, "path");
       path.classList.add("wave-line");
       if (n.factor !== 1) path.classList.add("edited");
       if (key === cursorKey) path.classList.add("playing");
       path.setAttribute("data-key", key);
-      path.setAttribute("d", `M ${x},${y} H ${x + w}`);
+      const d = ramp > 0
+        ? `M ${x},${yStart} L ${x + ramp},${y} H ${x + w}`
+        : `M ${x},${y} H ${x + w}`;
+      path.setAttribute("d", d);
       svg.appendChild(path);
 
       // ── hit-area transparente para drag e hover ───────────────────────
@@ -131,9 +140,18 @@ export function createWavePanel(host: HTMLElement, hooks: WavePanelHooks): WaveP
         ev.preventDefault();
       });
 
-      // hover
-      hit.addEventListener("pointerenter", () => hooks.onHover(n.syllableIndex));
-      hit.addEventListener("pointerleave", () => hooks.onHover(null));
+      // hover — engrossar todos os paths da mesma sílaba
+      hit.addEventListener("pointerenter", () => {
+        hooks.onHover(n.syllableIndex);
+        svg.querySelectorAll<SVGPathElement>(
+          `.wave-line[data-key^="${n.syllableIndex}:"]`
+        ).forEach((p) => p.classList.add("hovered"));
+      });
+      hit.addEventListener("pointerleave", () => {
+        hooks.onHover(null);
+        svg.querySelectorAll<SVGPathElement>(".wave-line.hovered")
+          .forEach((p) => p.classList.remove("hovered"));
+      });
 
       svg.appendChild(hit);
 
@@ -148,6 +166,8 @@ export function createWavePanel(host: HTMLElement, hooks: WavePanelHooks): WaveP
       }
 
       x += w;
+      yPrev = y;
+      incisoBreak = n.divisioAfter !== null;
 
       // ── divisio: barra vertical + gap ────────────────────────────────
       if (n.divisioAfter) {

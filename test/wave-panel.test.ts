@@ -147,4 +147,62 @@ describe("wave-panel — hover", () => {
     hit.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
     expect(onHover).toHaveBeenCalledWith(null);
   });
+
+  it("WP10. hover adiciona classe hovered nos paths da sílaba; pointerleave remove de todos", () => {
+    const p = createWavePanel(host(), { onFactorChange: vi.fn(), onReset: vi.fn(), onHover: vi.fn() });
+    p.render(notes());
+    // sílaba 0 tem 2 notas (0:0 e 0:1)
+    const hit0 = document.querySelector<SVGRectElement>('.wave-hit[data-key="0:0"]')!;
+    const path0 = document.querySelector<SVGPathElement>('.wave-line[data-key="0:0"]')!;
+    const path1 = document.querySelector<SVGPathElement>('.wave-line[data-key="0:1"]')!;
+
+    hit0.dispatchEvent(new MouseEvent("pointerenter", { bubbles: false }));
+    expect(path0.classList.contains("hovered")).toBe(true);
+    expect(path1.classList.contains("hovered")).toBe(true);
+
+    hit0.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+    expect(path0.classList.contains("hovered")).toBe(false);
+    expect(path1.classList.contains("hovered")).toBe(false);
+  });
+});
+
+describe("wave-panel — linha contínua", () => {
+  /** Extrai o y do ponto M inicial de um atributo `d`. */
+  function parseMy(d: string): number {
+    const m = /M\s+[\d.]+,(\S+)/.exec(d);
+    return m ? parseFloat(m[1]) : NaN;
+  }
+  /** Extrai o y do segmento horizontal (H final, que é o y da nota). */
+  function parseHy(d: string): number {
+    // a linha horizontal está no y do L final ou do M se não houver diagonal
+    const l = /L\s+[\d.]+,([\d.]+)/.exec(d);
+    if (l) return parseFloat(l[1]);
+    // sem diagonal: M x,y H ...
+    const m = /M\s+[\d.]+,([\d.]+)/.exec(d);
+    return m ? parseFloat(m[1]) : NaN;
+  }
+
+  it("WP11a. 2 notas de pitches diferentes no mesmo inciso: path da 2ª começa no y da 1ª (continuidade)", () => {
+    const p = createWavePanel(host(), { onFactorChange: vi.fn(), onReset: vi.fn(), onHover: vi.fn() });
+    // notas() tem 0:0 (pitch "f") e 0:1 (pitch "h") no mesmo inciso (sem divisio entre elas)
+    p.render(notes());
+    const d0 = document.querySelector<SVGPathElement>('.wave-line[data-key="0:0"]')!.getAttribute("d")!;
+    const d1 = document.querySelector<SVGPathElement>('.wave-line[data-key="0:1"]')!.getAttribute("d")!;
+
+    const y0 = parseHy(d0);  // y horizontal da 1ª nota
+    const yStart1 = parseMy(d1); // y inicial (M) da 2ª nota
+    expect(yStart1).toBeCloseTo(y0, 1); // 2ª nota começa onde a 1ª termina
+  });
+
+  it("WP11b. após divisio, a 1ª nota do novo inciso começa no próprio y (sem herança)", () => {
+    const p = createWavePanel(host(), { onFactorChange: vi.fn(), onReset: vi.fn(), onHover: vi.fn() });
+    // nota 1:0 (syllableIndex=1) vem APÓS divisio "minor" da nota 1:0 do syl=1
+    // nota 2:0 (syllableIndex=2) é a 1ª após a divisio
+    p.render(notes());
+    const d2 = document.querySelector<SVGPathElement>('.wave-line[data-key="2:0"]')!.getAttribute("d")!;
+    const yStart2 = parseMy(d2);
+    const yH2 = parseHy(d2);
+    // sem herança: M começa no mesmo y do segmento horizontal
+    expect(yStart2).toBeCloseTo(yH2, 1);
+  });
 });
