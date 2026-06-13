@@ -102,13 +102,14 @@ export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylB
   return systems;
 }
 
-const SW_BASE = 1.7, SW_MIN = 1.0, SW_MAX = 5.0;
+const SW_BASE = 3.0, SW_MIN = 1.0, SW_MAX = 7.5;
 const HALO_MAX = 0.55, HALO_SLOPE = 0.42;
 
-/** Fator → espessura do traço. Curva irregular (expoente 0.85; sem razão limpa,
- *  ver memória D-23) saturada em [SW_MIN, SW_MAX]. */
+/** Fator → espessura do traço. Default (fator 1) GROSSO o bastante p/ que ENCURTAR
+ *  (fator < 1) também seja visível, não só alargar. Curva irregular (expoente 0.9;
+ *  sem razão limpa, ver memória D-23) saturada em [SW_MIN, SW_MAX]. */
 export function factorToStrokeWidth(factor: number): number {
-  const w = SW_BASE * Math.pow(Math.max(0.01, factor), 0.85);
+  const w = SW_BASE * Math.pow(Math.max(0.01, factor), 0.9);
   return Math.min(SW_MAX, Math.max(SW_MIN, w));
 }
 
@@ -205,8 +206,11 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
         hooks.onFactorDrag?.(key, n.syllableIndex, n.noteInSyllable, n.factor, (ev as PointerEvent).clientY);
         ev.preventDefault();
       });
-      // hover: realça o trecho+ponto desta nota e sobe uma linha-guia até o neuma
+      // hover: nota ATIVA em rubrica forte; IRMÃS do mesmo neuma em rubrica clara
+      // (deixa claro qual nota do neuma está em foco); + linha-guia até o neuma.
+      const sibSel = `.wave-line[data-key^="${n.syllableIndex}:"], .wave-dot[data-key^="${n.syllableIndex}:"]`;
       hit.addEventListener("pointerenter", () => {
+        svg.querySelectorAll(sibSel).forEach((el) => el.classList.add("sibling"));
         p.classList.add("hovered");
         dot.classList.add("hovered");
         const guide = document.createElementNS(SVG_NS, "line");
@@ -220,6 +224,7 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
         hooks.onHover?.(n.realSyllableIndex);
       });
       hit.addEventListener("pointerleave", () => {
+        svg.querySelectorAll(sibSel).forEach((el) => el.classList.remove("sibling"));
         p.classList.remove("hovered");
         dot.classList.remove("hovered");
         (hit as unknown as { _guide?: SVGElement })._guide?.remove();

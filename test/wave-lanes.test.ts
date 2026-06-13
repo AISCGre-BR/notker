@@ -217,11 +217,11 @@ describe("mapSystems", () => {
 
 describe("codificação visual do fator", () => {
   it("espessura cresce com o fator e satura nos limites", () => {
-    expect(factorToStrokeWidth(1)).toBeCloseTo(1.7, 1);
+    expect(factorToStrokeWidth(1)).toBeCloseTo(3.0, 1);
     expect(factorToStrokeWidth(2.5)).toBeGreaterThan(factorToStrokeWidth(1));
     expect(factorToStrokeWidth(0.5)).toBeGreaterThanOrEqual(1.0);
     expect(factorToStrokeWidth(0.5)).toBeLessThan(factorToStrokeWidth(1));
-    expect(factorToStrokeWidth(99)).toBeLessThanOrEqual(5.0); // clamp superior
+    expect(factorToStrokeWidth(99)).toBeLessThanOrEqual(7.5); // clamp superior
   });
   it("halo só aparece quando há alargamento (fator > 1)", () => {
     expect(factorToHaloOpacity(1)).toBe(0);

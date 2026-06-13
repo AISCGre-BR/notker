@@ -207,6 +207,8 @@ async function boot() {
 
   // Estado do arrasto vertical de fator.
   let dragState: { key: string; syl: number; note: number; startFactor: number; startClientY: number } | null = null;
+  // Contagem de notas por sílaba (interna) p/ a leitura "nota N de M" no rodapé.
+  let waveNotesPerSyl = new Map<number, number>();
 
   const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
     onFactorDrag: (key, syl, note, startFactor, startClientY) => {
@@ -223,17 +225,21 @@ async function boot() {
   // Rótulo do alongamento p/ a leitura ao vivo no rodapé (na estética: sem floats).
   const fatorLabel = (f: number): string =>
     Math.abs(f - 1) < 0.01 ? "neumático puro" : `×${f.toFixed(2).replace(".", ",")}`;
+  const notaLabel = (d: NonNullable<typeof dragState>): string => {
+    const total = waveNotesPerSyl.get(d.syl);
+    return total && total > 1 ? `nota ${d.note + 1} de ${total}` : `nota ${d.note + 1}`;
+  };
   window.addEventListener("pointermove", (ev) => {
     if (!dragState) return;
     const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
     const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
-    setStatus(`onda: alongamento ${fatorLabel(f)} — nota ${dragState.note + 1}`);
+    setStatus(`onda: alongamento ${fatorLabel(f)} — ${notaLabel(dragState)}`);
   });
   window.addEventListener("pointerup", (ev) => {
     if (!dragState) return;
     const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
     wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
-    setStatus(`onda: nota ${dragState.note + 1} — ${fatorLabel(f)}`);
+    setStatus(`onda: ${notaLabel(dragState)} — ${fatorLabel(f)}`);
     dragState = null;
     rebuildWave();
   });
@@ -263,6 +269,8 @@ async function boot() {
         ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
         : null,
     }));
+    waveNotesPerSyl = new Map();
+    for (const n of notes) waveNotesPerSyl.set(n.syllableIndex, (waveNotesPerSyl.get(n.syllableIndex) ?? 0) + 1);
     waveLanes.refresh(notes);
   }
 
