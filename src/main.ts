@@ -302,7 +302,11 @@ async function boot() {
 
   // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
   // O panel pode ser null se o preview falhou — todos os caminhos degradam com setStatus.
-  const player = createPlayer(() => new AudioContext());
+  // TEMP (fix4): timbre "flauta" para ISOLAR o bug do playback que parou em HAec→di
+  // no WebKit real (agendamento exonerado em test/haec-regression.test.ts — suspeita
+  // na cadeia multi-nó do timbre "voz"). Se com flauta NÃO parar, confirma a cadeia
+  // voz como causa; reverter ao default "voz" após o diagnóstico/correção.
+  const player = createPlayer(() => new AudioContext(), "flauta");
   let playbackMode: PlaybackMode = "interpretado";
 
   /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
