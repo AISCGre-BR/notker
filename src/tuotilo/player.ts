@@ -65,14 +65,24 @@ export const PULSE_MS   = 56;    // duração total do mergulho vai-e-volta (ms)
  *  "flauta" = triangle + lowpass (timbre da v1/v2). Decisão final por UAT. */
 export type SynthTimbre = "voz" | "flauta";
 
-const VOZ_F1_HZ   = 710;    // formante 1 da vogal "ah"
-const VOZ_F2_HZ   = 1180;   // formante 2
-const VOZ_F1_Q    = 2.2;    // Q baixo = formante largo/suave (Q alto soa metálico)
-const VOZ_F2_Q    = 2.4;
-const VOZ_F1_MIX  = 0.60;   // pesos de mistura dos caminhos
-const VOZ_F2_MIX  = 0.18;
-const VOZ_BODY_MIX   = 0.66; // caminho de corpo (lowpass) p/ não ficar anasalado
-const VOZ_BODY_LP_HZ = 1800; // triângulo já é suave; aqui só arredonda
+// "voz": caminho SERIAL (WebKit-safe) — sem fan-out paralelo. Parâmetros expostos
+// p/ o mixer (B2b). Formante "ah" via filtro peaking (mantém o fundamental).
+export const VOZ_FORMANT_HZ = 900;   // realce de formante "ah"
+export const VOZ_FORMANT_Q  = 1.0;
+export const VOZ_PEAK_DB     = 6;    // ganho do peaking (dB)
+export const VOZ_SHAPE_K     = 2.2;  // intensidade da curva de harmônicos
+const VOZ_CURVE = makeVozCurve(VOZ_SHAPE_K);
+
+/** Curva suave (tanh) p/ adicionar harmônicos ao triângulo. Determinística. */
+function makeVozCurve(k: number): Float32Array<ArrayBuffer> {
+  const N = 1024;
+  const c = new Float32Array(new ArrayBuffer(N * 4));
+  for (let i = 0; i < N; i++) {
+    const x = (i / (N - 1)) * 2 - 1;
+    c[i] = Math.tanh(k * x);
+  }
+  return c;
+}
 
 // ── Grupo legato ──────────────────────────────────────────────────────────────
 
@@ -103,25 +113,21 @@ function scheduleGroup(ctx: AudioContext, baseTime: number, notes: GroupNote[], 
     osc.connect(filter);
     filter.connect(gain);
   } else {
-    // "voz": triangle → [formante1, formante2, corpo] em paralelo → mix → envelope
-    // (sawtooth soava metálico/chiado — UAT 2026-06-12; triângulo é mais doce)
+    // "voz": triangle → waveshaper (corpo vocálico) → peaking (formante "ah") → gain
+    // Caminho serial único: elimina o fan-out de 3 biquad+gain que travava o WebKit
+    // na transição HAec→di (UAT 2026-06-12/13).
     osc.type = "triangle";
-    const paths: [number, number | null, number][] = [
-      [VOZ_F1_HZ, VOZ_F1_Q, VOZ_F1_MIX],
-      [VOZ_F2_HZ, VOZ_F2_Q, VOZ_F2_MIX],
-      [VOZ_BODY_LP_HZ, null, VOZ_BODY_MIX],
-    ];
-    for (const [hz, q, mix] of paths) {
-      const f = ctx.createBiquadFilter();
-      f.type = q === null ? "lowpass" : "bandpass";
-      f.frequency.setValueAtTime(hz, startSec);
-      if (q !== null && f.Q) f.Q.setValueAtTime(q, startSec);
-      const m = ctx.createGain();
-      m.gain.setValueAtTime(mix, startSec);
-      osc.connect(f);
-      f.connect(m);
-      m.connect(gain);
-    }
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = VOZ_CURVE;
+    shaper.oversample = "2x";
+    const formant = ctx.createBiquadFilter();
+    formant.type = "peaking";
+    formant.frequency.setValueAtTime(VOZ_FORMANT_HZ, startSec);
+    formant.Q.setValueAtTime(VOZ_FORMANT_Q, startSec);
+    formant.gain.setValueAtTime(VOZ_PEAK_DB, startSec);
+    osc.connect(shaper);
+    shaper.connect(formant);
+    formant.connect(gain);
   }
 
   // Envelope: ataque + pulsos + release — IGUAL para os dois timbres.

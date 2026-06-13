@@ -57,16 +57,24 @@ interface FakeBiquadNode extends FakeNode {
   frequency: FakeAudioParam;
 }
 
+interface FakeWaveShaperNode {
+  curve: Float32Array | null;
+  oversample: string;
+  connect: ReturnType<typeof vi.fn>;
+}
+
 interface FakeCtx {
   currentTime: number;
   destination: Record<string, never>;
   close: ReturnType<typeof vi.fn>;
   createOscillator: ReturnType<typeof vi.fn>;
   createBiquadFilter: ReturnType<typeof vi.fn>;
+  createWaveShaper: ReturnType<typeof vi.fn>;
   createGain: ReturnType<typeof vi.fn>;
   _oscillators: FakeNode[];
   _gains: FakeNode[];
   _filters: FakeBiquadNode[];
+  _waveShapers: FakeWaveShaperNode[];
 }
 
 function fakeAudioParam(): FakeAudioParam {
@@ -81,6 +89,7 @@ function makeFakeCtx(currentTime = 0): FakeCtx {
     _oscillators: [],
     _gains: [],
     _filters: [],
+    _waveShapers: [],
     createOscillator: vi.fn(() => {
       const osc: FakeNode = {
         type: "triangle", frequency: fakeAudioParam(), gain: fakeAudioParam(),
@@ -96,6 +105,15 @@ function makeFakeCtx(currentTime = 0): FakeCtx {
       };
       ctx._filters.push(f);
       return f;
+    }),
+    createWaveShaper: vi.fn(() => {
+      const ws: FakeWaveShaperNode = {
+        curve: null,
+        oversample: "none",
+        connect: vi.fn(),
+      };
+      ctx._waveShapers.push(ws);
+      return ws;
     }),
     createGain: vi.fn(() => {
       const g: FakeNode = {
@@ -329,7 +347,7 @@ describe("debug-haec: pipeline completo Haec dies", () => {
     player.play(shaped, vi.fn(), vi.fn());
 
     // Para cada gain node do envelope (um por grupo):
-    // o fake registra gains dos grupos + os mix gains do timbre "voz"
+    // timbre "voz" serial: só há gains de envelope (sem mix gains paralelos).
     // Os gains de envelope são os que conectam ao destination
     const envelopeGains = fakeCtx._gains.filter((g) =>
       (g.connect.mock.calls as unknown[][]).some((c) => c[0] === fakeCtx.destination),

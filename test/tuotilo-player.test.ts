@@ -33,16 +33,24 @@ interface FakeBiquadNode extends FakeNode {
   frequency: FakeAudioParam;
 }
 
+interface FakeWaveShaperNode {
+  curve: Float32Array | null;
+  oversample: string;
+  connect: ReturnType<typeof vi.fn>;
+}
+
 interface FakeCtx {
   currentTime: number;
   destination: Record<string, never>;
   close: ReturnType<typeof vi.fn>;
   createOscillator: ReturnType<typeof vi.fn>;
   createBiquadFilter: ReturnType<typeof vi.fn>;
+  createWaveShaper: ReturnType<typeof vi.fn>;
   createGain: ReturnType<typeof vi.fn>;
   _oscillators: FakeNode[];
   _gains: FakeNode[];
   _filters: FakeBiquadNode[];
+  _waveShapers: FakeWaveShaperNode[];
 }
 
 function fakeAudioParam(): FakeAudioParam {
@@ -61,6 +69,7 @@ function makeFakeCtx(currentTime = 0): FakeCtx {
     _oscillators: [],
     _gains: [],
     _filters: [],
+    _waveShapers: [],
     createOscillator: vi.fn(() => {
       const osc: FakeNode = {
         type: "triangle",
@@ -85,6 +94,15 @@ function makeFakeCtx(currentTime = 0): FakeCtx {
       };
       ctx._filters.push(f);
       return f;
+    }),
+    createWaveShaper: vi.fn(() => {
+      const ws: FakeWaveShaperNode = {
+        curve: null,
+        oversample: "none",
+        connect: vi.fn(),
+      };
+      ctx._waveShapers.push(ws);
+      return ws;
     }),
     createGain: vi.fn(() => {
       const g: FakeNode = {
@@ -366,7 +384,10 @@ describe("Player — timbres", () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it("TB1. default 'voz': triangle + 2 formantes bandpass (F1≈710, F2≈1180)", () => {
+  it("TB1. default 'voz': caminho serial triangle → waveshaper → peaking (formante 900 Hz)", () => {
+    // Novo grafo serial (WebKit-safe): 1 WaveShaper + 1 BiquadFilter peaking em 900 Hz.
+    // Substituiu o fan-out paralelo de 3 biquad+gain (bandpass F1≈710, F2≈1180 + lowpass corpo)
+    // que travava o WebKit na transição HAec→di (UAT 2026-06-12/13).
     let fakeCtx!: FakeCtx;
     const player = createPlayer(() => {
       fakeCtx = makeFakeCtx(0);
@@ -375,13 +396,15 @@ describe("Player — timbres", () => {
     player.play(pb([tn({ pitch: "g", ms: 300 })]), vi.fn(), vi.fn());
     const osc = fakeCtx._oscillators[0];
     expect(osc.type).toBe("triangle");
-    const bandpass = fakeCtx._filters.filter((f) => f.type === "bandpass");
-    expect(bandpass.length).toBeGreaterThanOrEqual(2);
-    const freqs = bandpass.map((f) =>
-      (f.frequency.setValueAtTime.mock.calls as [number, number][])[0]?.[0],
-    );
-    expect(freqs).toContain(710);
-    expect(freqs).toContain(1180);
+    // Deve haver exatamente 1 WaveShaper
+    expect(fakeCtx._waveShapers).toHaveLength(1);
+    const ws = fakeCtx._waveShapers[0];
+    expect(ws.curve).toBeInstanceOf(Float32Array);
+    expect(ws.oversample).toBe("2x");
+    // Deve haver exatamente 1 BiquadFilter do tipo peaking em 900 Hz
+    const peaking = fakeCtx._filters.filter((f) => f.type === "peaking");
+    expect(peaking).toHaveLength(1);
+    expect(peaking[0].frequency.setValueAtTime).toHaveBeenCalledWith(900, expect.any(Number));
   });
 
   it("TB2. timbre 'flauta': cadeia legada triangle → lowpass 1200", () => {
