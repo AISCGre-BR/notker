@@ -35,7 +35,7 @@ interface FakeBiquadNode extends FakeNode {
 
 interface FakeWaveShaperNode {
   curve: Float32Array | null;
-  oversample: string;
+  oversample: OverSampleType;
   connect: ReturnType<typeof vi.fn>;
 }
 

@@ -67,16 +67,16 @@ export type SynthTimbre = "voz" | "flauta";
 
 // "voz": caminho SERIAL (WebKit-safe) — sem fan-out paralelo. Parâmetros expostos
 // p/ o mixer (B2b). Formante "ah" via filtro peaking (mantém o fundamental).
-export const VOZ_FORMANT_HZ = 900;   // realce de formante "ah"
-export const VOZ_FORMANT_Q  = 1.0;
-export const VOZ_PEAK_DB     = 6;    // ganho do peaking (dB)
-export const VOZ_SHAPE_K     = 2.2;  // intensidade da curva de harmônicos
+export const VOZ_FORMANT_HZ  = 900;   // realce de formante "ah"
+export const VOZ_FORMANT_Q   = 1.0;
+export const VOZ_PEAK_DB     = 6;     // ganho do peaking (dB)
+export const VOZ_SHAPE_K     = 2.2;   // intensidade da curva de harmônicos
 const VOZ_CURVE = makeVozCurve(VOZ_SHAPE_K);
 
 /** Curva suave (tanh) p/ adicionar harmônicos ao triângulo. Determinística. */
 function makeVozCurve(k: number): Float32Array<ArrayBuffer> {
   const N = 1024;
-  const c = new Float32Array(new ArrayBuffer(N * 4));
+  const c = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     const x = (i / (N - 1)) * 2 - 1;
     c[i] = Math.tanh(k * x);
