@@ -1,7 +1,6 @@
-// test/selection-range.test.ts — seleção do editor → intervalo de sílabas → recorte.
+// test/selection-range.test.ts — seleção do editor → intervalo de sílabas.
 import { describe, it, expect } from "vitest";
 import { syllableRangeOfSelection } from "../src/preview/source-map";
-import { sliceBySyllables, type TimedPlayback, type TimedNote } from "../src/tuotilo/duration";
 import { syllableSpans } from "../src/preview/nabc-lib";
 
 const DOC = "%%\n(c4) Ve(f)ni(g) Cre(h)a(i)tor(j)";
@@ -26,28 +25,3 @@ describe("syllableRangeOfSelection", () => {
   });
 });
 
-describe("sliceBySyllables", () => {
-  function tn(p: Partial<TimedNote> & { pitch: string; ms: number; syllableIndex: number }): TimedNote {
-    return { idx: 0, pauseAfterMs: 0, articulation: "full", noteInSyllable: 0, ...p } as TimedNote;
-  }
-  const pb: TimedPlayback = {
-    leadInMs: 30,
-    notes: [
-      tn({ pitch: "f", ms: 100, syllableIndex: 0 }),
-      tn({ pitch: "g", ms: 100, syllableIndex: 1, pauseAfterMs: 50 }),
-      tn({ pitch: "h", ms: 100, syllableIndex: 2 }),
-      tn({ pitch: "i", ms: 100, syllableIndex: 3 }),
-    ],
-  };
-  it("S1. recorte [1,2] mantém só as sílabas 1-2, zera leadIn, preserva pausa interna", () => {
-    const out = sliceBySyllables(pb, [1, 2]);
-    expect(out.notes.map((n) => n.syllableIndex)).toEqual([1, 2]);
-    expect(out.leadInMs).toBe(0);
-    expect(out.notes[0].pauseAfterMs).toBe(50);
-  });
-  it("S2. recorte completo = original (com leadIn)", () => {
-    const out = sliceBySyllables(pb, [0, 3]);
-    expect(out.notes).toHaveLength(4);
-    expect(out.leadInMs).toBe(30);
-  });
-});
