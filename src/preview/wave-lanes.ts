@@ -30,16 +30,26 @@ export interface System {
   notes: LaneNote[];
 }
 
-const Y_BAND_TOL = 8; // px: boxes com |Δy| menor caem no mesmo sistema
+const Y_MERGE_GAP = 6; // px de folga: bandas separadas por menos que isso fundem
 
-/** Agrupa boxes em sistemas por faixa de y (tolerância), de cima p/ baixo. */
+/** Agrupa boxes em SISTEMAS (linhas da pauta) por FUSÃO DE INTERVALOS verticais.
+ *  Dentro de um sistema, sílabas têm topos bem diferentes (notas agudas vs graves),
+ *  mas seus intervalos [y, y+height] se encadeiam e se sobrepõem; só há espaço em
+ *  branco real ENTRE sistemas. Por isso fundir por sobreposição (com folga pequena)
+ *  é robusto à variação de altura intra-sistema — ao contrário de tolerância no topo. */
 function clusterByY(boxes: SylBox[]): SylBox[][] {
   const sorted = [...boxes].sort((a, b) => a.y - b.y || a.x - b.x);
   const bands: SylBox[][] = [];
+  let curMaxBottom = -Infinity;
   for (const b of sorted) {
     const last = bands[bands.length - 1];
-    if (last && Math.abs(b.y - last[0].y) <= Y_BAND_TOL) last.push(b);
-    else bands.push([b]);
+    if (last && b.y <= curMaxBottom + Y_MERGE_GAP) {
+      last.push(b);
+      curMaxBottom = Math.max(curMaxBottom, b.y + b.height);
+    } else {
+      bands.push([b]);
+      curMaxBottom = b.y + b.height;
+    }
   }
   return bands;
 }
@@ -246,7 +256,30 @@ export interface WaveLanes {
   destroy(): void;
 }
 
-/** Lê as boxes das sílabas reais do SVG vivo (getBBox). Substituível em teste. */
+/** Matriz afim 2D (formato SVGMatrix/DOMMatrix). */
+interface Affine { a: number; b: number; c: number; d: number; e: number; f: number; }
+interface BBox { x: number; y: number; width: number; height: number; }
+
+/** Transforma um bbox LOCAL para o espaço de usuário do <svg> via a CTM do elemento.
+ *  O nabc-lib posiciona tudo com `transform="translate(...)"` em <g> aninhados
+ *  (root-group + linhas + elementos) e o getBBox IGNORA esses transforms — daí a
+ *  necessidade de aplicar a CTM. Transforma 2 cantos opostos (cobre translate+escala;
+ *  notação não tem rotação). CTM nula → devolve o bbox cru (fallback seguro). */
+export function bboxToRoot(b: BBox, m: Affine | null): BBox {
+  if (!m) return b;
+  const tx = (x: number, y: number) => ({ x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f });
+  const p1 = tx(b.x, b.y);
+  const p2 = tx(b.x + b.width, b.y + b.height);
+  return {
+    x: Math.min(p1.x, p2.x),
+    y: Math.min(p1.y, p2.y),
+    width: Math.abs(p2.x - p1.x),
+    height: Math.abs(p2.y - p1.y),
+  };
+}
+
+/** Lê as boxes das sílabas reais do SVG vivo, JÁ no espaço de usuário do <svg>
+ *  (getBBox local + getCTM). Substituível em teste (getBBox/getCTM não existem no jsdom). */
 export function readSyllableBoxes(svg: SVGSVGElement): Map<number, SylBox[]> {
   const m = new Map<number, SylBox[]>();
   svg.querySelectorAll<SVGGraphicsElement>('[class*="syllable-"]').forEach((g) => {
@@ -254,9 +287,9 @@ export function readSyllableBoxes(svg: SVGSVGElement): Map<number, SylBox[]> {
     const mm = /(?:^|\s)syllable-(\d+)(?:\s|$)/.exec(cls);
     if (!mm) return;
     const idx = Number(mm[1]);
-    const b = g.getBBox();
+    const root = bboxToRoot(g.getBBox(), g.getCTM());
     const arr = m.get(idx) ?? [];
-    arr.push({ syllableIndex: idx, x: b.x, y: b.y, width: b.width, height: b.height });
+    arr.push({ syllableIndex: idx, x: root.x, y: root.y, width: root.width, height: root.height });
     m.set(idx, arr);
   });
   return m;
@@ -276,7 +309,17 @@ export function createWaveLanes(
     if (!svg) return;
     svg.querySelector(".wave-lane-layer")?.remove();
     if (!on) return;
-    const systems = mapSystems(lastNotes, readBoxes(svg));
+    const boxes = readBoxes(svg);
+    const systems = mapSystems(lastNotes, boxes);
+    // Dump de diagnóstico opt-in: `window.__ondaDebug = true` no console antes de
+    // ligar a onda imprime as boxes reais e os sistemas detectados (para calibrar).
+    if (typeof window !== "undefined" && (window as unknown as { __ondaDebug?: boolean }).__ondaDebug) {
+      const boxSummary = [...boxes.entries()].map(([idx, bs]) =>
+        bs.map((b) => `#${idx} x=${b.x.toFixed(0)} y=${b.y.toFixed(0)} w=${b.width.toFixed(0)} h=${b.height.toFixed(0)}`));
+      console.debug("[onda] boxes (espaço svg):", boxSummary.flat());
+      console.debug("[onda] sistemas detectados:", systems.map((s, i) =>
+        `sys${i} yBaseline=${s.yBaseline.toFixed(0)} notas=${s.notes.length} x=[${s.xRange[0].toFixed(0)},${s.xRange[1].toFixed(0)}]`));
+    }
     renderWaveLanes(svg, systems, hooks);
   }
 

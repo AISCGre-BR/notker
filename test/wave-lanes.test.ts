@@ -1,7 +1,32 @@
 import { describe, it, expect } from "vitest";
 import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
 import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes, deformLiveSegment } from "../src/preview/wave-lanes";
+import { bboxToRoot } from "../src/preview/wave-lanes";
 import { WAVE_MIN, WAVE_MAX } from "../src/tuotilo/wave";
+
+describe("bboxToRoot (bbox local → espaço do <svg> via CTM)", () => {
+  const bbox = { x: 0, y: 0, width: 20, height: 10 };
+  it("translação pura (CTM = translate(e,f)) desloca a origem, mantém tamanho", () => {
+    // m = translate(40, 200): a=1 b=0 c=0 d=1 e=40 f=200 (caso real: root-group + linhas)
+    const r = bboxToRoot(bbox, { a: 1, b: 0, c: 0, d: 1, e: 40, f: 200 });
+    expect(r.x).toBeCloseTo(40);
+    expect(r.y).toBeCloseTo(200);
+    expect(r.width).toBeCloseTo(20);
+    expect(r.height).toBeCloseTo(10);
+  });
+  it("escala + translação aplica nos dois cantos (min/abs)", () => {
+    // m = scale(2) then translate(10,5): a=2 d=2 e=10 f=5
+    const r = bboxToRoot(bbox, { a: 2, b: 0, c: 0, d: 2, e: 10, f: 5 });
+    expect(r.x).toBeCloseTo(10);
+    expect(r.y).toBeCloseTo(5);
+    expect(r.width).toBeCloseTo(40);
+    expect(r.height).toBeCloseTo(20);
+  });
+  it("CTM nulo → devolve o bbox local cru (fallback seguro)", () => {
+    const r = bboxToRoot(bbox, null);
+    expect(r).toEqual(bbox);
+  });
+});
 
 function svgWithSystems() {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -71,6 +96,20 @@ describe("mapSystems", () => {
     expect(sys).toHaveLength(2);
     expect(sys[0].notes[0].syllableIndex).toBe(0);
     expect(sys[1].notes[0].syllableIndex).toBe(1);
+  });
+
+  it("sílabas do MESMO sistema com topos bem diferentes (agudo vs grave) ficam num só sistema", () => {
+    // simula um sistema real: sílaba aguda (topo y=10, baixa altura) e grave (topo
+    // y=45) cujos intervalos se sobrepõem via encadeamento → UM sistema, não dois.
+    const notes = [note(0, 0), note(1, 0), note(2, 0)];
+    const boxes = new Map<number, SylBox[]>([
+      [0, [{ syllableIndex: 0, x: 10, y: 10, width: 18, height: 50 }]], // agudo→grave, alto
+      [1, [{ syllableIndex: 1, x: 40, y: 30, width: 18, height: 40 }]], // sobrepõe o anterior
+      [2, [{ syllableIndex: 2, x: 70, y: 45, width: 18, height: 35 }]], // sobrepõe o anterior
+    ]);
+    const sys = mapSystems(notes, boxes);
+    expect(sys).toHaveLength(1);
+    expect(sys[0].notes).toHaveLength(3);
   });
 
   it("melisma com a sílaba partida em 2 boxes (quebra de linha) → 1 nota em cada sistema", () => {
