@@ -130,6 +130,8 @@ export function pitchToLaneY(pitch: string, laneHeight: number): number {
 const SVG_NS = "http://www.w3.org/2000/svg";
 export const LANE_HEIGHT = 22;       // altura da lane sob cada sistema
 const LANE_GAP = 4;                  // folga entre baseline do sistema e a lane
+const BASE_Y = LANE_HEIGHT / 2;      // régua RETA: baseline fixa (a melodia vem dos neumas)
+const END_MARGIN = 5;                // px do trecho da 1ª/última nota e após pausa
 
 export interface LaneHooks {
   onFactorDrag?: (key: string, syllableIndex: number, noteInSyllable: number, startFactor: number, startClientY: number) => void;
@@ -152,29 +154,36 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
     lane.setAttribute("class", "wave-lane");
     lane.setAttribute("transform", `translate(0,${laneTop})`);
 
-    // contorno como polilinha discreta ligando as notas (curvatura suave)
-    // Dois passes: 1ª passagem coleta elementos; 2ª appenda em ordem halo→line→hit
-    // para garantir z-order correto (halos sempre atrás das linhas).
+    // Régua RETA: a melodia se lê dos neumas acima (trechos já alinhados sob a nota);
+    // a lane mostra só o RITMO. Dois passes: halos → linhas → marcadores → hits.
     const halos: SVGElement[] = [];
     const lines: SVGElement[] = [];
+    const marks: SVGElement[] = [];
     const hits: SVGElement[] = [];
-
-    const dots: SVGElement[] = [];
     const guideTop = sys.yTop - laneTop; // y local do topo do sistema (acima da lane)
+    const ns = sys.notes;                // ordenadas por x
 
-    let prevX: number | null = null, prevY: number | null = null;
-    for (const n of sys.notes) {
-      const y = pitchToLaneY(n.pitch, LANE_HEIGHT);
+    for (let i = 0; i < ns.length; i++) {
+      const n = ns[i];
+      const prev = ns[i - 1];
+      const next = ns[i + 1];
       const key = waveLaneKey(n.syllableIndex, n.noteInSyllable);
+      // trecho horizontal: meio-caminho à esquerda → meio-caminho à direita,
+      // QUEBRANDO nas pausas (divisio gera um vão entre os trechos).
+      const connL = prev !== undefined && !prev.divisioAfter;
+      const connR = next !== undefined && !n.divisioAfter;
+      const left = connL ? (prev.x + n.x) / 2 : n.x - END_MARGIN;
+      const right = connR ? (n.x + next.x) / 2 : n.x + END_MARGIN;
+      const d = `M ${left},${BASE_Y} H ${right}`;
+      const sw = factorToStrokeWidth(n.factor);
       const halo = factorToHaloOpacity(n.factor);
-      const d = segPath(prevX, prevY, n.x, y);
 
       if (halo > 0) {
         const h = document.createElementNS(SVG_NS, "path");
         h.setAttribute("class", "wave-halo");
         h.setAttribute("data-key", key);
         h.setAttribute("d", d);
-        h.setAttribute("stroke-width", String(factorToStrokeWidth(n.factor) + 3));
+        h.setAttribute("stroke-width", String(sw + 3));
         h.style.opacity = String(halo);
         halos.push(h);
       }
@@ -183,17 +192,18 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       p.setAttribute("class", "wave-line");
       p.setAttribute("data-key", key);
       p.setAttribute("d", d);
-      p.setAttribute("stroke-width", String(factorToStrokeWidth(n.factor)));
+      p.setAttribute("stroke-width", String(sw));
       lines.push(p);
 
-      // marcador de nota (ponto) — torna as notas discretas do melisma visíveis
-      const dot = document.createElementNS(SVG_NS, "circle");
-      dot.setAttribute("class", "wave-dot");
-      dot.setAttribute("data-key", key);
-      dot.setAttribute("cx", String(n.x));
-      dot.setAttribute("cy", String(y));
-      dot.setAttribute("r", "1.6");
-      dots.push(dot);
+      // marcador de nota — tique vertical curto cruzando a régua (notas discretas)
+      const mark = document.createElementNS(SVG_NS, "line");
+      mark.setAttribute("class", "wave-dot");
+      mark.setAttribute("data-key", key);
+      mark.setAttribute("x1", String(n.x));
+      mark.setAttribute("x2", String(n.x));
+      mark.setAttribute("y1", String(BASE_Y - 4));
+      mark.setAttribute("y2", String(BASE_Y + 4));
+      marks.push(mark);
 
       const hit = document.createElementNS(SVG_NS, "rect");
       hit.setAttribute("class", "wave-hit");
@@ -212,12 +222,12 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       hit.addEventListener("pointerenter", () => {
         svg.querySelectorAll(sibSel).forEach((el) => el.classList.add("sibling"));
         p.classList.add("hovered");
-        dot.classList.add("hovered");
+        mark.classList.add("hovered");
         const guide = document.createElementNS(SVG_NS, "line");
         guide.setAttribute("class", "wave-guide");
         guide.setAttribute("x1", String(n.x));
         guide.setAttribute("x2", String(n.x));
-        guide.setAttribute("y1", String(y));
+        guide.setAttribute("y1", String(BASE_Y));
         guide.setAttribute("y2", String(guideTop));
         lane.appendChild(guide); // por cima de tudo, sobre a lane corrente
         (hit as unknown as { _guide?: SVGElement })._guide = guide;
@@ -226,20 +236,16 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       hit.addEventListener("pointerleave", () => {
         svg.querySelectorAll(sibSel).forEach((el) => el.classList.remove("sibling"));
         p.classList.remove("hovered");
-        dot.classList.remove("hovered");
+        mark.classList.remove("hovered");
         (hit as unknown as { _guide?: SVGElement })._guide?.remove();
         hooks.onHover?.(null);
       });
       hits.push(hit);
-
-      // quebra o contorno na PAUSA (divisio) — a onda respira, não atravessa a pausa
-      if (n.divisioAfter) { prevX = null; prevY = null; }
-      else { prevX = n.x; prevY = y; }
     }
 
     for (const el of halos) lane.appendChild(el);
     for (const el of lines) lane.appendChild(el);
-    for (const el of dots)  lane.appendChild(el);
+    for (const el of marks) lane.appendChild(el);
     for (const el of hits)  lane.appendChild(el);
     layer.appendChild(lane);
   }
@@ -277,13 +283,6 @@ export function deformLiveSegment(svg: SVGSVGElement, key: string, factor: numbe
     // Insere como primeiro filho da lane (atrás das linhas) para manter z-order halo→line.
     line.parentNode!.insertBefore(halo, line.parentNode!.firstChild);
   }
-}
-
-/** Segmento do contorno: diagonal suave da nota anterior à atual + leve apoio. */
-function segPath(px: number | null, py: number | null, x: number, y: number): string {
-  if (px === null || py === null) return `M ${x - 5},${y} L ${x + 5},${y}`;
-  const midX = (px + x) / 2;
-  return `M ${px},${py} Q ${midX},${py} ${x},${y}`;
 }
 
 // ─── Controller ───────────────────────────────────────────────────────────────

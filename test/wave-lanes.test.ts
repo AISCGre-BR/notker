@@ -96,9 +96,12 @@ describe("renderWaveLanes", () => {
     }];
     renderWaveLanes(svg, systems, {});
     const lines = svg.querySelectorAll<SVGPathElement>(".wave-line");
-    const d2 = lines[1].getAttribute("d") ?? "";
-    expect(d2).toContain(" L "); // traço-stub de nota inicial
-    expect(d2).not.toContain("Q"); // NÃO conecta por bezier à nota anterior
+    const d0 = lines[0].getAttribute("d") ?? "";
+    const d1 = lines[1].getAttribute("d") ?? "";
+    const rightOf0 = Number(/H ([\d.]+)/.exec(d0)![1]);
+    const leftOf1 = Number(/M ([\d.]+),/.exec(d1)![1]);
+    // VÃO entre os trechos: a onda respira na pausa (não tile contíguo no meio-caminho)
+    expect(leftOf1).toBeGreaterThan(rightOf0);
   });
 });
 
@@ -232,7 +235,7 @@ describe("codificação visual do fator", () => {
 });
 
 describe("renderWaveLanes — multi-sistema", () => {
-  it("primeira nota do segundo sistema usa segPath de primeira nota (sem bezier Q ligando sistemas)", () => {
+  it("primeira nota do segundo sistema é um trecho próprio (não liga ao sistema anterior)", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const systems = [
       {
@@ -255,12 +258,11 @@ describe("renderWaveLanes — multi-sistema", () => {
     const lanes = svg.querySelectorAll(".wave-lane");
     expect(lanes.length).toBe(2);
 
-    // A primeira linha do segundo sistema deve ser um stub horizontal (sem Q bezier)
+    // O trecho do 2º sistema (nota única x=15) é horizontal próprio: "M 10,<y> H 20"
     const secondLaneFirstLine = lanes[1].querySelector(".wave-line");
     expect(secondLaneFirstLine).not.toBeNull();
     const d = secondLaneFirstLine!.getAttribute("d")!;
-    // segPath(null, null, 15, y) → "M 10,<y> L 20,<y>"
-    expect(d).toMatch(/^M 10,[\d.]+ L 20,/);
+    expect(d).toMatch(/^M 10,[\d.]+ H 20/);
     expect(d).not.toContain("Q");
   });
 });
