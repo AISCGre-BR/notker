@@ -30,7 +30,7 @@ import { highlightSyllable, clearHighlight } from "./preview/highlight";
 import { createPlayer } from "./tuotilo/player";
 import { extractAll } from "./tuotilo/signs";
 import { buildTimeline } from "./tuotilo/timeline";
-import { computeTimedNotes, sliceBySyllables, type PlaybackMode } from "./tuotilo/duration";
+import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuotilo/duration";
 import { syllableRangeOfSelection } from "./preview/source-map";
 import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel } from "./overlay-ui/panel";
@@ -560,7 +560,7 @@ async function boot() {
       // Seleção não-vazia do mouse ⇒ toca só o trecho (spec B2a)
       const sel = view.state.selection.main;
       const range = syllableRangeOfSelection(map, sel.from, sel.to);
-      const toPlay = range ? sliceBySyllables(shaped, range) : shaped;
+      const toPlay = range ? sliceFromSyllable(shaped, range[0]) : shaped;
       if (toPlay.notes.length === 0) {
         setStatus("playback: seleção sem notas");
         return;
@@ -568,7 +568,7 @@ async function boot() {
       const svg = panel?.svgEl?.() ?? null;
       const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
       if (btn) btn.textContent = "Parar";
-      setStatus(range ? "playback: tocando seleção…" : "playback: tocando…");
+      setStatus(range ? "playback: da seleção ao fim…" : "playback: tocando…");
       let lastSyl = -1;
       player.play(
         toPlay,

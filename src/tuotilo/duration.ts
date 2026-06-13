@@ -180,3 +180,11 @@ export function sliceBySyllables(pb: TimedPlayback, range: [number, number]): Ti
   const full = notes.length === pb.notes.length;
   return { leadInMs: full ? pb.leadInMs : 0, notes };
 }
+
+/** Recorta o playback da sílaba `a` (ordinal da timeline) até o FIM da peça.
+ *  Contexto interpretativo já computado na peça inteira; leadIn zera se a > 0. */
+export function sliceFromSyllable(pb: TimedPlayback, a: number): TimedPlayback {
+  const notes = pb.notes.filter((n) => n.syllableIndex >= a);
+  const full = notes.length === pb.notes.length;
+  return { leadInMs: full ? pb.leadInMs : 0, notes };
+}
