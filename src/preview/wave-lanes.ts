@@ -30,26 +30,26 @@ export interface System {
   notes: LaneNote[];
 }
 
-const Y_MERGE_GAP = 6; // px de folga: bandas separadas por menos que isso fundem
+const BAND_GAP_FACTOR = 0.45; // fração da altura mediana: gap maior que isso = novo sistema
 
-/** Agrupa boxes em SISTEMAS (linhas da pauta) por FUSÃO DE INTERVALOS verticais.
- *  Dentro de um sistema, sílabas têm topos bem diferentes (notas agudas vs graves),
- *  mas seus intervalos [y, y+height] se encadeiam e se sobrepõem; só há espaço em
- *  branco real ENTRE sistemas. Por isso fundir por sobreposição (com folga pequena)
- *  é robusto à variação de altura intra-sistema — ao contrário de tolerância no topo. */
+/** Agrupa boxes em SISTEMAS (linhas da pauta) por GAP nos TOPOS (y).
+ *  Validado contra coordenadas REAIS do nabc-lib (Dies sanctificatus, 121 boxes):
+ *  cada sílaba emite vários boxes (neuma, NABC, coluna full-height ~staff, texto) e
+ *  os boxes full-height de linhas vizinhas chegam a se sobrepor por ~2px — então
+ *  fundir por intervalo encadeia tudo. Já o ESPAÇAMENTO entre sistemas (~127px) supera
+ *  de longe a dispersão de topos dentro do sistema (≤24px), então separar onde o gap
+ *  entre topos consecutivos (ordenados) excede ~0,45×altura-mediana é robusto numa
+ *  ampla faixa (0,25–0,5 dão os 5 sistemas certos nos dados reais). */
 function clusterByY(boxes: SylBox[]): SylBox[][] {
+  if (boxes.length === 0) return [];
   const sorted = [...boxes].sort((a, b) => a.y - b.y || a.x - b.x);
-  const bands: SylBox[][] = [];
-  let curMaxBottom = -Infinity;
-  for (const b of sorted) {
-    const last = bands[bands.length - 1];
-    if (last && b.y <= curMaxBottom + Y_MERGE_GAP) {
-      last.push(b);
-      curMaxBottom = Math.max(curMaxBottom, b.y + b.height);
-    } else {
-      bands.push([b]);
-      curMaxBottom = b.y + b.height;
-    }
+  const hs = sorted.map((b) => b.height).sort((a, b) => a - b);
+  const medH = hs[Math.floor(hs.length / 2)] || 1;
+  const thr = BAND_GAP_FACTOR * medH;
+  const bands: SylBox[][] = [[sorted[0]]];
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].y - sorted[i - 1].y > thr) bands.push([sorted[i]]);
+    else bands[bands.length - 1].push(sorted[i]);
   }
   return bands;
 }

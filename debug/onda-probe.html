@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>onda-probe</title>
+  <style>
+    body { margin: 0; background: #fdfcf9; font-family: serif; }
+    #preview { padding: 10px; }
+    /* tokens.css não é carregado aqui — estilizo as lanes p/ ficarem VISÍVEIS no screenshot */
+    .wave-line { fill: none; stroke: #a02531; stroke-width: 2; }
+    .wave-halo { fill: none; stroke: #e08; }
+    .wave-hit { fill: transparent; }
+    #dump {
+      position: fixed; right: 0; top: 0; max-width: 42vw; max-height: 100vh; overflow: auto;
+      margin: 0; font: 10px/1.25 monospace; white-space: pre-wrap;
+      background: #fff; border-left: 1px solid #ccc; padding: 4px; opacity: 0.95;
+    }
+  </style>
+</head>
+<body>
+  <div id="preview"></div>
+  <pre id="dump">…carregando…</pre>
+  <script type="module" src="./onda-probe.ts"></script>
+</body>
+</html>

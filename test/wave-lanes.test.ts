@@ -3,6 +3,27 @@ import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToH
 import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes, deformLiveSegment } from "../src/preview/wave-lanes";
 import { bboxToRoot } from "../src/preview/wave-lanes";
 import { WAVE_MIN, WAVE_MAX } from "../src/tuotilo/wave";
+import diesBoxes from "./fixtures/dies-sanctificatus-boxes.json";
+
+describe("mapSystems com dados REAIS do nabc-lib (saída getCTM)", () => {
+  it("Dies sanctificatus (121 boxes, 5 sistemas) — não funde nem fragmenta", () => {
+    const boxes = new Map<number, SylBox[]>();
+    for (const b of diesBoxes.boxes as SylBox[]) {
+      const arr = boxes.get(b.syllableIndex) ?? [];
+      arr.push(b);
+      boxes.set(b.syllableIndex, arr);
+    }
+    const notes: NoteIdent[] = [...boxes.keys()].sort((a, b) => a - b).map((idx) => ({
+      syllableIndex: idx, realSyllableIndex: idx, noteInSyllable: 0,
+      pitch: "f", alt: 0, factor: 1, divisioAfter: null,
+    }));
+    const sys = mapSystems(notes, boxes);
+    expect(sys).toHaveLength(diesBoxes.expectedSystems); // 5
+    const ys = sys.map((s) => s.yBaseline);
+    expect(ys).toEqual([...ys].sort((a, b) => a - b)); // crescentes
+    for (const s of sys) expect(s.notes.length).toBeGreaterThan(0);
+  });
+});
 
 describe("bboxToRoot (bbox local → espaço do <svg> via CTM)", () => {
   const bbox = { x: 0, y: 0, width: 20, height: 10 };
@@ -98,18 +119,30 @@ describe("mapSystems", () => {
     expect(sys[1].notes[0].syllableIndex).toBe(1);
   });
 
-  it("sílabas do MESMO sistema com topos bem diferentes (agudo vs grave) ficam num só sistema", () => {
-    // simula um sistema real: sílaba aguda (topo y=10, baixa altura) e grave (topo
-    // y=45) cujos intervalos se sobrepõem via encadeamento → UM sistema, não dois.
+  it("topos diferentes DENTRO de um sistema (gap < limiar) ficam num só sistema", () => {
+    // proporções reais: altura ~120, topos 14/32/78 (gaps 18/46 < 0,45×120=54).
     const notes = [note(0, 0), note(1, 0), note(2, 0)];
     const boxes = new Map<number, SylBox[]>([
-      [0, [{ syllableIndex: 0, x: 10, y: 10, width: 18, height: 50 }]], // agudo→grave, alto
-      [1, [{ syllableIndex: 1, x: 40, y: 30, width: 18, height: 40 }]], // sobrepõe o anterior
-      [2, [{ syllableIndex: 2, x: 70, y: 45, width: 18, height: 35 }]], // sobrepõe o anterior
+      [0, [{ syllableIndex: 0, x: 10, y: 14, width: 18, height: 120 }]],
+      [1, [{ syllableIndex: 1, x: 40, y: 32, width: 18, height: 120 }]],
+      [2, [{ syllableIndex: 2, x: 70, y: 78, width: 18, height: 120 }]],
     ]);
     const sys = mapSystems(notes, boxes);
     expect(sys).toHaveLength(1);
     expect(sys[0].notes).toHaveLength(3);
+  });
+
+  it("REGRESSÃO: boxes full-height de sistemas vizinhos que se sobrepõem ~2px NÃO fundem", () => {
+    // o bug real (UAT 2026-06-13): sys1 box y=14 h=129 (fundo 143) e sys2 box y=141
+    // h=129 se sobrepõem por 2px → fusão de intervalos juntava tudo. Gap nos topos
+    // (127 >> 0,45×129=58) separa corretamente.
+    const notes = [note(0, 0), note(1, 0)];
+    const boxes = new Map<number, SylBox[]>([
+      [0, [{ syllableIndex: 0, x: 100, y: 14, width: 9, height: 129 }]],
+      [1, [{ syllableIndex: 1, x: 30, y: 141, width: 9, height: 129 }]],
+    ]);
+    const sys = mapSystems(notes, boxes);
+    expect(sys).toHaveLength(2);
   });
 
   it("melisma com a sílaba partida em 2 boxes (quebra de linha) → 1 nota em cada sistema", () => {
