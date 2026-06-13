@@ -4,7 +4,12 @@ export interface SyllableSource {
   to: number;             // offset final (exclusivo)
 }
 export interface RenderResult { svg: string; sourceMap: SyllableSource[]; }
-export interface RenderOptions { widthPx?: number; }
+export interface RenderOptions {
+  widthPx?: number;
+  /** Espaçamento EXTRA (px) acima de cada sistema — usado p/ abrir vão p/ as lanes
+   *  da onda quando ela está ativa. Some-se ao chantLineTopPaddingPx padrão. */
+  extraLineSpacingPx?: number;
+}
 export interface PreviewEngine {
   readonly id: string;
   render(doc: string, opts?: RenderOptions): Promise<RenderResult>;

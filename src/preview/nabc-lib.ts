@@ -34,7 +34,7 @@ export function syllableSpans(doc: string): SyllableSource[] {
 
 export class NabcLibEngine implements PreviewEngine {
   readonly id = "nabc-lib";
-  async render(doc: string, opts?: { widthPx?: number }): Promise<RenderResult> {
+  async render(doc: string, opts?: { widthPx?: number; extraLineSpacingPx?: number }): Promise<RenderResult> {
     const [lib, fonts] = await Promise.all([
       import("@testneumz/nabc-lib"),
       import("./nabc-fonts"),
@@ -46,6 +46,17 @@ export class NabcLibEngine implements PreviewEngine {
     const ctx = new ChantContext();
     // Largura de linha = largura útil do painel (preview responsivo); fallback 800.
     if (opts?.widthPx && opts.widthPx > 120) ctx.lineWidthPx = Math.round(opts.widthPx);
+    // Espaçamento extra ENTRE sistemas (vão p/ as lanes da onda). O empilhamento de
+    // linhas usa `spaceabovelines` (default 0); lengthToPx(mm) = space × pxInCm/10,
+    // então convertemos o px desejado para mm com o pxInCm do contexto.
+    // (Casts pontuais: o pacote nabc-lib não publica `types`, então essas props não
+    //  estão na tipagem inferida — mas existem em runtime, ver dist/types/.)
+    if (opts?.extraLineSpacingPx && opts.extraLineSpacingPx > 0) {
+      const LengthCtor = (lib as unknown as { Length: new (n: number, u: string) => unknown }).Length;
+      const pxInCm = (ctx as unknown as { pxInCm?: number }).pxInCm ?? 55.22;
+      (ctx as unknown as { spaceabovelines: unknown }).spaceabovelines =
+        new LengthCtor((opts.extraLineSpacingPx * 10) / pxInCm, "mm");
+    }
     const score = new GregorioScore(ctx);
     // O nabc-lib espera APENAS o corpo da partitura (depois do `%%`); os cabeçalhos
     // (name/mode/nabc-lines/…) são metadados e, se passados, são renderizados como

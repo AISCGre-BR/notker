@@ -14,6 +14,9 @@ export interface PreviewPanel {
   svgEl(): SVGSVGElement | null;
   onSyllable(cb: (syllableIndex: number) => void): void;
   onRender(cb: () => void): void;
+  /** Espaçamento extra (px) entre sistemas — abre vão p/ as lanes da onda.
+   *  Mudar o valor re-renderiza a partitura. */
+  setExtraLineSpacing(px: number): void;
   destroy(): void;
 }
 
@@ -26,11 +29,15 @@ export function createPreviewPanel(
   let cb: ((n: number) => void) | null = null;
   let renderCb: (() => void) | null = null;
   let lastDoc = "";
+  let extraLineSpacingPx = 0;
 
   async function doRender(doc: string) {
     // Largura útil da prancha (descontando padding ~22px de cada lado + moldura).
     const inner = host.clientWidth ? host.clientWidth - 48 : 0;
-    const r = await engine.render(doc, inner > 120 ? { widthPx: inner } : undefined);
+    const r = await engine.render(doc, {
+      widthPx: inner > 120 ? inner : undefined,
+      extraLineSpacingPx: extraLineSpacingPx || undefined,
+    });
     map = r.sourceMap;
     host.innerHTML = r.svg;
     host.querySelector("svg")?.addEventListener("click", (ev) => {
@@ -55,6 +62,11 @@ export function createPreviewPanel(
     svgEl: () => host.querySelector("svg"),
     onSyllable: (fn) => { cb = fn; },
     onRender: (fn) => { renderCb = fn; },
+    setExtraLineSpacing: (px) => {
+      if (px === extraLineSpacingPx) return;
+      extraLineSpacingPx = px;
+      if (lastDoc) render(lastDoc);
+    },
     destroy: () => { render.cancel(); ro?.disconnect(); },
   };
 }

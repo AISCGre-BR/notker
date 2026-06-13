@@ -200,6 +200,9 @@ async function boot() {
   // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
   // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
   const WAVE_SEED = 12345;
+  // Vão extra (px) aberto entre sistemas quando a onda está ativa (≈ altura da lane
+  // + folga); validado no harness de diagnóstico (debug/onda-probe).
+  const WAVE_LINE_SPACING_PX = 36;
   let wave: WaveOverlay = emptyWave("");
 
   // Estado do arrasto vertical de fator.
@@ -565,6 +568,9 @@ async function boot() {
     toggleWave: () => {
       const on = !waveLanes.enabled();
       waveLanes.setEnabled(on);
+      // Abre/fecha o vão entre sistemas para acomodar as lanes. O re-render dispara
+      // onRender → rebuildWave, que (re)desenha as lanes já no layout espaçado.
+      panel?.setExtraLineSpacing(on ? WAVE_LINE_SPACING_PX : 0);
       if (on) syncWaveWithDoc();
       setStatus(on ? "onda: visível" : "onda: oculta");
     },
