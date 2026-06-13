@@ -1,5 +1,40 @@
 import { describe, it, expect } from "vitest";
 import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
+import { renderWaveLanes, LANE_HEIGHT } from "../src/preview/wave-lanes";
+
+function svgWithSystems() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const systems = [
+    { yBaseline: 30, xRange: [10, 60] as [number, number], notes: [
+      { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 20 },
+      { syllableIndex: 1, realSyllableIndex: 2, noteInSyllable: 0, pitch: "h", alt: 0, factor: 2.0, divisioAfter: null, x: 50 },
+    ]},
+  ];
+  return { svg, systems };
+}
+
+describe("renderWaveLanes", () => {
+  it("injeta uma lane por sistema e um path+hit por nota", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    expect(svg.querySelectorAll(".wave-lane").length).toBe(1);
+    expect(svg.querySelectorAll(".wave-line").length).toBe(2);
+    expect(svg.querySelectorAll(".wave-hit").length).toBe(2);
+  });
+  it("desenha halo só na nota alargada e marca data-key", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    expect(svg.querySelectorAll(".wave-halo").length).toBe(1); // só a de fator 2.0
+    expect(svg.querySelector('.wave-hit[data-key="1:0"]')).not.toBeNull();
+  });
+  it("re-render limpa a camada anterior (sem duplicar)", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    renderWaveLanes(svg, systems, {});
+    expect(svg.querySelectorAll(".wave-lane-layer").length).toBe(1);
+    expect(svg.querySelectorAll(".wave-line").length).toBe(2);
+  });
+});
 
 const note = (s: number, n: number, pitch = "f"): NoteIdent =>
   ({ syllableIndex: s, realSyllableIndex: s, noteInSyllable: n, pitch, alt: 0, factor: 1, divisioAfter: null });

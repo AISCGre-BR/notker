@@ -112,3 +112,81 @@ export function pitchToLaneY(pitch: string, laneHeight: number): number {
   const o = isNaN(off) ? 6 : Math.min(12, Math.max(0, off));
   return laneHeight - (o / 12) * (laneHeight - 4) - 2;
 }
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+export const LANE_HEIGHT = 22;       // altura da lane sob cada sistema
+const LANE_GAP = 4;                  // folga entre baseline do sistema e a lane
+
+export interface LaneHooks {
+  onFactorDrag?: (key: string, syllableIndex: number, noteInSyllable: number, startFactor: number, startClientY: number) => void;
+  onHover?: (syllableIndex: number | null) => void;
+}
+
+export function waveLaneKey(syllableIndex: number, noteInSyllable: number): string {
+  return `${syllableIndex}:${noteInSyllable}`;
+}
+
+/** (Re)injeta a camada de lanes no svg. Remove a camada anterior antes. */
+export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: LaneHooks): void {
+  svg.querySelector(".wave-lane-layer")?.remove();
+  const layer = document.createElementNS(SVG_NS, "g");
+  layer.setAttribute("class", "wave-lane-layer");
+
+  for (const sys of systems) {
+    const laneTop = sys.yBaseline + LANE_GAP;
+    const lane = document.createElementNS(SVG_NS, "g");
+    lane.setAttribute("class", "wave-lane");
+    lane.setAttribute("transform", `translate(0,${laneTop})`);
+
+    // contorno como polilinha discreta ligando as notas (curvatura suave)
+    let prevX: number | null = null, prevY: number | null = null;
+    for (const n of sys.notes) {
+      const y = pitchToLaneY(n.pitch, LANE_HEIGHT);
+      const key = waveLaneKey(n.syllableIndex, n.noteInSyllable);
+      const halo = factorToHaloOpacity(n.factor);
+
+      if (halo > 0) {
+        const h = document.createElementNS(SVG_NS, "path");
+        h.setAttribute("class", "wave-halo");
+        h.setAttribute("data-key", key);
+        h.setAttribute("d", segPath(prevX, prevY, n.x, y));
+        h.setAttribute("stroke-width", String(factorToStrokeWidth(n.factor) + 3));
+        h.style.opacity = String(halo);
+        lane.appendChild(h);
+      }
+
+      const p = document.createElementNS(SVG_NS, "path");
+      p.setAttribute("class", "wave-line");
+      p.setAttribute("data-key", key);
+      p.setAttribute("d", segPath(prevX, prevY, n.x, y));
+      p.setAttribute("stroke-width", String(factorToStrokeWidth(n.factor)));
+      lane.appendChild(p);
+
+      const hit = document.createElementNS(SVG_NS, "rect");
+      hit.setAttribute("class", "wave-hit");
+      hit.setAttribute("data-key", key);
+      hit.setAttribute("x", String(n.x - 6));
+      hit.setAttribute("y", "0");
+      hit.setAttribute("width", "12");
+      hit.setAttribute("height", String(LANE_HEIGHT));
+      hit.addEventListener("pointerdown", (ev) => {
+        hooks.onFactorDrag?.(key, n.syllableIndex, n.noteInSyllable, n.factor, (ev as PointerEvent).clientY);
+        ev.preventDefault();
+      });
+      hit.addEventListener("pointerenter", () => hooks.onHover?.(n.realSyllableIndex));
+      hit.addEventListener("pointerleave", () => hooks.onHover?.(null));
+      lane.appendChild(hit);
+
+      prevX = n.x; prevY = y;
+    }
+    layer.appendChild(lane);
+  }
+  svg.appendChild(layer);
+}
+
+/** Segmento do contorno: diagonal suave da nota anterior à atual + leve apoio. */
+function segPath(px: number | null, py: number | null, x: number, y: number): string {
+  if (px === null || py === null) return `M ${x - 5},${y} L ${x + 5},${y}`;
+  const midX = (px + x) / 2;
+  return `M ${px},${py} Q ${midX},${py} ${x},${y}`;
+}
