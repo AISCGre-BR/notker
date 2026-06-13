@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
-import { renderWaveLanes, LANE_HEIGHT } from "../src/preview/wave-lanes";
+import { renderWaveLanes, LANE_HEIGHT, factorFromDrag } from "../src/preview/wave-lanes";
+import { WAVE_MIN, WAVE_MAX } from "../src/tuotilo/wave";
 
 function svgWithSystems() {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -170,6 +171,19 @@ describe("renderWaveLanes — multi-sistema", () => {
     // segPath(null, null, 15, y) → "M 10,<y> L 20,<y>"
     expect(d).toMatch(/^M 10,[\d.]+ L 20,/);
     expect(d).not.toContain("Q");
+  });
+});
+
+describe("factorFromDrag", () => {
+  it("subir o ponteiro (dy negativo de clientY) alarga; descer encurta", () => {
+    const up = factorFromDrag(1, /*startClientY*/ 200, /*nowClientY*/ 120); // subiu 80px
+    const down = factorFromDrag(1, 200, 280); // desceu 80px
+    expect(up).toBeGreaterThan(1);
+    expect(down).toBeLessThan(1);
+  });
+  it("satura em [WAVE_MIN, WAVE_MAX]", () => {
+    expect(factorFromDrag(2, 200, -9999)).toBeLessThanOrEqual(WAVE_MAX);
+    expect(factorFromDrag(2, 200, 9999)).toBeGreaterThanOrEqual(WAVE_MIN);
   });
 });
 

@@ -3,6 +3,7 @@
  *  as notas de cada sílaba pela largura da sílaba (ancoragem por posição, não tempo). */
 
 import { staffOffset } from "../gabc/gabc-pitch";
+import { WAVE_MIN, WAVE_MAX } from "../tuotilo/wave";
 
 export interface SylBox {
   syllableIndex: number;
@@ -193,6 +194,24 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
     layer.appendChild(lane);
   }
   svg.appendChild(layer);
+}
+
+const DRAG_PX_PER_DOUBLE = 80; // 80px = dobra/metade o fator
+
+/** Fator a partir do arrasto vertical (exponencial; cima alarga). Saturado. */
+export function factorFromDrag(startFactor: number, startClientY: number, nowClientY: number): number {
+  const dy = startClientY - nowClientY; // cima = positivo
+  const f = startFactor * Math.pow(2, dy / DRAG_PX_PER_DOUBLE);
+  return Math.min(WAVE_MAX, Math.max(WAVE_MIN, f));
+}
+
+/** Atualiza ao vivo (sem re-render) o segmento de uma nota durante o arrasto. */
+export function deformLiveSegment(svg: SVGSVGElement, key: string, factor: number): void {
+  const line = svg.querySelector<SVGPathElement>(`.wave-line[data-key="${key}"]`);
+  if (line) line.setAttribute("stroke-width", String(factorToStrokeWidth(factor)));
+  const halo = svg.querySelector<SVGPathElement>(`.wave-halo[data-key="${key}"]`);
+  const op = factorToHaloOpacity(factor);
+  if (halo) { halo.style.opacity = String(op); halo.setAttribute("stroke-width", String(factorToStrokeWidth(factor) + 3)); }
 }
 
 /** Segmento do contorno: diagonal suave da nota anterior à atual + leve apoio. */
