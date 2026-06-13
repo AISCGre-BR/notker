@@ -304,9 +304,11 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .wave-reset:hover { color: var(--ink); border-color: var(--ink-muted); }
 .wave-scroller { flex: 1 1 0; overflow: auto; padding: 10px 0; }
 .wave-svg { display: block; }
-.wave-note { fill: var(--cream-deep); stroke: var(--ink-muted); stroke-width: 1; cursor: ns-resize; }
-.wave-note:hover { fill: var(--rule-soft); }
-.wave-note.playing { fill: var(--rubric-soft); stroke: var(--rubric); }
+.wave-line { stroke: var(--ink-soft); stroke-width: 2; fill: none; }
+.wave-line.edited { stroke: var(--rubric-soft); }
+.wave-line.hovered { stroke-width: 3.5; }
+.wave-line.playing { stroke: var(--rubric); stroke-width: 4; }
+.wave-hit { fill: transparent; cursor: ns-resize; }
 .wave-label { font: 12px var(--font); fill: var(--ink-soft); }
 .wave-divisio { stroke: var(--rule); stroke-width: 1.5; }
 .wave-divisio[data-kind="finalis"] { stroke: var(--ink-muted); stroke-width: 3; }

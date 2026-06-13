@@ -208,6 +208,9 @@ async function boot() {
   const WAVE_SEED = 12345;
   let wave: WaveOverlay = emptyWave("");
 
+  // Índices reais de sílaba para sincronizar hover da onda com a partitura.
+  let waveSvgIndices: number[] = [];
+
   const wavePanel = createWavePanel(wavePane, {
     onFactorChange: (syl, note, factor) => {
       if (playbackMode !== "interpretado") {
@@ -221,6 +224,12 @@ async function boot() {
       wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
       rebuildWave();
       setStatus("onda: restaurada ao neumático");
+    },
+    onHover: (syl) => {
+      const svg = panel?.svgEl?.();
+      if (!svg) return;
+      if (syl === null) { clearHighlight(svg); return; }
+      highlightSyllable(svg, waveSvgIndices[syl] ?? syl + 1);
     },
   });
 
@@ -239,6 +248,8 @@ async function boot() {
     const tl = buildTimeline(syls);
     // base = durações neumáticas PURAS (sem applyWave); o fator vem do overlay
     const base = computeTimedNotes(tl, DEFAULT_PROFILE, WAVE_SEED, "interpretado");
+    // Mapeia índice interno de sílaba → índice real SVG (para hover sincronizado)
+    waveSvgIndices = reals.map((s) => s.syllableIndex);
     const views = base.notes.map((n) => {
       const sylSpan = reals[n.syllableIndex];
       const text = n.noteInSyllable === 0 && sylSpan
@@ -256,6 +267,8 @@ async function boot() {
         noteInSyllable: n.noteInSyllable,
         ms: n.ms,  // BASE — sem fator (o panel multiplica por factor para largura)
         factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
+        pitch: n.pitch,
+        alt: n.alt,
         text,
         divisioAfter,
       };

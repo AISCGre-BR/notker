@@ -1,14 +1,17 @@
-/** wave-panel.ts — a onda de interpretação (spec §7). Um bloco SVG por nota:
- *  largura ∝ duração final, altura ∝ fator (a "onda"); arrasto vertical ajusta
- *  o fator da nota sob o ponteiro; sílabas legendadas; divisiones como barras;
- *  cursor de playback; banner de interpretação desatualizada (hash divergente). */
+/** wave-panel.ts — a onda de interpretação redesenhada como linha contínua (a voz).
+ *  Um path SVG por nota: x = tempo (ms × factor × PX_PER_MS), y = contorno melódico
+ *  (staffOffset invertido). Trechos editados levemente rubricados. Hover sincronizado
+ *  com a partitura via onHover. Arrasto vertical ajusta fator (exponencial). */
 import { WAVE_MIN, WAVE_MAX } from "../tuotilo/wave";
+import { staffOffset } from "../gabc/gabc-pitch";
 
 export interface WaveNoteView {
   syllableIndex: number;
   noteInSyllable: number;
   ms: number;                 // duração BASE neumática (sem o fator da onda)
   factor: number;             // fator atual (1 = neumático puro)
+  pitch: string;              // letra gabc (ex: "f", "h", "g")
+  alt: number;                // -1 bemol | 0 natural | +1 sustenido
   text: string;               // texto da sílaba (só na 1ª nota dela; senão "")
   divisioAfter: "minima" | "minor" | "maior" | "finalis" | null;
 }
@@ -16,6 +19,7 @@ export interface WaveNoteView {
 export interface WavePanelHooks {
   onFactorChange(syllableIndex: number, noteInSyllable: number, factor: number): void;
   onReset(): void;            // "restaurar neumático" (global ou do banner)
+  onHover(syllableIndex: number | null): void;
 }
 
 export interface WavePanel {
@@ -25,10 +29,28 @@ export interface WavePanel {
   destroy(): void;
 }
 
-const PX_PER_MS = 0.18;      // escala horizontal
-const H_BASE = 46;           // altura do bloco com fator 1
-const H_AREA = 130;          // área vertical útil
-const DRAG_PX_PER_DOUBLE = 80; // arrastar 80px p/ cima dobra o fator
+const PX_PER_MS = 0.18;
+const H_LINE = 60;           // altura da área de linha (contorno melódico)
+const LABEL_H = 20;          // altura da faixa de labels
+const H = H_LINE + LABEL_H;
+const DRAG_PX_PER_DOUBLE = 80;
+const GAP_DIVISIO = 10;      // px de gap entre incisos
+
+/** Calcula o y do segmento horizontal de uma nota pelo pitch. */
+function pitchY(pitch: string): number {
+  const off = staffOffset(pitch);
+  const o = isNaN(off) ? 6 : Math.min(12, Math.max(0, off));
+  return H_LINE - Math.round((o / 12) * (H_LINE - 4)) - 2;
+}
+
+/** Monta o tooltip de uma nota. */
+function buildTooltip(n: WaveNoteView): string {
+  const acc = n.alt === -1 ? "♭" : n.alt === 1 ? "♯" : "";
+  const parts: string[] = [`${n.pitch}${acc}`];
+  if (n.text) parts.push(n.text);
+  parts.push(`nota ${n.noteInSyllable + 1}`);
+  return parts.join(" · ");
+}
 
 export function createWavePanel(host: HTMLElement, hooks: WavePanelHooks): WavePanel {
   host.classList.add("wave-host");
@@ -65,69 +87,94 @@ export function createWavePanel(host: HTMLElement, hooks: WavePanelHooks): WaveP
   host.addEventListener("pointerleave", onPointerUp);
 
   function render(notes: WaveNoteView[]): void {
-    const totalW = notes.reduce((a, n) => a + Math.max(8, n.ms * n.factor * PX_PER_MS) + 2, 24);
-    const H = H_AREA + 38; // área + faixa de rótulos
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("width", String(Math.max(totalW, 200)));
-    svg.setAttribute("height", String(H));
     svg.classList.add("wave-svg");
 
     let x = 12;
-    for (const n of notes) {
-      const w = Math.max(8, n.ms * n.factor * PX_PER_MS);
-      const h = Math.min(H_AREA, H_BASE * n.factor);
-      const y = H_AREA - h;
-      const key = `${n.syllableIndex}:${n.noteInSyllable}`;
 
-      const rect = document.createElementNS(svgNS, "rect");
-      rect.classList.add("wave-note");
-      if (key === cursorKey) rect.classList.add("playing");
-      rect.setAttribute("data-key", key);
-      rect.setAttribute("x", String(x));
-      rect.setAttribute("y", String(y));
-      rect.setAttribute("width", String(w));
-      rect.setAttribute("height", String(h));
-      rect.addEventListener("pointerdown", (ev) => {
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      const w = Math.max(8, n.ms * n.factor * PX_PER_MS);
+      const key = `${n.syllableIndex}:${n.noteInSyllable}`;
+      const y = pitchY(n.pitch);
+
+      // ── path da nota (linha contínua horizontal = segmento da voz) ──────
+      const path = document.createElementNS(svgNS, "path");
+      path.classList.add("wave-line");
+      if (n.factor !== 1) path.classList.add("edited");
+      if (key === cursorKey) path.classList.add("playing");
+      path.setAttribute("data-key", key);
+      path.setAttribute("d", `M ${x},${y} H ${x + w}`);
+      svg.appendChild(path);
+
+      // ── hit-area transparente para drag e hover ───────────────────────
+      const hit = document.createElementNS(svgNS, "rect");
+      hit.classList.add("wave-hit");
+      hit.setAttribute("data-key", key);
+      hit.setAttribute("x", String(x));
+      hit.setAttribute("y", "0");
+      hit.setAttribute("width", String(w));
+      hit.setAttribute("height", String(H_LINE));
+
+      // Tooltip
+      const title = document.createElementNS(svgNS, "title");
+      title.textContent = buildTooltip(n);
+      hit.appendChild(title);
+
+      // drag
+      hit.addEventListener("pointerdown", (ev) => {
         drag = {
           key, syl: n.syllableIndex, note: n.noteInSyllable,
           startY: (ev as MouseEvent).clientY, startFactor: n.factor,
         };
         ev.preventDefault();
       });
-      svg.appendChild(rect);
 
+      // hover
+      hit.addEventListener("pointerenter", () => hooks.onHover(n.syllableIndex));
+      hit.addEventListener("pointerleave", () => hooks.onHover(null));
+
+      svg.appendChild(hit);
+
+      // ── label de sílaba ───────────────────────────────────────────────
       if (n.text) {
         const label = document.createElementNS(svgNS, "text");
         label.classList.add("wave-label");
         label.setAttribute("x", String(x));
-        label.setAttribute("y", String(H_AREA + 16));
+        label.setAttribute("y", String(H_LINE + 16));
         label.textContent = n.text;
         svg.appendChild(label);
       }
-      x += w + 2;
 
+      x += w;
+
+      // ── divisio: barra vertical + gap ────────────────────────────────
       if (n.divisioAfter) {
         const bar = document.createElementNS(svgNS, "line");
         bar.classList.add("wave-divisio");
         bar.setAttribute("data-kind", n.divisioAfter);
-        bar.setAttribute("x1", String(x + 2));
-        bar.setAttribute("x2", String(x + 2));
+        bar.setAttribute("x1", String(x + GAP_DIVISIO / 2));
+        bar.setAttribute("x2", String(x + GAP_DIVISIO / 2));
         bar.setAttribute("y1", "0");
-        bar.setAttribute("y2", String(H_AREA));
+        bar.setAttribute("y2", String(H_LINE));
         svg.appendChild(bar);
-        x += 8;
+        x += GAP_DIVISIO;
       }
     }
+
+    // largura total + margem direita
+    svg.setAttribute("width", String(Math.max(x + 12, 200)));
+    svg.setAttribute("height", String(H));
 
     scroller.replaceChildren(svg);
   }
 
   function setCursor(key: string | null): void {
     cursorKey = key;
-    scroller.querySelectorAll(".wave-note.playing").forEach((el) => el.classList.remove("playing"));
+    scroller.querySelectorAll(".wave-line.playing").forEach((el) => el.classList.remove("playing"));
     if (key !== null) {
-      scroller.querySelector(`.wave-note[data-key="${key}"]`)?.classList.add("playing");
+      scroller.querySelector(`.wave-line[data-key="${key}"]`)?.classList.add("playing");
     }
   }
 
