@@ -13,6 +13,7 @@ export interface PreviewPanel {
   sourceMap(): SyllableSource[];
   svgEl(): SVGSVGElement | null;
   onSyllable(cb: (syllableIndex: number) => void): void;
+  onRender(cb: () => void): void;
   destroy(): void;
 }
 
@@ -23,6 +24,7 @@ export function createPreviewPanel(
 ): PreviewPanel {
   let map: SyllableSource[] = [];
   let cb: ((n: number) => void) | null = null;
+  let renderCb: (() => void) | null = null;
   let lastDoc = "";
 
   async function doRender(doc: string) {
@@ -36,6 +38,7 @@ export function createPreviewPanel(
       const n = syllableIndexFromGroup(g);
       if (n != null && cb) cb(n);
     });
+    renderCb?.();
   }
   const render = debounce((doc: string) => { void doRender(doc); }, opts.debounceMs);
 
@@ -51,6 +54,7 @@ export function createPreviewPanel(
     sourceMap: () => map,
     svgEl: () => host.querySelector("svg"),
     onSyllable: (fn) => { cb = fn; },
+    onRender: (fn) => { renderCb = fn; },
     destroy: () => { render.cancel(); ro?.disconnect(); },
   };
 }

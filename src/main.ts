@@ -276,6 +276,8 @@ async function boot() {
     panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
+    // Re-injeta as wave lanes após cada render (sobrevive a debounce e resize).
+    panel.onRender(() => { if (waveLanes.enabled()) rebuildWave(); });
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
     const prevOnDocChange = onDocChange;
     onDocChange = () => {

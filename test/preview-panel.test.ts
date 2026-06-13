@@ -34,4 +34,24 @@ describe("painel de preview", () => {
     g.className = "syllable syllable-7";
     expect(syllableIndexFromGroup(g)).toBe(7);
   });
+  it("onRender dispara após cada render (com o SVG já no DOM)", async () => {
+    vi.useFakeTimers();
+    const host = document.createElement("div");
+    const panel = createPreviewPanel(host, new FakeEngine(), { debounceMs: 10 });
+    let calls = 0;
+    let svgPresentAtCall = false;
+    panel.onRender(() => {
+      calls++;
+      svgPresentAtCall = host.querySelector("svg") !== null;
+    });
+    panel.update("(c4) Ve(f) ni(g)");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(calls).toBe(1);
+    expect(svgPresentAtCall).toBe(true);
+    // segundo render → segundo disparo
+    panel.update("(c4) Ve(f) ni(g) tu(h)");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(calls).toBe(2);
+    vi.useRealTimers();
+  });
 });
