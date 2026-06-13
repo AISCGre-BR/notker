@@ -284,7 +284,12 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .wave-lane { pointer-events: auto; }
 .wave-line { fill: none; stroke: var(--ink-muted); vector-effect: non-scaling-stroke; }
 .wave-line.playing { stroke: var(--rubric); }
+.wave-line.hovered { stroke: var(--rubric); }
 .wave-halo { fill: none; stroke: var(--rubric-soft); stroke-linecap: round; }
+.wave-dot { fill: var(--ink-muted); }
+.wave-dot.hovered { fill: var(--rubric); }
+/* linha-guia (hover): liga o trecho da nota ao neuma correspondente na pauta */
+.wave-guide { stroke: var(--rubric-soft); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.75; vector-effect: non-scaling-stroke; pointer-events: none; }
 .wave-hit { fill: transparent; cursor: ns-resize; }
 
 /* ── Lista lateral de documentos ──────────────────────────────────────────── */

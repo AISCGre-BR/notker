@@ -26,6 +26,7 @@ export interface LaneNote extends NoteIdent {
 
 export interface System {
   yBaseline: number;      // base dos glifos do sistema (y + height máx)
+  yTop: number;           // topo dos glifos do sistema (y mín) — alvo da linha-guia
   xRange: [number, number];
   notes: LaneNote[];
 }
@@ -63,6 +64,7 @@ export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylB
 
   const systems: System[] = bands.map((band) => ({
     yBaseline: Math.max(...band.map((b) => b.y + b.height)),
+    yTop: Math.min(...band.map((b) => b.y)),
     xRange: [Math.min(...band.map((b) => b.x)), Math.max(...band.map((b) => b.x + b.width))],
     notes: [],
   }));
@@ -156,6 +158,9 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
     const lines: SVGElement[] = [];
     const hits: SVGElement[] = [];
 
+    const dots: SVGElement[] = [];
+    const guideTop = sys.yTop - laneTop; // y local do topo do sistema (acima da lane)
+
     let prevX: number | null = null, prevY: number | null = null;
     for (const n of sys.notes) {
       const y = pitchToLaneY(n.pitch, LANE_HEIGHT);
@@ -180,26 +185,56 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       p.setAttribute("stroke-width", String(factorToStrokeWidth(n.factor)));
       lines.push(p);
 
+      // marcador de nota (ponto) — torna as notas discretas do melisma visíveis
+      const dot = document.createElementNS(SVG_NS, "circle");
+      dot.setAttribute("class", "wave-dot");
+      dot.setAttribute("data-key", key);
+      dot.setAttribute("cx", String(n.x));
+      dot.setAttribute("cy", String(y));
+      dot.setAttribute("r", "1.6");
+      dots.push(dot);
+
       const hit = document.createElementNS(SVG_NS, "rect");
       hit.setAttribute("class", "wave-hit");
       hit.setAttribute("data-key", key);
-      hit.setAttribute("x", String(n.x - 6));
+      hit.setAttribute("x", String(n.x - 7));
       hit.setAttribute("y", "0");
-      hit.setAttribute("width", "12");
+      hit.setAttribute("width", "14");
       hit.setAttribute("height", String(LANE_HEIGHT));
       hit.addEventListener("pointerdown", (ev) => {
         hooks.onFactorDrag?.(key, n.syllableIndex, n.noteInSyllable, n.factor, (ev as PointerEvent).clientY);
         ev.preventDefault();
       });
-      hit.addEventListener("pointerenter", () => hooks.onHover?.(n.realSyllableIndex));
-      hit.addEventListener("pointerleave", () => hooks.onHover?.(null));
+      // hover: realça o trecho+ponto desta nota e sobe uma linha-guia até o neuma
+      hit.addEventListener("pointerenter", () => {
+        p.classList.add("hovered");
+        dot.classList.add("hovered");
+        const guide = document.createElementNS(SVG_NS, "line");
+        guide.setAttribute("class", "wave-guide");
+        guide.setAttribute("x1", String(n.x));
+        guide.setAttribute("x2", String(n.x));
+        guide.setAttribute("y1", String(y));
+        guide.setAttribute("y2", String(guideTop));
+        lane.appendChild(guide); // por cima de tudo, sobre a lane corrente
+        (hit as unknown as { _guide?: SVGElement })._guide = guide;
+        hooks.onHover?.(n.realSyllableIndex);
+      });
+      hit.addEventListener("pointerleave", () => {
+        p.classList.remove("hovered");
+        dot.classList.remove("hovered");
+        (hit as unknown as { _guide?: SVGElement })._guide?.remove();
+        hooks.onHover?.(null);
+      });
       hits.push(hit);
 
-      prevX = n.x; prevY = y;
+      // quebra o contorno na PAUSA (divisio) — a onda respira, não atravessa a pausa
+      if (n.divisioAfter) { prevX = null; prevY = null; }
+      else { prevX = n.x; prevY = y; }
     }
 
     for (const el of halos) lane.appendChild(el);
     for (const el of lines) lane.appendChild(el);
+    for (const el of dots)  lane.appendChild(el);
     for (const el of hits)  lane.appendChild(el);
     layer.appendChild(lane);
   }

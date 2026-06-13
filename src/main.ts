@@ -220,15 +220,20 @@ async function boot() {
     },
   });
 
+  // Rótulo do alongamento p/ a leitura ao vivo no rodapé (na estética: sem floats).
+  const fatorLabel = (f: number): string =>
+    Math.abs(f - 1) < 0.01 ? "neumático puro" : `×${f.toFixed(2).replace(".", ",")}`;
   window.addEventListener("pointermove", (ev) => {
     if (!dragState) return;
     const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
     const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
+    setStatus(`onda: alongamento ${fatorLabel(f)} — nota ${dragState.note + 1}`);
   });
   window.addEventListener("pointerup", (ev) => {
     if (!dragState) return;
     const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
     wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
+    setStatus(`onda: nota ${dragState.note + 1} — ${fatorLabel(f)}`);
     dragState = null;
     rebuildWave();
   });

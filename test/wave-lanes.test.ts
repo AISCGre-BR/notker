@@ -52,7 +52,7 @@ describe("bboxToRoot (bbox local → espaço do <svg> via CTM)", () => {
 function svgWithSystems() {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   const systems = [
-    { yBaseline: 30, xRange: [10, 60] as [number, number], notes: [
+    { yBaseline: 30, yTop: 8, xRange: [10, 60] as [number, number], notes: [
       { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 20 },
       { syllableIndex: 1, realSyllableIndex: 2, noteInSyllable: 0, pitch: "h", alt: 0, factor: 2.0, divisioAfter: null, x: 50 },
     ]},
@@ -80,6 +80,25 @@ describe("renderWaveLanes", () => {
     renderWaveLanes(svg, systems, {});
     expect(svg.querySelectorAll(".wave-lane-layer").length).toBe(1);
     expect(svg.querySelectorAll(".wave-line").length).toBe(2);
+  });
+  it("desenha um marcador (ponto) por nota", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    expect(svg.querySelectorAll(".wave-dot").length).toBe(2);
+  });
+  it("interrompe o contorno na divisio — a nota após a pausa começa um traço novo", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const systems = [{
+      yBaseline: 30, yTop: 8, xRange: [10, 90] as [number, number], notes: [
+        { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: "minima" as const, x: 20 },
+        { syllableIndex: 1, realSyllableIndex: 2, noteInSyllable: 0, pitch: "h", alt: 0, factor: 1, divisioAfter: null, x: 60 },
+      ],
+    }];
+    renderWaveLanes(svg, systems, {});
+    const lines = svg.querySelectorAll<SVGPathElement>(".wave-line");
+    const d2 = lines[1].getAttribute("d") ?? "";
+    expect(d2).toContain(" L "); // traço-stub de nota inicial
+    expect(d2).not.toContain("Q"); // NÃO conecta por bezier à nota anterior
   });
 });
 
@@ -217,14 +236,14 @@ describe("renderWaveLanes — multi-sistema", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const systems = [
       {
-        yBaseline: 30,
+        yBaseline: 30, yTop: 8,
         xRange: [10, 60] as [number, number],
         notes: [
           { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 20 },
         ],
       },
       {
-        yBaseline: 120,
+        yBaseline: 120, yTop: 98,
         xRange: [10, 60] as [number, number],
         notes: [
           { syllableIndex: 1, realSyllableIndex: 2, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 15 },
@@ -292,7 +311,7 @@ describe("deformLiveSegment — halo ao vivo durante arrasto", () => {
     // Sistema com nota única: syllableIndex=0, noteInSyllable=0 → data-key="0:0"
     const systems = [
       {
-        yBaseline: 30,
+        yBaseline: 30, yTop: 8,
         xRange: [10, 60] as [number, number],
         notes: [
           { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 20 },

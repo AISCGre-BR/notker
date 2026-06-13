@@ -1,9 +1,14 @@
 /** onda-probe.ts — harness de diagnóstico (NÃO faz parte do app).
  *  Renderiza um canto multi-sistema num browser real (getBBox/getCTM funcionam,
- *  ao contrário do jsdom), desenha as lanes e despeja as coordenadas reais.
- *  Servido por vite em /debug/onda-probe.html; capturado por chromium headless. */
+ *  ao contrário do jsdom), monta notas reais da timeline, desenha as lanes
+ *  (com marcadores, quebra nas pausas, alguns alargamentos e uma guia de hover
+ *  simulada) e despeja coordenadas. Servido por vite em /debug/onda-probe.html. */
 import { NabcLibEngine } from "../src/preview/nabc-lib";
 import { readSyllableBoxes, mapSystems, renderWaveLanes, type NoteIdent } from "../src/preview/wave-lanes";
+import { extractAll } from "../src/tuotilo/signs";
+import { buildTimeline } from "../src/tuotilo/timeline";
+import { computeTimedNotes } from "../src/tuotilo/duration";
+import { DEFAULT_PROFILE } from "../src/tuotilo/profile";
 
 const dumpEl = document.getElementById("dump")!;
 const r = (n: number) => Math.round(n);
@@ -16,28 +21,40 @@ async function main(): Promise<void> {
   host.innerHTML = res.svg;
   const svg = host.querySelector("svg")! as SVGSVGElement;
 
-  const boxes = readSyllableBoxes(svg);
-  const idxs = [...boxes.keys()].sort((a, b) => a - b);
-  // 1 nota por sílaba real — suficiente p/ revelar a detecção de sistemas
-  const notes: NoteIdent[] = idxs.map((idx) => ({
-    syllableIndex: idx, realSyllableIndex: idx, noteInSyllable: 0,
-    pitch: "f", alt: 0, factor: 1, divisioAfter: null,
+  // Notas reais da timeline (espelha o rebuildWave do main).
+  const map = res.sourceMap;
+  const reals = map.filter((s) => s.syllableIndex >= 1);
+  const syls = extractAll(doc, map);
+  const tl = buildTimeline(syls);
+  const base = computeTimedNotes(tl, DEFAULT_PROFILE, 12345, "interpretado");
+  const notes: NoteIdent[] = base.notes.map((n, i) => ({
+    syllableIndex: n.syllableIndex,
+    realSyllableIndex: reals[n.syllableIndex]?.syllableIndex ?? (n.syllableIndex + 1),
+    noteInSyllable: n.noteInSyllable,
+    pitch: n.pitch, alt: n.alt,
+    factor: i % 6 === 3 ? 1.7 : 1, // alguns alargados p/ mostrar espessura+halo
+    divisioAfter: n.pauseAfterMs > 0
+      ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
+      : null,
   }));
+
+  const boxes = readSyllableBoxes(svg);
   const systems = mapSystems(notes, boxes);
   renderWaveLanes(svg, systems, {});
 
-  const dump = {
-    nBoxes: [...boxes.values()].reduce((s, a) => s + a.length, 0),
+  // Hover simulado numa nota p/ mostrar a linha-guia + realce no screenshot.
+  const hit = svg.querySelector<SVGRectElement>('.wave-hit[data-key="6:2"]')
+    ?? svg.querySelector<SVGRectElement>(".wave-hit");
+  hit?.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
+
+  dumpEl.textContent = JSON.stringify({
+    nNotes: notes.length,
     nSystems: systems.length,
-    svgWidth: svg.getAttribute("width"),
-    svgHeight: svg.getAttribute("height"),
-    rootGroupTransform: svg.querySelector(".root-group")?.getAttribute("transform") ?? null,
-    boxes: idxs.map((idx) => (boxes.get(idx) ?? []).map((b) =>
-      `#${idx} x=${r(b.x)} y=${r(b.y)} w=${r(b.width)} h=${r(b.height)}`)).flat(),
+    nDots: svg.querySelectorAll(".wave-dot").length,
+    nBreaks: notes.filter((n) => n.divisioAfter).length,
     systems: systems.map((s, i) =>
-      `sys${i} yBaseline=${r(s.yBaseline)} notas=${s.notes.length} xR=[${r(s.xRange[0])},${r(s.xRange[1])}]`),
-  };
-  dumpEl.textContent = JSON.stringify(dump, null, 1);
+      `sys${i} yTop=${r(s.yTop)} yBaseline=${r(s.yBaseline)} notas=${s.notes.length}`),
+  }, null, 1);
   document.title = "PROBE_DONE";
 }
 
