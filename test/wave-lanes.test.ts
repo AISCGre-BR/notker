@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapSystems, type SylBox, type NoteIdent } from "../src/preview/wave-lanes";
+import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
 
 const note = (s: number, n: number, pitch = "f"): NoteIdent =>
   ({ syllableIndex: s, realSyllableIndex: s, noteInSyllable: n, pitch, alt: 0, factor: 1, divisioAfter: null });
@@ -85,5 +85,32 @@ describe("mapSystems", () => {
     expect(sys[0].notes).toHaveLength(1);
     expect(sys[1].notes).toHaveLength(0);
     expect(sys[0].notes[0].x).toBeCloseTo(100);
+  });
+});
+
+describe("codificação visual do fator", () => {
+  it("espessura cresce com o fator e satura nos limites", () => {
+    expect(factorToStrokeWidth(1)).toBeCloseTo(1.7, 1);
+    expect(factorToStrokeWidth(2.5)).toBeGreaterThan(factorToStrokeWidth(1));
+    expect(factorToStrokeWidth(0.5)).toBeGreaterThanOrEqual(1.0);
+    expect(factorToStrokeWidth(0.5)).toBeLessThan(factorToStrokeWidth(1));
+    expect(factorToStrokeWidth(99)).toBeLessThanOrEqual(5.0); // clamp superior
+  });
+  it("halo só aparece quando há alargamento (fator > 1)", () => {
+    expect(factorToHaloOpacity(1)).toBe(0);
+    expect(factorToHaloOpacity(0.7)).toBe(0);
+    expect(factorToHaloOpacity(2.5)).toBeGreaterThan(0);
+    expect(factorToHaloOpacity(99)).toBeLessThanOrEqual(0.55); // clamp
+  });
+});
+
+describe("pitchToLaneY", () => {
+  it("nota grave fica mais baixa (y maior) que nota aguda", () => {
+    const yLow = pitchToLaneY("d", 22);
+    const yHigh = pitchToLaneY("l", 22);
+    expect(yLow).toBeGreaterThan(yHigh);
+  });
+  it("pitch desconhecido cai no meio sem lançar", () => {
+    expect(() => pitchToLaneY("?", 22)).not.toThrow();
   });
 });

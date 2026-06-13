@@ -2,6 +2,8 @@
  *  Mapeia bounding-boxes das sílabas em SISTEMAS (linhas da pauta) e distribui
  *  as notas de cada sílaba pela largura da sílaba (ancoragem por posição, não tempo). */
 
+import { staffOffset } from "../gabc/gabc-pitch";
+
 export interface SylBox {
   syllableIndex: number;
   x: number; y: number; width: number; height: number;
@@ -85,4 +87,28 @@ export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylB
 
   for (const s of systems) s.notes.sort((a, b) => a.x - b.x);
   return systems;
+}
+
+const SW_BASE = 1.7, SW_MIN = 1.0, SW_MAX = 5.0;
+const HALO_MAX = 0.55, HALO_SLOPE = 0.42;
+
+/** Fator → espessura do traço. Curva irregular (expoente 0.85; sem razão limpa,
+ *  ver memória D-23) saturada em [SW_MIN, SW_MAX]. */
+export function factorToStrokeWidth(factor: number): number {
+  const w = SW_BASE * Math.pow(Math.max(0.01, factor), 0.85);
+  return Math.min(SW_MAX, Math.max(SW_MIN, w));
+}
+
+/** Fator → opacidade do halo rubrica. 0 até fator 1; sobe linear depois, clamp. */
+export function factorToHaloOpacity(factor: number): number {
+  if (factor <= 1) return 0;
+  return Math.min(HALO_MAX, (factor - 1) * HALO_SLOPE);
+}
+
+/** Altura (y local na lane) a partir do pitch. staffOffset 0..12; inverte
+ *  (agudo = y menor). Reaproveita a régua de gabc-pitch. */
+export function pitchToLaneY(pitch: string, laneHeight: number): number {
+  const off = staffOffset(pitch);
+  const o = isNaN(off) ? 6 : Math.min(12, Math.max(0, off));
+  return laneHeight - (o / 12) * (laneHeight - 4) - 2;
 }
