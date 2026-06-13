@@ -181,27 +181,33 @@ describe("mapSystems", () => {
     expect(sys[1].notes).toHaveLength(1);
   });
 
-  it("melisma K=3 em box único → x distribuídos linearmente em 5, 15, 25", () => {
-    // g = (j+0.5)/K, local = g/1.0 = g, x = 0 + g*30
-    // nota 0: g=0.5/3≈0.1667 → x=5
-    // nota 1: g=1.5/3=0.5    → x=15
-    // nota 2: g=2.5/3≈0.8333 → x=25
+  it("melisma em box LARGO (≥ k×MIN_DX) → distribuição linear pela largura", () => {
+    // box w=60, K=3: span=max(60,45)=60 → x = (j+0.5)/3 × 60 = 10, 30, 50
     const notes = [note(0, 0), note(0, 1), note(0, 2)];
     const boxes = new Map<number, SylBox[]>([
-      [0, [{ syllableIndex: 0, x: 0, y: 5, width: 30, height: 10 }]],
+      [0, [{ syllableIndex: 0, x: 0, y: 5, width: 60, height: 10 }]],
     ]);
     const sys = mapSystems(notes, boxes);
     expect(sys).toHaveLength(1);
-    const xs = sys[0].notes.map((n) => n.x);
-    expect(xs[0]).toBeCloseTo(5);
-    expect(xs[1]).toBeCloseTo(15);
-    expect(xs[2]).toBeCloseTo(25);
+    expect(sys[0].notes.map((n) => n.x)).toEqual([10, 30, 50]);
   });
 
-  it("K=1 spanning duas boxes iguais → note cai na primeira box (seam: g≤acc+frac) com x≈100", () => {
-    // totalW=20, g=(0+0.5)/1=0.5, frac da 1ª box=10/20=0.5
-    // condição: 0.5 <= 0 + 0.5 → true → chosen=1ª box (y≈5)
-    // local=(0.5-0)/0.5=1.0 → x = 90 + 1.0*10 = 100
+  it("neuma COMPACTO (clivis K=2, glifo estreito) → notas recebem ESPAÇO MÍNIMO centrado", () => {
+    // glifo estreito (w=8) centrado em x=100; K=2 → span=max(8, 2×15)=30 centrado em 100
+    // → notas em 92.5 e 107.5 (≥ MIN_DX=15 de distância, distinguíveis/clicáveis)
+    const notes = [note(0, 0), note(0, 1)];
+    const boxes = new Map<number, SylBox[]>([
+      [0, [{ syllableIndex: 0, x: 96, y: 5, width: 8, height: 10 }]],
+    ]);
+    const sys = mapSystems(notes, boxes);
+    const xs = sys[0].notes.map((n) => n.x);
+    expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(15);
+    expect((xs[0] + xs[1]) / 2).toBeCloseTo(100); // centrado no glifo
+  });
+
+  it("K=1 spanning duas boxes iguais → note cai na primeira box (seam: g≤acc+frac)", () => {
+    // totalW=20, g=0.5, frac da 1ª box=0.5 → 0.5<=0.5 → 1ª box (y≈5).
+    // 1 nota nessa box: span=max(10, 1×15)=15 centrado em 95 → x=95.
     const notes = [note(0, 0)];
     const boxes = new Map<number, SylBox[]>([
       [0, [
@@ -214,7 +220,7 @@ describe("mapSystems", () => {
     // a nota cai no sistema da banda y≈5 (sistema 0)
     expect(sys[0].notes).toHaveLength(1);
     expect(sys[1].notes).toHaveLength(0);
-    expect(sys[0].notes[0].x).toBeCloseTo(100);
+    expect(sys[0].notes[0].x).toBeCloseTo(95);
   });
 });
 

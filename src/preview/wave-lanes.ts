@@ -32,6 +32,7 @@ export interface System {
 }
 
 const BAND_GAP_FACTOR = 0.45; // fração da altura mediana: gap maior que isso = novo sistema
+const MIN_NOTE_DX = 15;       // px mínimos por nota na lane (separa notas de neumas compactos)
 
 /** Agrupa boxes em SISTEMAS (linhas da pauta) por GAP nos TOPOS (y).
  *  Validado contra coordenadas REAIS do nabc-lib (Dies sanctificatus, 121 boxes):
@@ -69,33 +70,45 @@ export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylB
     notes: [],
   }));
 
-  // contagem de notas por sílaba (pelo índice REAL — o mesmo que indexa as boxes)
-  const countBySyl = new Map<number, number>();
-  for (const n of notes) countBySyl.set(n.realSyllableIndex, (countBySyl.get(n.realSyllableIndex) ?? 0) + 1);
-
+  // agrupa notas por sílaba REAL (ordem do documento preservada)
+  const bySyl = new Map<number, NoteIdent[]>();
   for (const n of notes) {
-    const boxes = (boxesBySyllable.get(n.realSyllableIndex) ?? [])
-      .slice()
-      .sort((a, b) => a.y - b.y || a.x - b.x);
+    const arr = bySyl.get(n.realSyllableIndex);
+    if (arr) arr.push(n);
+    else bySyl.set(n.realSyllableIndex, [n]);
+  }
+
+  for (const [realIdx, sylNotes] of bySyl) {
+    const boxes = (boxesBySyllable.get(realIdx) ?? []).slice().sort((a, b) => a.y - b.y || a.x - b.x);
     if (boxes.length === 0) continue;
-    const K = countBySyl.get(n.realSyllableIndex) ?? 1;
-    const g = (n.noteInSyllable + 0.5) / K; // fração global da nota na sílaba
+    const K = sylNotes.length;
     const totalW = boxes.reduce((s, b) => s + b.width, 0) || 1;
-    // acha a box cuja faixa cumulativa cobre g
-    let acc = 0;
-    let chosen = boxes[boxes.length - 1];
-    let local = 0.5;
-    for (const b of boxes) {
-      const frac = b.width / totalW;
-      if (g <= acc + frac || b === boxes[boxes.length - 1]) {
-        chosen = b;
-        local = frac > 0 ? Math.min(1, Math.max(0, (g - acc) / frac)) : 0.5;
-        break;
+
+    // 1) atribui cada nota a uma box (fração cumulativa por noteInSyllable)
+    const perBox: NoteIdent[][] = boxes.map(() => []);
+    for (const n of sylNotes) {
+      const g = (n.noteInSyllable + 0.5) / K;
+      let acc = 0, bi = boxes.length - 1;
+      for (let b = 0; b < boxes.length; b++) {
+        const frac = boxes[b].width / totalW;
+        if (g <= acc + frac) { bi = b; break; }
+        acc += frac;
       }
-      acc += frac;
+      perBox[bi].push(n);
     }
-    const sysIdx = sysOfBox.get(chosen)!;
-    systems[sysIdx].notes.push({ ...n, x: chosen.x + local * chosen.width });
+
+    // 2) distribui DENTRO de cada box com ESPAÇO MÍNIMO por nota (centrado no glifo):
+    //    neumas compactos (clivis, pes, …) ganham notas distinguíveis/clicáveis mesmo
+    //    quando o glifo é estreito — span = max(largura do glifo, k × MIN_NOTE_DX).
+    boxes.forEach((box, bi) => {
+      const arr = perBox[bi];
+      const k = arr.length;
+      if (k === 0) return;
+      const span = Math.max(box.width, k * MIN_NOTE_DX);
+      const start = box.x + box.width / 2 - span / 2;
+      const sysIdx = sysOfBox.get(box)!;
+      arr.forEach((n, j) => systems[sysIdx].notes.push({ ...n, x: start + ((j + 0.5) / k) * span }));
+    });
   }
 
   for (const s of systems) s.notes.sort((a, b) => a.x - b.x);
