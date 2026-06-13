@@ -14,9 +14,9 @@ export interface PreviewPanel {
   svgEl(): SVGSVGElement | null;
   onSyllable(cb: (syllableIndex: number) => void): void;
   onRender(cb: () => void): void;
-  /** Espaçamento extra (px) entre sistemas — abre vão p/ as lanes da onda.
-   *  Mudar o valor re-renderiza a partitura. */
-  setExtraLineSpacing(px: number): void;
+  /** Layout da onda: vão extra (px) entre sistemas + fator de espalhamento horizontal
+   *  (>1 afasta notas em melismas densos). Mudar qualquer valor re-renderiza. */
+  setWaveSpacing(extraLineSpacingPx: number, horizontalSpread: number): void;
   destroy(): void;
 }
 
@@ -30,6 +30,7 @@ export function createPreviewPanel(
   let renderCb: (() => void) | null = null;
   let lastDoc = "";
   let extraLineSpacingPx = 0;
+  let horizontalSpread = 1;
 
   async function doRender(doc: string) {
     // Largura útil da prancha (descontando padding ~22px de cada lado + moldura).
@@ -37,6 +38,7 @@ export function createPreviewPanel(
     const r = await engine.render(doc, {
       widthPx: inner > 120 ? inner : undefined,
       extraLineSpacingPx: extraLineSpacingPx || undefined,
+      horizontalSpreadFactor: horizontalSpread > 1 ? horizontalSpread : undefined,
     });
     map = r.sourceMap;
     host.innerHTML = r.svg;
@@ -62,9 +64,10 @@ export function createPreviewPanel(
     svgEl: () => host.querySelector("svg"),
     onSyllable: (fn) => { cb = fn; },
     onRender: (fn) => { renderCb = fn; },
-    setExtraLineSpacing: (px) => {
-      if (px === extraLineSpacingPx) return;
+    setWaveSpacing: (px, spread) => {
+      if (px === extraLineSpacingPx && spread === horizontalSpread) return;
       extraLineSpacingPx = px;
+      horizontalSpread = spread;
       if (lastDoc) render(lastDoc);
     },
     destroy: () => { render.cancel(); ro?.disconnect(); },

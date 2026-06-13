@@ -9,6 +9,9 @@ export interface RenderOptions {
   /** Espaçamento EXTRA (px) acima de cada sistema — usado p/ abrir vão p/ as lanes
    *  da onda quando ela está ativa. Some-se ao chantLineTopPaddingPx padrão. */
   extraLineSpacingPx?: number;
+  /** Fator de ESPALHAMENTO horizontal (>1) — multiplica os espaços entre notas/glifos
+   *  (gabc e nabc) p/ afastar notas em melismas densos quando a onda está ativa. */
+  horizontalSpreadFactor?: number;
 }
 export interface PreviewEngine {
   readonly id: string;

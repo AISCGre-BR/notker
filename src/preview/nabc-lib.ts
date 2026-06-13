@@ -34,7 +34,7 @@ export function syllableSpans(doc: string): SyllableSource[] {
 
 export class NabcLibEngine implements PreviewEngine {
   readonly id = "nabc-lib";
-  async render(doc: string, opts?: { widthPx?: number; extraLineSpacingPx?: number }): Promise<RenderResult> {
+  async render(doc: string, opts?: { widthPx?: number; extraLineSpacingPx?: number; horizontalSpreadFactor?: number }): Promise<RenderResult> {
     const [lib, fonts] = await Promise.all([
       import("@testneumz/nabc-lib"),
       import("./nabc-fonts"),
@@ -56,6 +56,28 @@ export class NabcLibEngine implements PreviewEngine {
       const pxInCm = (ctx as unknown as { pxInCm?: number }).pxInCm ?? 55.22;
       (ctx as unknown as { spaceabovelines: unknown }).spaceabovelines =
         new LengthCtor((opts.extraLineSpacingPx * 10) / pxInCm, "mm");
+    }
+    // Espalhamento HORIZONTAL: multiplica o `space` base dos espaços elásticos entre
+    // notas/glifos (gabc e nabc) — afasta notas em melismas densos sem deformar glifos.
+    if (opts?.horizontalSpreadFactor && opts.horizontalSpreadFactor > 1) {
+      const f = opts.horizontalSpreadFactor;
+      const libx = lib as unknown as {
+        Length: new (n: number, u: string) => unknown;
+        RubberLength: new (s: unknown, st: unknown, sh: unknown) => unknown;
+      };
+      type Len = { space: number; unit: string };
+      type Rub = { space: Len; stretch: unknown; shrink: unknown };
+      const cx = ctx as unknown as Record<string, unknown>;
+      const scaleRub = (rl: Rub) =>
+        new libx.RubberLength(new libx.Length(rl.space.space * f, rl.space.unit), rl.stretch, rl.shrink);
+      const scaleLen = (l: Len) => new libx.Length(l.space * f, l.unit);
+      for (const k of [
+        "interglyphspace", "interelementspace", "glyphspace", "largerspace", "halfspace",
+        "interwordspacenotes", "nabcinterelementspace", "nabclargerspace",
+      ]) {
+        if (cx[k]) cx[k] = scaleRub(cx[k] as Rub);
+      }
+      if (cx.intersyllablespacenotes) cx.intersyllablespacenotes = scaleLen(cx.intersyllablespacenotes as Len);
     }
     const score = new GregorioScore(ctx);
     // O nabc-lib espera APENAS o corpo da partitura (depois do `%%`); os cabeçalhos

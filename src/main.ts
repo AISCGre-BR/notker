@@ -201,8 +201,10 @@ async function boot() {
   // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
   const WAVE_SEED = 12345;
   // Vão extra (px) aberto entre sistemas quando a onda está ativa (≈ altura da lane
-  // + folga); validado no harness de diagnóstico (debug/onda-probe).
+  // + folga); e fator de espalhamento horizontal p/ afastar notas em melismas densos.
+  // Validados no harness de diagnóstico (debug/onda-probe).
   const WAVE_LINE_SPACING_PX = 36;
+  const WAVE_SPREAD = 1.8;
   let wave: WaveOverlay = emptyWave("");
 
   // Estado do arrasto vertical de fator.
@@ -581,9 +583,10 @@ async function boot() {
     toggleWave: () => {
       const on = !waveLanes.enabled();
       waveLanes.setEnabled(on);
-      // Abre/fecha o vão entre sistemas para acomodar as lanes. O re-render dispara
-      // onRender → rebuildWave, que (re)desenha as lanes já no layout espaçado.
-      panel?.setExtraLineSpacing(on ? WAVE_LINE_SPACING_PX : 0);
+      // Abre/fecha o vão entre sistemas + espalha as notas na horizontal (melismas
+      // densos). O re-render dispara onRender → rebuildWave, que (re)desenha as lanes
+      // já no layout espaçado.
+      panel?.setWaveSpacing(on ? WAVE_LINE_SPACING_PX : 0, on ? WAVE_SPREAD : 1);
       if (on) syncWaveWithDoc();
       setStatus(on ? "onda: visível" : "onda: oculta");
     },

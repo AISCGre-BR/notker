@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   const doc = await fetch("/samples/04-dies-sanctificatus.gabc").then((x) => x.text());
   const engine = new NabcLibEngine();
   const host = document.getElementById("preview")!;
-  const res = await engine.render(doc, { widthPx: 680, extraLineSpacingPx: 36 });
+  const res = await engine.render(doc, { widthPx: 680, extraLineSpacingPx: 36, horizontalSpreadFactor: 1.8 });
   host.innerHTML = res.svg;
   const svg = host.querySelector("svg")! as SVGSVGElement;
 
