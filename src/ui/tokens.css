@@ -85,6 +85,18 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 }
 .toolbar-btn:hover { color: var(--rubric); border-bottom-color: var(--rubric); }
 .toolbar-btn:active { color: var(--rubric-soft); }
+/* toggle ligado: sublinhado rubricado persistente (mesma linguagem do hover) */
+.toolbar-btn.pressed { color: var(--ink); border-bottom-color: var(--rubric); }
+/* ação primária (Tocar): rubrica cheia */
+.toolbar-btn.toolbar-primary {
+  color: var(--cream); background: var(--rubric);
+  border: 1px solid var(--rubric); padding: 8px 14px 7px;
+}
+.toolbar-btn.toolbar-primary:hover { background: var(--rubric-soft); color: var(--cream); }
+.toolbar-sep {
+  display: inline-block; width: 1px; height: 18px;
+  background: var(--rule); margin: 0 8px; align-self: center;
+}
 
 /* ── Workspace / preview como "prancha" emoldurada ─────────────────────────── */
 #workspace { background: var(--cream); }
