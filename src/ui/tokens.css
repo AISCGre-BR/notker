@@ -333,6 +333,30 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .newdlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .newdlg-actions button { padding: 6px 12px; cursor: pointer; }
 
+/* ── Barra contextual da onda (spec B) ─────────────────────────────────────── */
+.wave-bar {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--cream-deep); border-bottom: 1px solid var(--rule);
+  padding: 4px 12px; font: 11px/1.5 var(--font); color: var(--ink-soft);
+}
+.wave-bar-title {
+  color: var(--rubric); font-weight: 600;
+  letter-spacing: 0.05em; white-space: nowrap;
+}
+.wave-bar-msg { flex: 1 1 auto; color: var(--ink-muted); font-style: italic; }
+.wave-bar-msg.wave-bar-warn { color: var(--rubric); font-style: normal; }
+.wave-bar-count {
+  color: var(--ink-muted); letter-spacing: 0.04em;
+  text-transform: uppercase; font-size: 10px; white-space: nowrap;
+}
+.wave-bar-reset {
+  font: 500 10px/1 var(--font); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--ink-soft); background: transparent;
+  border: 1px solid var(--rule); padding: 4px 10px; cursor: pointer;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease);
+}
+.wave-bar-reset:hover { color: var(--rubric); border-color: var(--rubric); }
+
 /* ── Onda integrada (lanes sob cada sistema) ──────────────────────────────── */
 .wave-lane-layer { pointer-events: none; }
 .wave-lane { pointer-events: auto; }
