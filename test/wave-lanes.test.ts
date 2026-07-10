@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
 import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes, deformLiveSegment } from "../src/preview/wave-lanes";
+import { WAVE_SPREAD, WAVE_LINE_SPACING_PX, MIN_NOTE_DX } from "../src/preview/wave-lanes";
 import { bboxToRoot } from "../src/preview/wave-lanes";
 import { WAVE_MIN, WAVE_MAX } from "../src/tuotilo/wave";
 import diesBoxes from "./fixtures/dies-sanctificatus-boxes.json";
@@ -182,32 +183,32 @@ describe("mapSystems", () => {
   });
 
   it("melisma em box LARGO (≥ k×MIN_DX) → distribuição linear pela largura", () => {
-    // box w=60, K=3: span=max(60,45)=60 → x = (j+0.5)/3 × 60 = 10, 30, 50
+    // box w=90, K=3: span=max(90, 3×24=72)=90 → x = (j+0.5)/3 × 90 = 15, 45, 75
     const notes = [note(0, 0), note(0, 1), note(0, 2)];
     const boxes = new Map<number, SylBox[]>([
-      [0, [{ syllableIndex: 0, x: 0, y: 5, width: 60, height: 10 }]],
+      [0, [{ syllableIndex: 0, x: 0, y: 5, width: 90, height: 10 }]],
     ]);
     const sys = mapSystems(notes, boxes);
     expect(sys).toHaveLength(1);
-    expect(sys[0].notes.map((n) => n.x)).toEqual([10, 30, 50]);
+    expect(sys[0].notes.map((n) => n.x)).toEqual([15, 45, 75]);
   });
 
   it("neuma COMPACTO (clivis K=2, glifo estreito) → notas recebem ESPAÇO MÍNIMO centrado", () => {
-    // glifo estreito (w=8) centrado em x=100; K=2 → span=max(8, 2×15)=30 centrado em 100
-    // → notas em 92.5 e 107.5 (≥ MIN_DX=15 de distância, distinguíveis/clicáveis)
+    // glifo estreito (w=8) centrado em x=100; K=2 → span=max(8, 2×24)=48 centrado em 100
+    // → notas em 88 e 112 (MIN_NOTE_DX=24 de distância, distinguíveis/clicáveis)
     const notes = [note(0, 0), note(0, 1)];
     const boxes = new Map<number, SylBox[]>([
       [0, [{ syllableIndex: 0, x: 96, y: 5, width: 8, height: 10 }]],
     ]);
     const sys = mapSystems(notes, boxes);
     const xs = sys[0].notes.map((n) => n.x);
-    expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(15);
+    expect(xs[1] - xs[0]).toBeCloseTo(MIN_NOTE_DX);
     expect((xs[0] + xs[1]) / 2).toBeCloseTo(100); // centrado no glifo
   });
 
   it("K=1 spanning duas boxes iguais → note cai na primeira box (seam: g≤acc+frac)", () => {
     // totalW=20, g=0.5, frac da 1ª box=0.5 → 0.5<=0.5 → 1ª box (y≈5).
-    // 1 nota nessa box: span=max(10, 1×15)=15 centrado em 95 → x=95.
+    // 1 nota nessa box: span=max(10, 1×24)=24 centrado em 95 → x=95.
     const notes = [note(0, 0)];
     const boxes = new Map<number, SylBox[]>([
       [0, [
@@ -221,6 +222,20 @@ describe("mapSystems", () => {
     expect(sys[0].notes).toHaveLength(1);
     expect(sys[1].notes).toHaveLength(0);
     expect(sys[0].notes[0].x).toBeCloseTo(95);
+  });
+});
+
+describe("constantes de espalhamento (decisão UAT-8, 2026-07-09)", () => {
+  it("WAVE_SPREAD = 3.4 — abertura validada no probe (Dies: 10 sistemas, divisões legíveis)", () => {
+    expect(WAVE_SPREAD).toBe(3.4);
+  });
+  it("MIN_NOTE_DX = 24 — clivis/neumas compactos acompanham a abertura da partitura", () => {
+    // O spread multiplica só os espaços ELÁSTICOS do nabc-lib; notas dentro do
+    // mesmo glifo não desgrudam com ele — por isso o mínimo por nota sobe junto.
+    expect(MIN_NOTE_DX).toBe(24);
+  });
+  it("WAVE_LINE_SPACING_PX = 36 — vão entre sistemas ≈ altura da lane + folga", () => {
+    expect(WAVE_LINE_SPACING_PX).toBe(36);
   });
 });
 

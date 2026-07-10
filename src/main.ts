@@ -42,7 +42,7 @@ import {
   withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
 } from "./project/model";
 import { createDocList } from "./project/doc-list";
-import { createWaveLanes, factorFromDrag, deformLiveSegment, type NoteIdent } from "./preview/wave-lanes";
+import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
 import type { WaveOverlay } from "./tuotilo/wave";
 import { emptyWave, setWaveFactor, applyWave, gabcBodyHash, waveKey } from "./tuotilo/wave";
 
@@ -200,11 +200,7 @@ async function boot() {
   // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
   // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
   const WAVE_SEED = 12345;
-  // Vão extra (px) aberto entre sistemas quando a onda está ativa (≈ altura da lane
-  // + folga); e fator de espalhamento horizontal p/ afastar notas em melismas densos.
-  // Validados no harness de diagnóstico (debug/onda-probe).
-  const WAVE_LINE_SPACING_PX = 36;
-  const WAVE_SPREAD = 1.8;
+  // Espaçamento com onda ativa (WAVE_LINE_SPACING_PX + WAVE_SPREAD): wave-lanes.ts.
   let wave: WaveOverlay = emptyWave("");
 
   // Estado do arrasto vertical de fator.

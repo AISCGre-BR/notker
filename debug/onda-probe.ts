@@ -4,7 +4,7 @@
  *  (com marcadores, quebra nas pausas, alguns alargamentos e uma guia de hover
  *  simulada) e despeja coordenadas. Servido por vite em /debug/onda-probe.html. */
 import { NabcLibEngine } from "../src/preview/nabc-lib";
-import { readSyllableBoxes, mapSystems, renderWaveLanes, type NoteIdent } from "../src/preview/wave-lanes";
+import { readSyllableBoxes, mapSystems, renderWaveLanes, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "../src/preview/wave-lanes";
 import { extractAll } from "../src/tuotilo/signs";
 import { buildTimeline } from "../src/tuotilo/timeline";
 import { computeTimedNotes } from "../src/tuotilo/duration";
@@ -15,8 +15,9 @@ const r = (n: number) => Math.round(n);
 
 async function main(): Promise<void> {
   const qs = new URLSearchParams(location.search);
-  const spread = Number(qs.get("spread") ?? "1.8");
-  const lineSpacing = Number(qs.get("ls") ?? "36");
+  // Defaults seguem as constantes de produção — passar ?spread=X&ls=Y p/ experimentar.
+  const spread = Number(qs.get("spread") ?? WAVE_SPREAD);
+  const lineSpacing = Number(qs.get("ls") ?? WAVE_LINE_SPACING_PX);
   const doc = await fetch("/samples/04-dies-sanctificatus.gabc").then((x) => x.text());
   const engine = new NabcLibEngine();
   const host = document.getElementById("preview")!;

@@ -32,7 +32,16 @@ export interface System {
 }
 
 const BAND_GAP_FACTOR = 0.45; // fração da altura mediana: gap maior que isso = novo sistema
-const MIN_NOTE_DX = 15;       // px mínimos por nota na lane (separa notas de neumas compactos)
+
+// Espalhamento quando a onda está ativa (decisão UAT-8, 2026-07-09, validada no
+// probe debug/onda-probe): WAVE_SPREAD multiplica os espaços ELÁSTICOS do nabc-lib
+// (Dies com onda ativa: 10 sistemas, divisões legíveis — sem onda são 5); como ele
+// não desgruda notas do MESMO glifo (clivis, pes, …), MIN_NOTE_DX sobe junto para
+// a lane acompanhar a abertura. WAVE_LINE_SPACING_PX é o vão vertical extra entre
+// sistemas (≈ altura da lane + folga) — os dois entram juntos em setWaveSpacing.
+export const WAVE_SPREAD = 3.4;
+export const WAVE_LINE_SPACING_PX = 36;
+export const MIN_NOTE_DX = 24; // px mínimos por nota na lane (separa notas de neumas compactos)
 
 /** Agrupa boxes em SISTEMAS (linhas da pauta) por GAP nos TOPOS (y).
  *  Validado contra coordenadas REAIS do nabc-lib (Dies sanctificatus, 121 boxes):
