@@ -21,7 +21,9 @@ import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
 import { createCommands } from "./ui/commands";
-import { createToolbar } from "./ui/toolbar";
+import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
+import { createMenubar } from "./ui/menubar";
+import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
@@ -196,6 +198,9 @@ async function boot() {
 
   // Referência mutável para limpar o cursor da onda no stopPlayback.
   let waveCursorClear: () => void = () => {};
+  // Handles de UI atribuídos no fim do boot; os closures abaixo rodam depois.
+  let toolbarHandle: ToolbarHandle | null = null;
+  let waveBar: WaveBarHandle | null = null;
 
   // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
   // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
@@ -231,17 +236,18 @@ async function boot() {
     if (!dragState) return;
     const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
     const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
-    setStatus(`onda: alongamento ${fatorLabel(f)} — ${notaLabel(dragState)}`);
+    // Leitura ao vivo na barra da onda (perto do gesto); rodapé fica p/ status geral.
+    waveBar?.setReading(`alongamento ${fatorLabel(f)} — ${notaLabel(dragState)}`);
   });
   window.addEventListener("pointerup", (ev) => {
     if (!dragState) return;
     const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
     wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
-    setStatus(`onda: ${notaLabel(dragState)} — ${fatorLabel(f)}`);
+    waveBar?.setReading(null);
     dragState = null;
     rebuildWave();
   });
-  window.addEventListener("pointercancel", () => { dragState = null; });
+  window.addEventListener("pointercancel", () => { dragState = null; waveBar?.setReading(null); });
 
   // Liga a referência mutável usada em stopPlayback.
   waveCursorClear = () => waveLanes.setCursor(null);
@@ -249,6 +255,7 @@ async function boot() {
   /** Recomputa a onda a partir do doc atual + overlay WaveOverlay e repassa para
    *  o controller de lanes integrado ao SVG da partitura. */
   function rebuildWave(): void {
+    waveBar?.setCount(Object.keys(wave.factors).length);
     const map = panel?.sourceMap?.() ?? [];
     const texto = view.state.doc.toString();
     const reals = map.filter((s) => s.syllableIndex >= 1);
@@ -317,8 +324,8 @@ async function boot() {
   /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
   function stopPlayback(reason?: string): void {
     player.stop();
-    const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
-    if (btn) btn.textContent = "Tocar";
+    toolbarHandle?.setLabel("playToggle", "Tocar");
+    toolbarHandle?.setPressed("playToggle", false);
     const svg = panel?.svgEl?.() ?? null;
     if (svg) clearHighlight(svg);
     waveCursorClear();
@@ -518,8 +525,8 @@ async function boot() {
     // (leitura de solmização); sinais e legato só no interpretado.
     modeToggle: () => {
       playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
-      const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="modo de playback — interpretado/solfejo"]');
-      if (btn) btn.textContent = playbackMode === "interpretado" ? "Interpretado" : "Solfejo";
+      toolbarHandle?.setLabel("modeToggle", playbackMode === "interpretado" ? "Interpretado" : "Solfejo");
+      waveBar?.setSolfejo(playbackMode !== "interpretado");
       if (player.playing) stopPlayback("playback: parado (troca de modo)");
       setStatus("modo de playback: " + playbackMode);
     },
@@ -558,8 +565,8 @@ async function boot() {
         return;
       }
       const svg = panel?.svgEl?.() ?? null;
-      const btn = document.querySelector<HTMLElement>('.toolbar-btn[title="playback semiológico (Tuotilo)"]');
-      if (btn) btn.textContent = "Parar";
+      toolbarHandle?.setLabel("playToggle", "Parar");
+      toolbarHandle?.setPressed("playToggle", true);
       setStatus(range ? "playback: da seleção ao fim…" : "playback: tocando…");
       let lastSyl = -1;
       player.play(
@@ -584,6 +591,9 @@ async function boot() {
       // já no layout espaçado.
       panel?.setWaveSpacing(on ? WAVE_LINE_SPACING_PX : 0, on ? WAVE_SPREAD : 1);
       if (on) syncWaveWithDoc();
+      waveBar?.setVisible(on);
+      waveBar?.setSolfejo(playbackMode !== "interpretado");
+      toolbarHandle?.setPressed("toggleWave", on);
       setStatus(on ? "onda: visível" : "onda: oculta");
     },
     resetWave: () => {
@@ -593,29 +603,75 @@ async function boot() {
     },
   });
 
-  createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { id: "newProjectCmd", label: "Novo projeto", title: "novo projeto (.notker)" },
-    { id: "openFile", label: "Abrir", title: "Ctrl+O — .notker ou .gabc" },
-    { id: "saveFile", label: "Salvar", title: "Ctrl+S — projeto .notker" },
-    { id: "exportGabc", label: "Exportar", title: "exportar o canto atual como .gabc padrão" },
-    { id: "exportAllGabcCmd", label: "Exportar todos", title: "exportar todos os cantos como .gabc" },
-    { id: "format", label: "Formatar", title: "Ctrl+Shift+F" },
-    { id: "openSearch", label: "Buscar", title: "F2" },
-    { id: "openOverlayPanel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
-    { id: "toggleLegend", label: "Régua", title: "Ctrl+Alt+L — letra↔altura na pauta" },
-    { id: "toggleFamily", label: "Família", title: "Ctrl+Shift+G" },
-    { id: "togglePreview", label: "Preview", title: "mostrar/ocultar painel" },
-    { id: "toggleSplit", label: "Dividir", title: "alternar lado-a-lado / empilhado" },
-    { id: "toggleWave", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
-    { id: "resetWave", label: "Resetar onda", title: "restaurar interpretação ao neumático puro" },
+  // ── Spec B: menubar (comandos completos) + toolbar contextual (frequentes) ──
+  // Rótulos/checks dos menus são funções — reavaliados a cada abertura.
+  createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
+    {
+      label: "Arquivo",
+      items: [
+        { cmd: "newProjectCmd", label: "Novo projeto…" },
+        { cmd: "openFile", label: "Abrir…", shortcut: "Ctrl+O" },
+        { cmd: "saveFile", label: "Salvar", shortcut: "Ctrl+S" },
+        "---",
+        { cmd: "exportGabc", label: "Exportar .gabc" },
+        { cmd: "exportAllGabcCmd", label: "Exportar todos os .gabc" },
+      ],
+    },
+    {
+      label: "Editar",
+      items: [
+        { cmd: "format", label: "Formatar", shortcut: "Ctrl+Shift+F" },
+        "---",
+        { cmd: "moveLeft", label: "Mover neuma à esquerda", shortcut: "Alt+←" },
+        { cmd: "moveDown", label: "Descer o neuma", shortcut: "Alt+↓" },
+        { cmd: "moveUp", label: "Subir o neuma", shortcut: "Alt+↑" },
+        { cmd: "moveRight", label: "Mover neuma à direita", shortcut: "Alt+→" },
+        { cmd: "moveReset", label: "Resetar posição do neuma", shortcut: "Alt+0" },
+      ],
+    },
+    {
+      label: "Exibir",
+      items: [
+        { cmd: "togglePreview", label: "Partitura", checked: () => previewHost.style.display !== "none" },
+        { cmd: "toggleSplit", label: "Lado a lado", checked: () => split.orientation() === "horizontal" },
+        { cmd: "toggleLegend", label: "Régua da pauta", shortcut: "Ctrl+Alt+L", checked: () => view.state.field(legendVisible) },
+        "---",
+        { cmd: "openSearch", label: "Buscar neumas…", shortcut: "F2" },
+        { cmd: "openOverlayPanel", label: "Nomes dos neumas…", shortcut: "Ctrl+Alt+N" },
+        "---",
+        { cmd: "toggleFamily", label: "Família: St. Gall ⇄ Laon", shortcut: "Ctrl+Shift+G" },
+      ],
+    },
+    {
+      label: "Interpretação",
+      items: [
+        { cmd: "playToggle", label: () => (player.playing ? "Parar" : "Tocar") },
+        { cmd: "modeToggle", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo") },
+        "---",
+        { cmd: "toggleWave", label: "Onda de interpretação", checked: () => waveLanes.enabled() },
+        { cmd: "resetWave", label: "Resetar onda", enabled: () => waveLanes.enabled() },
+      ],
+    },
+  ]);
+
+  toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
+    { id: "playToggle", label: "Tocar", title: "playback semiológico (Tuotilo)", primary: true },
     { id: "modeToggle", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
-    { id: "playToggle", label: "Tocar", title: "playback semiológico (Tuotilo)" },
+    { id: "toggleWave", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
+    "|",
     { id: "moveLeft", label: "◀", title: "Alt+← — empurrar o neuma à esquerda" },
     { id: "moveDown", label: "▼", title: "Alt+↓ — descer a altura do neuma" },
     { id: "moveUp", label: "▲", title: "Alt+↑ — subir a altura do neuma" },
     { id: "moveRight", label: "▶", title: "Alt+→ — empurrar o neuma à direita" },
     { id: "moveReset", label: "⟳", title: "Alt+0 — resetar posição do neuma" },
+    "|",
+    { id: "openSearch", label: "Buscar", title: "F2" },
+    { id: "openOverlayPanel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
   ]);
+
+  waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
+    void commands.run("resetWave");
+  });
 
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
