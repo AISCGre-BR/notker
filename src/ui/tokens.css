@@ -393,19 +393,23 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 }
 .wave-bar-reset:hover { color: var(--rubric); border-color: var(--rubric); }
 
-/* ── Onda integrada (lanes sob cada sistema) ──────────────────────────────── */
+/* ── Onda integrada: colunas de mensura sob cada sistema ───────────────────── */
 .wave-lane-layer { pointer-events: none; }
 .wave-lane { pointer-events: auto; }
-.wave-line { fill: none; stroke: var(--ink-muted); vector-effect: non-scaling-stroke; }
-.wave-line.sibling { stroke: var(--rubric-soft); }   /* irmãs do neuma em foco (clara) */
-.wave-line.playing { stroke: var(--rubric); }
-.wave-line.hovered { stroke: var(--rubric); }        /* nota ativa (forte) — vence .sibling */
-.wave-halo { fill: none; stroke: var(--rubric-soft); stroke-linecap: round; }
-/* marcador de nota = tique vertical curto cruzando a régua */
-.wave-dot { stroke: var(--ink-soft); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
-.wave-dot.sibling { stroke: var(--rubric-soft); }
-.wave-dot.hovered { stroke: var(--rubric); stroke-width: 1.8; }
-/* linha-guia (hover): liga o trecho da nota ao neuma correspondente na pauta */
+/* régua-base no pé da lane — as colunas sobem dela em direção às notas */
+.wave-base { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+/* zebra por sílaba: tinta diluída agrupando as notas de sílabas alternadas */
+.wave-band { fill: rgba(122, 106, 88, 0.07); }
+/* coluna por nota: ALTURA = alargamento; neutra em tinta, editada em rubrica */
+.wave-col { fill: var(--ink-muted); opacity: 0.6; transition: opacity 120ms var(--ease); }
+.wave-col.edited { fill: var(--rubric-soft); opacity: 0.85; }
+.wave-col.sibling { fill: var(--rubric-soft); opacity: 0.9; }     /* irmãs da sílaba em foco */
+.wave-col.score-hover { fill: var(--rubric-soft); opacity: 0.9; } /* elo pauta → lane */
+.wave-col.hovered { fill: var(--rubric); opacity: 1; }            /* coluna ativa — vence tudo */
+.wave-col.playing { fill: var(--rubric); opacity: 1; }
+/* vírgula de respiração no lugar da divisio */
+.wave-breath { stroke: var(--ink-muted); stroke-width: 1.4; opacity: 0.8; }
+/* linha-guia (hover): liga o topo da coluna ao neuma correspondente na pauta */
 .wave-guide { stroke: var(--rubric-soft); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.75; vector-effect: non-scaling-stroke; pointer-events: none; }
 .wave-hit { fill: transparent; cursor: ns-resize; }
 

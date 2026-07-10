@@ -124,21 +124,13 @@ export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylB
   return systems;
 }
 
-const SW_BASE = 3.0, SW_MIN = 1.0, SW_MAX = 7.5;
-const HALO_MAX = 0.55, HALO_SLOPE = 0.42;
+const BAR_UNIT = 11, BAR_MIN = 5, BAR_MAX = 25;
 
-/** Fator → espessura do traço. Default (fator 1) GROSSO o bastante p/ que ENCURTAR
- *  (fator < 1) também seja visível, não só alargar. Curva irregular (expoente 0.9;
- *  sem razão limpa, ver memória D-23) saturada em [SW_MIN, SW_MAX]. */
-export function factorToStrokeWidth(factor: number): number {
-  const w = SW_BASE * Math.pow(Math.max(0.01, factor), 0.9);
-  return Math.min(SW_MAX, Math.max(SW_MIN, w));
-}
-
-/** Fator → opacidade do halo rubrica. 0 até fator 1; sobe linear depois, clamp. */
-export function factorToHaloOpacity(factor: number): number {
-  if (factor <= 1) return 0;
-  return Math.min(HALO_MAX, (factor - 1) * HALO_SLOPE);
+/** Fator → ALTURA da coluna de mensura (rework 2026-07-10). Espessura de traço
+ *  era ilegível (meio-fator ≈ 1px); altura dá ~5-6px por meio-fator. Linear no
+ *  fator, com piso (coluna nunca some) e teto (cabe na lane de 28px). */
+export function factorToBarHeight(factor: number): number {
+  return Math.min(BAR_MAX, Math.max(BAR_MIN, Math.round(BAR_UNIT * factor)));
 }
 
 /** Altura (y local na lane) a partir do pitch. staffOffset 0..12; inverte
@@ -152,9 +144,11 @@ export function pitchToLaneY(pitch: string, laneHeight: number): number {
 const SVG_NS = "http://www.w3.org/2000/svg";
 export const LANE_HEIGHT = 28;       // altura da lane sob cada sistema (traço/alvo maiores)
 const LANE_GAP = 10;                 // folga entre baseline do sistema e a lane (respiro)
-const BASE_Y = LANE_HEIGHT / 2;      // régua RETA: baseline fixa (a melodia vem dos neumas)
-const MARK_HALF = Math.round(LANE_HEIGHT * 0.22); // meia-altura do tique — escala com a lane
-const END_MARGIN = 5;                // px do trecho da 1ª/última nota e após pausa
+const BASE_LINE_Y = LANE_HEIGHT - 2; // régua-base no pé da lane — as colunas sobem dela
+const COL_MAX_HALF = 9;              // meia-largura máxima da coluna (col ≤ 18px)
+const COL_GAP = 1;                   // vão mínimo entre colunas vizinhas (identidade da nota)
+const BREATH_H = 9;                  // altura da vírgula de respiração (divisio)
+const BAND_PAD = 12;                 // extensão da zebra além da 1ª/última nota da sílaba
 
 export interface LaneHooks {
   onFactorDrag?: (key: string, syllableIndex: number, noteInSyllable: number, startFactor: number, startClientY: number) => void;
@@ -177,80 +171,102 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
     lane.setAttribute("class", "wave-lane");
     lane.setAttribute("transform", `translate(0,${laneTop})`);
 
-    // Régua RETA: a melodia se lê dos neumas acima (trechos já alinhados sob a nota);
-    // a lane mostra só o RITMO. Dois passes: halos → linhas → marcadores → hits.
-    const halos: SVGElement[] = [];
-    const lines: SVGElement[] = [];
-    const marks: SVGElement[] = [];
+    // Colunas de mensura (rework 2026-07-10): cada nota é uma COLUNA discreta que
+    // sobe da régua-base em direção ao seu neuma; a ALTURA codifica o fator.
+    // Ordem de pintura: zebra → régua-base → respirações → colunas → hits.
+    const bands: SVGElement[] = [];
+    const cols: SVGElement[] = [];
+    const breaths: SVGElement[] = [];
     const hits: SVGElement[] = [];
     const guideTop = sys.yTop - laneTop; // y local do topo do sistema (acima da lane)
     const ns = sys.notes;                // ordenadas por x
+
+    // Zebra por sílaba: faixa de fundo nas sílabas ALTERNADAS (agrupa "estas
+    // notas são da mesma sílaba" sem desenhar contorno). Corre por RUNS de
+    // syllableIndex consecutivo na ordem de x.
+    let runStart = 0, runOrdinal = 0;
+    for (let i = 1; i <= ns.length; i++) {
+      if (i < ns.length && ns[i].syllableIndex === ns[runStart].syllableIndex) continue;
+      if (runOrdinal % 2 === 1) {
+        const first = ns[runStart], last = ns[i - 1];
+        const left = runStart > 0 ? (ns[runStart - 1].x + first.x) / 2 : first.x - BAND_PAD;
+        const right = i < ns.length ? (last.x + ns[i].x) / 2 : last.x + BAND_PAD;
+        const band = document.createElementNS(SVG_NS, "rect");
+        band.setAttribute("class", "wave-band");
+        band.setAttribute("x", String(left));
+        band.setAttribute("y", "0");
+        band.setAttribute("width", String(Math.max(0, right - left)));
+        band.setAttribute("height", String(LANE_HEIGHT));
+        bands.push(band);
+      }
+      runStart = i; runOrdinal++;
+    }
+
+    // Régua-base: hairline no pé da lane, extensão do sistema.
+    const base = document.createElementNS(SVG_NS, "line");
+    base.setAttribute("class", "wave-base");
+    base.setAttribute("x1", String(sys.xRange[0] - 4));
+    base.setAttribute("x2", String(sys.xRange[1] + 4));
+    base.setAttribute("y1", String(BASE_LINE_Y));
+    base.setAttribute("y2", String(BASE_LINE_Y));
 
     for (let i = 0; i < ns.length; i++) {
       const n = ns[i];
       const prev = ns[i - 1];
       const next = ns[i + 1];
       const key = waveLaneKey(n.syllableIndex, n.noteInSyllable);
-      // trecho horizontal: meio-caminho à esquerda → meio-caminho à direita,
-      // QUEBRANDO nas pausas (divisio gera um vão entre os trechos).
-      const connL = prev !== undefined && !prev.divisioAfter;
-      const connR = next !== undefined && !n.divisioAfter;
-      const left = connL ? (prev.x + n.x) / 2 : n.x - END_MARGIN;
-      const right = connR ? (n.x + next.x) / 2 : n.x + END_MARGIN;
-      const d = `M ${left},${BASE_Y} H ${right}`;
-      const sw = factorToStrokeWidth(n.factor);
-      const halo = factorToHaloOpacity(n.factor);
 
-      if (halo > 0) {
-        const h = document.createElementNS(SVG_NS, "path");
-        h.setAttribute("class", "wave-halo");
-        h.setAttribute("data-key", key);
-        h.setAttribute("d", d);
-        h.setAttribute("stroke-width", String(sw + 3));
-        h.style.opacity = String(halo);
-        halos.push(h);
+      // Largura da coluna: centrada no x da nota, recuada dos pontos médios
+      // com os vizinhos (colunas DISCRETAS — a fronteira entre notas é o vão).
+      const left = Math.max(n.x - COL_MAX_HALF, prev ? (prev.x + n.x) / 2 + COL_GAP : n.x - COL_MAX_HALF);
+      const right = Math.min(n.x + COL_MAX_HALF, next ? (n.x + next.x) / 2 - COL_GAP : n.x + COL_MAX_HALF);
+      const w = Math.max(3, right - left); // notas ~coincidentes: fatia mínima visível
+      const h = factorToBarHeight(n.factor);
+
+      const col = document.createElementNS(SVG_NS, "rect");
+      col.setAttribute("class", "wave-col" + (Math.abs(n.factor - 1) > 1e-9 ? " edited" : ""));
+      col.setAttribute("data-key", key);
+      col.setAttribute("data-real-syl", String(n.realSyllableIndex));
+      col.setAttribute("x", String(right - left >= 3 ? left : n.x - w / 2));
+      col.setAttribute("y", String(BASE_LINE_Y - h));
+      col.setAttribute("width", String(w));
+      col.setAttribute("height", String(h));
+      cols.push(col);
+
+      // Pausa (divisio) vira vírgula de respiração no ponto médio até a próxima.
+      if (n.divisioAfter && next) {
+        const bx = (n.x + next.x) / 2;
+        const breath = document.createElementNS(SVG_NS, "line");
+        breath.setAttribute("class", "wave-breath");
+        breath.setAttribute("x1", String(bx));
+        breath.setAttribute("x2", String(bx));
+        breath.setAttribute("y1", String(BASE_LINE_Y));
+        breath.setAttribute("y2", String(BASE_LINE_Y - BREATH_H));
+        breaths.push(breath);
       }
-
-      const p = document.createElementNS(SVG_NS, "path");
-      p.setAttribute("class", "wave-line");
-      p.setAttribute("data-key", key);
-      p.setAttribute("d", d);
-      p.setAttribute("stroke-width", String(sw));
-      lines.push(p);
-
-      // marcador de nota — tique vertical curto cruzando a régua (notas discretas)
-      const mark = document.createElementNS(SVG_NS, "line");
-      mark.setAttribute("class", "wave-dot");
-      mark.setAttribute("data-key", key);
-      mark.setAttribute("x1", String(n.x));
-      mark.setAttribute("x2", String(n.x));
-      mark.setAttribute("y1", String(BASE_Y - MARK_HALF));
-      mark.setAttribute("y2", String(BASE_Y + MARK_HALF));
-      marks.push(mark);
 
       const hit = document.createElementNS(SVG_NS, "rect");
       hit.setAttribute("class", "wave-hit");
       hit.setAttribute("data-key", key);
-      hit.setAttribute("x", String(n.x - 7));
+      hit.setAttribute("x", String(Math.min(left, n.x - 7) - 2));
       hit.setAttribute("y", "0");
-      hit.setAttribute("width", "14");
+      hit.setAttribute("width", String(Math.max(right, n.x + 7) - Math.min(left, n.x - 7) + 4));
       hit.setAttribute("height", String(LANE_HEIGHT));
       hit.addEventListener("pointerdown", (ev) => {
         hooks.onFactorDrag?.(key, n.syllableIndex, n.noteInSyllable, n.factor, (ev as PointerEvent).clientY);
         ev.preventDefault();
       });
-      // hover: nota ATIVA em rubrica forte; IRMÃS do mesmo neuma em rubrica clara
-      // (deixa claro qual nota do neuma está em foco); + linha-guia até o neuma.
-      const sibSel = `.wave-line[data-key^="${n.syllableIndex}:"], .wave-dot[data-key^="${n.syllableIndex}:"]`;
+      // hover: coluna ATIVA em rubrica forte; IRMÃS da sílaba em rubrica clara;
+      // + linha-guia do TOPO da coluna até o neuma correspondente.
+      const sibSel = `.wave-col[data-key^="${n.syllableIndex}:"]`;
       hit.addEventListener("pointerenter", () => {
         svg.querySelectorAll(sibSel).forEach((el) => el.classList.add("sibling"));
-        p.classList.add("hovered");
-        mark.classList.add("hovered");
+        col.classList.add("hovered");
         const guide = document.createElementNS(SVG_NS, "line");
         guide.setAttribute("class", "wave-guide");
         guide.setAttribute("x1", String(n.x));
         guide.setAttribute("x2", String(n.x));
-        guide.setAttribute("y1", String(BASE_Y));
+        guide.setAttribute("y1", String(Number(col.getAttribute("y"))));
         guide.setAttribute("y2", String(guideTop));
         lane.appendChild(guide); // por cima de tudo, sobre a lane corrente
         (hit as unknown as { _guide?: SVGElement })._guide = guide;
@@ -258,18 +274,18 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       });
       hit.addEventListener("pointerleave", () => {
         svg.querySelectorAll(sibSel).forEach((el) => el.classList.remove("sibling"));
-        p.classList.remove("hovered");
-        mark.classList.remove("hovered");
+        col.classList.remove("hovered");
         (hit as unknown as { _guide?: SVGElement })._guide?.remove();
         hooks.onHover?.(null);
       });
       hits.push(hit);
     }
 
-    for (const el of halos) lane.appendChild(el);
-    for (const el of lines) lane.appendChild(el);
-    for (const el of marks) lane.appendChild(el);
-    for (const el of hits)  lane.appendChild(el);
+    for (const el of bands) lane.appendChild(el);
+    lane.appendChild(base);
+    for (const el of breaths) lane.appendChild(el);
+    for (const el of cols) lane.appendChild(el);
+    for (const el of hits) lane.appendChild(el);
     layer.appendChild(lane);
   }
   svg.appendChild(layer);
@@ -284,28 +300,15 @@ export function factorFromDrag(startFactor: number, startClientY: number, nowCli
   return Math.min(WAVE_MAX, Math.max(WAVE_MIN, f));
 }
 
-/** Atualiza ao vivo (sem re-render) o segmento de uma nota durante o arrasto.
- *  Cria o halo na hora se ainda não existir (nota com fator 1 não tem halo inicial). */
+/** Atualiza ao vivo (sem re-render) a COLUNA de uma nota durante o arrasto:
+ *  pé fixo na régua-base, altura acompanha o fator; classe edited espelha ≠1. */
 export function deformLiveSegment(svg: SVGSVGElement, key: string, factor: number): void {
-  const line = svg.querySelector<SVGPathElement>(`.wave-line[data-key="${key}"]`);
-  if (!line) return;
-  line.setAttribute("stroke-width", String(factorToStrokeWidth(factor)));
-
-  const op = factorToHaloOpacity(factor);
-  let halo = svg.querySelector<SVGPathElement>(`.wave-halo[data-key="${key}"]`);
-  if (halo) {
-    halo.style.opacity = String(op);
-    halo.setAttribute("stroke-width", String(factorToStrokeWidth(factor) + 3));
-  } else if (op > 0) {
-    halo = document.createElementNS(SVG_NS, "path") as SVGPathElement;
-    halo.setAttribute("class", "wave-halo");
-    halo.setAttribute("data-key", key);
-    halo.setAttribute("d", line.getAttribute("d") ?? "");
-    halo.setAttribute("stroke-width", String(factorToStrokeWidth(factor) + 3));
-    halo.style.opacity = String(op);
-    // Insere como primeiro filho da lane (atrás das linhas) para manter z-order halo→line.
-    line.parentNode!.insertBefore(halo, line.parentNode!.firstChild);
-  }
+  const col = svg.querySelector<SVGRectElement>(`.wave-col[data-key="${key}"]`);
+  if (!col) return;
+  const h = factorToBarHeight(factor);
+  col.setAttribute("y", String(BASE_LINE_Y - h));
+  col.setAttribute("height", String(h));
+  col.classList.toggle("edited", Math.abs(factor - 1) > 1e-9);
 }
 
 // ─── Controller ───────────────────────────────────────────────────────────────
@@ -366,11 +369,33 @@ export function createWaveLanes(
   let on = false;
   let lastNotes: NoteIdent[] = [];
 
+  /** Elo bidirecional pauta → lane: pairar sobre uma sílaba na PARTITURA acende
+   *  as colunas dela (score-hover). Delegado no <svg> (sobrevive aos re-renders
+   *  internos); flag no elemento evita duplicar — o svg é trocado a cada render
+   *  do nabc-lib, o que zera a flag naturalmente. */
+  function bindScoreHover(svg: SVGSVGElement): void {
+    const flagged = svg as unknown as { __waveScoreHover?: boolean };
+    if (flagged.__waveScoreHover) return;
+    flagged.__waveScoreHover = true;
+    const clear = () =>
+      svg.querySelectorAll(".wave-col.score-hover").forEach((el) => el.classList.remove("score-hover"));
+    svg.addEventListener("pointerover", (e) => {
+      if (!on) return;
+      clear();
+      const g = (e.target as Element).closest?.('[class*="syllable-"]');
+      const mm = g ? /(?:^|\s)syllable-(\d+)(?:\s|$)/.exec(g.getAttribute("class") ?? "") : null;
+      if (!mm) return;
+      svg.querySelectorAll(`.wave-col[data-real-syl="${mm[1]}"]`).forEach((el) => el.classList.add("score-hover"));
+    });
+    svg.addEventListener("pointerleave", clear);
+  }
+
   function draw(): void {
     const svg = getSvg();
     if (!svg) return;
     svg.querySelector(".wave-lane-layer")?.remove();
     if (!on) return;
+    bindScoreHover(svg);
     const boxes = readBoxes(svg);
     const systems = mapSystems(lastNotes, boxes);
     // Dump de diagnóstico opt-in: `window.__ondaDebug = true` no console antes de
@@ -392,8 +417,8 @@ export function createWaveLanes(
     setCursor(key) {
       const svg = getSvg();
       if (!svg) return;
-      svg.querySelectorAll(".wave-line.playing").forEach((el) => el.classList.remove("playing"));
-      if (key !== null) svg.querySelector(`.wave-line[data-key="${key}"]`)?.classList.add("playing");
+      svg.querySelectorAll(".wave-col.playing").forEach((el) => el.classList.remove("playing"));
+      if (key !== null) svg.querySelector(`.wave-col[data-key="${key}"]`)?.classList.add("playing");
     },
     destroy() { getSvg()?.querySelector(".wave-lane-layer")?.remove(); },
   };

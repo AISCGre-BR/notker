@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapSystems, type SylBox, type NoteIdent, factorToStrokeWidth, factorToHaloOpacity, pitchToLaneY } from "../src/preview/wave-lanes";
+import { mapSystems, type SylBox, type NoteIdent, factorToBarHeight, pitchToLaneY } from "../src/preview/wave-lanes";
 import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes, deformLiveSegment } from "../src/preview/wave-lanes";
 import { WAVE_SPREAD, WAVE_LINE_SPACING_PX, MIN_NOTE_DX } from "../src/preview/wave-lanes";
 import { bboxToRoot } from "../src/preview/wave-lanes";
@@ -61,42 +61,56 @@ function svgWithSystems() {
   return { svg, systems };
 }
 
-describe("renderWaveLanes", () => {
-  it("injeta uma lane por sistema e um path+hit por nota", () => {
+const BASE_LINE = LANE_HEIGHT - 2; // régua-base no pé da lane (colunas sobem dela)
+
+describe("renderWaveLanes — colunas de mensura", () => {
+  it("injeta uma lane por sistema, uma coluna+hit por nota e a régua-base", () => {
     const { svg, systems } = svgWithSystems();
     renderWaveLanes(svg, systems, {});
     expect(svg.querySelectorAll(".wave-lane").length).toBe(1);
-    expect(svg.querySelectorAll(".wave-line").length).toBe(2);
+    expect(svg.querySelectorAll(".wave-col").length).toBe(2);
     expect(svg.querySelectorAll(".wave-hit").length).toBe(2);
+    expect(svg.querySelectorAll(".wave-base").length).toBe(1);
+    expect(svg.querySelector('.wave-hit[data-key="1:0"]')).not.toBeNull();
   });
-  it("desenha halo só na nota alargada e marca data-key", () => {
+  it("coluna ancora na régua-base e a ALTURA codifica o fator (sobe para a nota)", () => {
     const { svg, systems } = svgWithSystems();
     renderWaveLanes(svg, systems, {});
-    expect(svg.querySelectorAll(".wave-halo").length).toBe(1); // só a de fator 2.0
-    expect(svg.querySelector('.wave-hit[data-key="1:0"]')).not.toBeNull();
+    const c0 = svg.querySelector<SVGRectElement>('.wave-col[data-key="0:0"]')!; // fator 1
+    const c1 = svg.querySelector<SVGRectElement>('.wave-col[data-key="1:0"]')!; // fator 2
+    const h0 = Number(c0.getAttribute("height")), y0 = Number(c0.getAttribute("y"));
+    const h1 = Number(c1.getAttribute("height")), y1 = Number(c1.getAttribute("y"));
+    expect(y0 + h0).toBeCloseTo(BASE_LINE); // pé na régua-base
+    expect(y1 + h1).toBeCloseTo(BASE_LINE);
+    expect(h0).toBe(factorToBarHeight(1));
+    expect(h1).toBe(factorToBarHeight(2));
+    expect(h1).toBeGreaterThan(h0); // alargada é visivelmente mais alta
+  });
+  it("nota editada (fator ≠ 1) ganha a classe edited; neutra não", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    expect(svg.querySelector('.wave-col[data-key="0:0"]')!.classList.contains("edited")).toBe(false);
+    expect(svg.querySelector('.wave-col[data-key="1:0"]')!.classList.contains("edited")).toBe(true);
+  });
+  it("zebra: sílabas alternadas ganham faixa de fundo agrupando suas notas", () => {
+    const { svg, systems } = svgWithSystems(); // 2 sílabas → 1 faixa (a alternada)
+    renderWaveLanes(svg, systems, {});
+    expect(svg.querySelectorAll(".wave-band").length).toBe(1);
+  });
+  it("colunas carregam data-real-syl (elo com a sílaba da pauta)", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    expect(svg.querySelector('.wave-col[data-real-syl="1"]')).not.toBeNull();
+    expect(svg.querySelector('.wave-col[data-real-syl="2"]')).not.toBeNull();
   });
   it("re-render limpa a camada anterior (sem duplicar)", () => {
     const { svg, systems } = svgWithSystems();
     renderWaveLanes(svg, systems, {});
     renderWaveLanes(svg, systems, {});
     expect(svg.querySelectorAll(".wave-lane-layer").length).toBe(1);
-    expect(svg.querySelectorAll(".wave-line").length).toBe(2);
+    expect(svg.querySelectorAll(".wave-col").length).toBe(2);
   });
-  it("desenha um marcador (ponto) por nota", () => {
-    const { svg, systems } = svgWithSystems();
-    renderWaveLanes(svg, systems, {});
-    expect(svg.querySelectorAll(".wave-dot").length).toBe(2);
-  });
-  it("tique escala com a lane (~22% de LANE_HEIGHT para cada lado)", () => {
-    const { svg, systems } = svgWithSystems();
-    renderWaveLanes(svg, systems, {});
-    const dot = svg.querySelector<SVGLineElement>(".wave-dot")!;
-    const half = Math.round(LANE_HEIGHT * 0.22);
-    const y1 = Number(dot.getAttribute("y1")), y2 = Number(dot.getAttribute("y2"));
-    expect(y2 - y1).toBe(2 * half);
-    expect((y1 + y2) / 2).toBeCloseTo(LANE_HEIGHT / 2); // centrado na régua
-  });
-  it("interrompe o contorno na divisio — a nota após a pausa começa um traço novo", () => {
+  it("divisio vira vírgula de respiração entre as colunas (no ponto médio)", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const systems = [{
       yBaseline: 30, yTop: 8, xRange: [10, 90] as [number, number], notes: [
@@ -105,13 +119,22 @@ describe("renderWaveLanes", () => {
       ],
     }];
     renderWaveLanes(svg, systems, {});
-    const lines = svg.querySelectorAll<SVGPathElement>(".wave-line");
-    const d0 = lines[0].getAttribute("d") ?? "";
-    const d1 = lines[1].getAttribute("d") ?? "";
-    const rightOf0 = Number(/H ([\d.]+)/.exec(d0)![1]);
-    const leftOf1 = Number(/M ([\d.]+),/.exec(d1)![1]);
-    // VÃO entre os trechos: a onda respira na pausa (não tile contíguo no meio-caminho)
-    expect(leftOf1).toBeGreaterThan(rightOf0);
+    const breath = svg.querySelector<SVGLineElement>(".wave-breath")!;
+    expect(breath).not.toBeNull();
+    const bx = Number(breath.getAttribute("x1"));
+    expect(bx).toBeGreaterThan(20);
+    expect(bx).toBeLessThan(60);
+  });
+  it("hover no hit: coluna hovered, irmãs da sílaba sibling, guia até o neuma", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    const hit = svg.querySelector<SVGRectElement>('.wave-hit[data-key="0:0"]')!;
+    hit.dispatchEvent(new Event("pointerenter"));
+    expect(svg.querySelector('.wave-col[data-key="0:0"]')!.classList.contains("hovered")).toBe(true);
+    expect(svg.querySelector(".wave-guide")).not.toBeNull();
+    hit.dispatchEvent(new Event("pointerleave"));
+    expect(svg.querySelector('.wave-col[data-key="0:0"]')!.classList.contains("hovered")).toBe(false);
+    expect(svg.querySelector(".wave-guide")).toBeNull();
   });
 });
 
@@ -251,24 +274,18 @@ describe("constantes de espalhamento (decisão UAT-8, 2026-07-09)", () => {
   });
 });
 
-describe("codificação visual do fator", () => {
-  it("espessura cresce com o fator e satura nos limites", () => {
-    expect(factorToStrokeWidth(1)).toBeCloseTo(3.0, 1);
-    expect(factorToStrokeWidth(2.5)).toBeGreaterThan(factorToStrokeWidth(1));
-    expect(factorToStrokeWidth(0.5)).toBeGreaterThanOrEqual(1.0);
-    expect(factorToStrokeWidth(0.5)).toBeLessThan(factorToStrokeWidth(1));
-    expect(factorToStrokeWidth(99)).toBeLessThanOrEqual(7.5); // clamp superior
-  });
-  it("halo só aparece quando há alargamento (fator > 1)", () => {
-    expect(factorToHaloOpacity(1)).toBe(0);
-    expect(factorToHaloOpacity(0.7)).toBe(0);
-    expect(factorToHaloOpacity(2.5)).toBeGreaterThan(0);
-    expect(factorToHaloOpacity(99)).toBeLessThanOrEqual(0.55); // clamp
+describe("codificação visual do fator (altura da coluna)", () => {
+  it("altura cresce com o fator, é distinguível a meio-fator e satura", () => {
+    expect(factorToBarHeight(1)).toBe(11);
+    expect(factorToBarHeight(1.5) - factorToBarHeight(1)).toBeGreaterThanOrEqual(5); // legível
+    expect(factorToBarHeight(0.5)).toBeLessThan(factorToBarHeight(1));
+    expect(factorToBarHeight(0.1)).toBeGreaterThanOrEqual(5);  // piso: nunca some
+    expect(factorToBarHeight(99)).toBeLessThanOrEqual(25);     // teto: cabe na lane
   });
 });
 
 describe("renderWaveLanes — multi-sistema", () => {
-  it("primeira nota do segundo sistema é um trecho próprio (não liga ao sistema anterior)", () => {
+  it("cada sistema tem lane própria; a coluna do 2º fica centrada na sua nota", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const systems = [
       {
@@ -290,13 +307,9 @@ describe("renderWaveLanes — multi-sistema", () => {
 
     const lanes = svg.querySelectorAll(".wave-lane");
     expect(lanes.length).toBe(2);
-
-    // O trecho do 2º sistema (nota única x=15) é horizontal próprio: "M 10,<y> H 20"
-    const secondLaneFirstLine = lanes[1].querySelector(".wave-line");
-    expect(secondLaneFirstLine).not.toBeNull();
-    const d = secondLaneFirstLine!.getAttribute("d")!;
-    expect(d).toMatch(/^M 10,[\d.]+ H 20/);
-    expect(d).not.toContain("Q");
+    const col = lanes[1].querySelector<SVGRectElement>(".wave-col")!;
+    const cx = Number(col.getAttribute("x")) + Number(col.getAttribute("width")) / 2;
+    expect(cx).toBeCloseTo(15);
   });
 });
 
@@ -340,10 +353,9 @@ describe("createWaveLanes (controller)", () => {
   });
 });
 
-describe("deformLiveSegment — halo ao vivo durante arrasto", () => {
-  it("cria halo na hora para nota com fator 1 (sem halo inicial); esconde ao voltar para 1", () => {
+describe("deformLiveSegment — coluna ao vivo durante o arrasto", () => {
+  it("muda altura/y da coluna (pé fixo na régua-base) e alterna a classe edited", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    // Sistema com nota única: syllableIndex=0, noteInSyllable=0 → data-key="0:0"
     const systems = [
       {
         yBaseline: 30, yTop: 8,
@@ -354,29 +366,40 @@ describe("deformLiveSegment — halo ao vivo durante arrasto", () => {
       },
     ];
     renderWaveLanes(svg, systems, {});
+    const col = svg.querySelector<SVGRectElement>('.wave-col[data-key="0:0"]')!;
+    expect(col.classList.contains("edited")).toBe(false);
 
-    // Nota com fator 1 não deve ter halo inicial
-    expect(svg.querySelectorAll(".wave-halo").length).toBe(0);
-
-    // Arrastar para fator 2.0 deve criar o halo ao vivo
     deformLiveSegment(svg, "0:0", 2.0);
-    const halo = svg.querySelector<SVGPathElement>('.wave-halo[data-key="0:0"]');
-    expect(halo).not.toBeNull();
-    expect(Number(halo!.style.opacity)).toBeGreaterThan(0);
+    expect(Number(col.getAttribute("height"))).toBe(factorToBarHeight(2));
+    expect(Number(col.getAttribute("y")) + Number(col.getAttribute("height"))).toBeCloseTo(BASE_LINE);
+    expect(col.classList.contains("edited")).toBe(true);
 
-    // Halo deve ser anterior ao wave-line na ordem de filhos da lane
-    const lane = svg.querySelector(".wave-lane")!;
-    const children = Array.from(lane.children);
-    const haloIdx = children.findIndex((el) => el.classList.contains("wave-halo") && el.getAttribute("data-key") === "0:0");
-    const lineIdx = children.findIndex((el) => el.classList.contains("wave-line") && el.getAttribute("data-key") === "0:0");
-    expect(haloIdx).toBeGreaterThanOrEqual(0);
-    expect(lineIdx).toBeGreaterThanOrEqual(0);
-    expect(haloIdx).toBeLessThan(lineIdx);
-
-    // Ao arrastar de volta para fator 1.0: halo deve ter opacidade 0 e não duplicar
     deformLiveSegment(svg, "0:0", 1.0);
-    expect(svg.querySelectorAll('.wave-halo[data-key="0:0"]').length).toBe(1); // não criou segundo
-    const haloAfter = svg.querySelector<SVGPathElement>('.wave-halo[data-key="0:0"]')!;
-    expect(Number(haloAfter.style.opacity)).toBe(0);
+    expect(Number(col.getAttribute("height"))).toBe(factorToBarHeight(1));
+    expect(col.classList.contains("edited")).toBe(false);
+  });
+});
+
+describe("elo bidirecional pauta → lane (score-hover)", () => {
+  it("pointerover na sílaba da pauta acende as colunas dela; sair apaga", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "syllable-1");
+    const glyph = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    g.appendChild(glyph);
+    svg.appendChild(g);
+    document.body.appendChild(svg as unknown as Node);
+
+    const readBoxes = () => new Map([[1, [{ syllableIndex: 1, x: 10, y: 5, width: 20, height: 10 }]]]);
+    const ctl = createWaveLanes(() => svg, {}, { readBoxes });
+    ctl.setEnabled(true);
+    ctl.refresh([{ syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null }]);
+    const col = svg.querySelector('.wave-col[data-real-syl="1"]')!;
+
+    glyph.dispatchEvent(new Event("pointerover", { bubbles: true }));
+    expect(col.classList.contains("score-hover")).toBe(true);
+
+    svg.dispatchEvent(new Event("pointerleave"));
+    expect(col.classList.contains("score-hover")).toBe(false);
   });
 });

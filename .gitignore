@@ -14,3 +14,4 @@ docs/superpowers/
 # git worktrees (superpowers)
 .claude/worktrees/
 # (wasm + neume-db.json vendorizados p/ build reproduzível — ver release)
+debug/out/

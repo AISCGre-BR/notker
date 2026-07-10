@@ -8,7 +8,7 @@ export interface WaveBarHandle {
   setSolfejo(on: boolean): void;
 }
 
-const HINT = "arraste um tique na vertical — ↑ alonga, ↓ encurta";
+const HINT = "arraste uma coluna na vertical — ↑ alonga, ↓ encurta";
 const SOLFEJO = "edição da onda só no modo interpretado";
 
 export function createWaveBar(host: HTMLElement, onReset: () => void): WaveBarHandle {

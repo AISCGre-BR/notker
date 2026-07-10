@@ -19,7 +19,7 @@ describe("barra da onda", () => {
     bar.setVisible(true);
     expect(el.style.display).not.toBe("none");
     expect(el.textContent).toContain("Onda de interpretação");
-    expect(el.textContent).toContain("arraste um tique na vertical");
+    expect(el.textContent).toContain("arraste uma coluna na vertical");
     bar.setVisible(false);
     expect(el.style.display).toBe("none");
   });
@@ -40,9 +40,9 @@ describe("barra da onda", () => {
     bar.setVisible(true);
     bar.setReading("alongamento ×1,50 — nota 2 de 3");
     expect(host.textContent).toContain("alongamento ×1,50 — nota 2 de 3");
-    expect(host.textContent).not.toContain("arraste um tique");
+    expect(host.textContent).not.toContain("arraste uma coluna");
     bar.setReading(null);
-    expect(host.textContent).toContain("arraste um tique na vertical");
+    expect(host.textContent).toContain("arraste uma coluna na vertical");
   });
 
   it("setSolfejo mostra o aviso de modo", () => {
@@ -51,7 +51,7 @@ describe("barra da onda", () => {
     bar.setSolfejo(true);
     expect(host.textContent).toContain("edição da onda só no modo interpretado");
     bar.setSolfejo(false);
-    expect(host.textContent).toContain("arraste um tique na vertical");
+    expect(host.textContent).toContain("arraste uma coluna na vertical");
   });
 
   it("aviso de solfejo vence a leitura de arrasto", () => {

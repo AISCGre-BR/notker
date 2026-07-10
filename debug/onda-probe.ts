@@ -54,7 +54,7 @@ async function main(): Promise<void> {
   dumpEl.textContent = JSON.stringify({
     nNotes: notes.length,
     nSystems: systems.length,
-    nDots: svg.querySelectorAll(".wave-dot").length,
+    nCols: svg.querySelectorAll(".wave-col").length,
     nBreaks: notes.filter((n) => n.divisioAfter).length,
     systems: systems.map((s, i) =>
       `sys${i} yTop=${r(s.yTop)} yBaseline=${r(s.yBaseline)} notas=${s.notes.length}`),
