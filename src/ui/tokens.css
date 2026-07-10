@@ -23,9 +23,14 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   padding: 0 6px;
 }
 .menubar-slot { position: relative; display: inline-flex; }
+.menubar-brand {
+  font-size: 18px; padding: 0 12px 0 6px; margin-right: 2px;
+  align-self: center;
+}
+.menubar-brand::after { height: 16px; }
 .menubar-top {
   font: 500 12px/1 var(--font); color: var(--ink-soft);
-  letter-spacing: 0.05em;
+  font-variant-caps: small-caps; letter-spacing: 0.05em;
   background: transparent; border: none; cursor: pointer;
   padding: 8px 12px 7px;
   transition: color 160ms var(--ease), background 160ms var(--ease);
@@ -336,7 +341,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 /* ── Barra contextual da onda (spec B) ─────────────────────────────────────── */
 .wave-bar {
   display: flex; align-items: center; gap: 14px;
-  background: var(--cream-deep); border-bottom: 1px solid var(--rule);
+  background: var(--cream-deep); border-top: 1px solid var(--rule);
   padding: 4px 12px; font: 11px/1.5 var(--font); color: var(--ink-soft);
 }
 .wave-bar-title {

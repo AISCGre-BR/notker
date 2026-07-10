@@ -14,12 +14,6 @@ export function createToolbar(host: HTMLElement, commands: Commands, items: Tool
   const bar = document.createElement("div");
   bar.className = "toolbar";
 
-  const brand = document.createElement("span");
-  brand.className = "toolbar-brand";
-  brand.textContent = "Notker";
-  brand.title = "Notker — editor de canto gregoriano";
-  bar.appendChild(brand);
-
   const byCmd = new Map<string, HTMLButtonElement>();
   for (const it of items) {
     if (it === "|") {

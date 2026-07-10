@@ -622,10 +622,10 @@ async function boot() {
       items: [
         { cmd: "format", label: "Formatar", shortcut: "Ctrl+Shift+F" },
         "---",
-        { cmd: "moveLeft", label: "Mover neuma à esquerda", shortcut: "Alt+←" },
-        { cmd: "moveDown", label: "Descer o neuma", shortcut: "Alt+↓" },
-        { cmd: "moveUp", label: "Subir o neuma", shortcut: "Alt+↑" },
-        { cmd: "moveRight", label: "Mover neuma à direita", shortcut: "Alt+→" },
+        { cmd: "moveLeft", label: "Mover neuma para a esquerda", shortcut: "Alt+←" },
+        { cmd: "moveDown", label: "Mover neuma para baixo", shortcut: "Alt+↓" },
+        { cmd: "moveUp", label: "Mover neuma para cima", shortcut: "Alt+↑" },
+        { cmd: "moveRight", label: "Mover neuma para a direita", shortcut: "Alt+→" },
         { cmd: "moveReset", label: "Resetar posição do neuma", shortcut: "Alt+0" },
       ],
     },
@@ -659,15 +659,18 @@ async function boot() {
     { id: "modeToggle", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
     { id: "toggleWave", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
     "|",
-    { id: "moveLeft", label: "◀", title: "Alt+← — empurrar o neuma à esquerda" },
-    { id: "moveDown", label: "▼", title: "Alt+↓ — descer a altura do neuma" },
-    { id: "moveUp", label: "▲", title: "Alt+↑ — subir a altura do neuma" },
-    { id: "moveRight", label: "▶", title: "Alt+→ — empurrar o neuma à direita" },
+    { id: "moveLeft", label: "◀", title: "Alt+← — mover neuma para a esquerda" },
+    { id: "moveDown", label: "▼", title: "Alt+↓ — mover neuma para baixo" },
+    { id: "moveUp", label: "▲", title: "Alt+↑ — mover neuma para cima" },
+    { id: "moveRight", label: "▶", title: "Alt+→ — mover neuma para a direita" },
     { id: "moveReset", label: "⟳", title: "Alt+0 — resetar posição do neuma" },
     "|",
     { id: "openSearch", label: "Buscar", title: "F2" },
     { id: "openOverlayPanel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
   ]);
+
+  // Estado inicial dos toggles da toolbar (a11y: aria-pressed desde o boot).
+  toolbarHandle.setPressed("toggleWave", false);
 
   waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
     void commands.run("resetWave");

@@ -18,6 +18,12 @@ export function createMenubar(
 ): { closeAll(): void } {
   const bar = document.createElement("div");
   bar.className = "menubar";
+  // Marca na linha do menubar (wireframe da spec B): "Notker Arquivo Editar…".
+  const brand = document.createElement("span");
+  brand.className = "toolbar-brand menubar-brand";
+  brand.textContent = "Notker";
+  brand.title = "Notker — editor de canto gregoriano";
+  bar.appendChild(brand);
   host.appendChild(bar);
 
   let openIdx: number | null = null;
@@ -28,7 +34,10 @@ export function createMenubar(
   function closeAll(): void {
     pop?.remove();
     pop = null;
-    if (openIdx !== null) tops[openIdx].classList.remove("open");
+    if (openIdx !== null) {
+      tops[openIdx].classList.remove("open");
+      tops[openIdx].setAttribute("aria-expanded", "false");
+    }
     openIdx = null;
     document.removeEventListener("mousedown", onDocMouseDown, true);
     document.removeEventListener("keydown", onDocKeyDown, true);
@@ -43,16 +52,25 @@ export function createMenubar(
   function buildPop(i: number): HTMLElement {
     const p = document.createElement("div");
     p.className = "menu-pop";
+    p.setAttribute("role", "menu");
     for (const entry of menus[i].items) {
       if (entry === "---") {
         const sep = document.createElement("div");
         sep.className = "menu-sep";
+        sep.setAttribute("role", "separator");
         p.appendChild(sep);
         continue;
       }
       const b = document.createElement("button");
       b.className = "menu-item";
       b.disabled = entry.enabled ? !entry.enabled() : false;
+      // Toggle (tem checked()) é menuitemcheckbox; ação simples é menuitem.
+      if (entry.checked) {
+        b.setAttribute("role", "menuitemcheckbox");
+        b.setAttribute("aria-checked", String(entry.checked()));
+      } else {
+        b.setAttribute("role", "menuitem");
+      }
 
       const check = document.createElement("span");
       check.className = "menu-check";
@@ -74,9 +92,13 @@ export function createMenubar(
   function openMenu(i: number): void {
     const wasOpen = openIdx !== null;
     pop?.remove();
-    if (openIdx !== null) tops[openIdx].classList.remove("open");
+    if (openIdx !== null) {
+      tops[openIdx].classList.remove("open");
+      tops[openIdx].setAttribute("aria-expanded", "false");
+    }
     openIdx = i;
     tops[i].classList.add("open");
+    tops[i].setAttribute("aria-expanded", "true");
     pop = buildPop(i);
     slots[i].appendChild(pop);
     if (!wasOpen) {
@@ -128,6 +150,8 @@ export function createMenubar(
     const top = document.createElement("button");
     top.className = "menubar-top";
     top.textContent = menu.label;
+    top.setAttribute("aria-haspopup", "menu");
+    top.setAttribute("aria-expanded", "false");
     top.addEventListener("click", () => {
       if (openIdx === i) closeAll();
       else openMenu(i);

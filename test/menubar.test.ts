@@ -130,6 +130,52 @@ describe("menubar", () => {
     expect(host.querySelector(".menu-pop")!.textContent).toContain("Partitura");
   });
 
+  it("a11y: roles e aria de menu (haspopup/expanded/menuitemcheckbox/checked)", () => {
+    const { host } = mount(BASIC);
+    const top = host.querySelectorAll<HTMLButtonElement>(".menubar-top")[1];
+    expect(top.getAttribute("aria-haspopup")).toBe("menu");
+    expect(top.getAttribute("aria-expanded")).toBe("false");
+    top.click();
+    expect(top.getAttribute("aria-expanded")).toBe("true");
+    const pop = host.querySelector(".menu-pop")!;
+    expect(pop.getAttribute("role")).toBe("menu");
+    const item = pop.querySelector(".menu-item")!; // Partitura, checked()=true
+    expect(item.getAttribute("role")).toBe("menuitemcheckbox");
+    expect(item.getAttribute("aria-checked")).toBe("true");
+    top.click();
+    expect(top.getAttribute("aria-expanded")).toBe("false");
+    // item sem checked() é menuitem simples
+    const tops = host.querySelectorAll<HTMLButtonElement>(".menubar-top");
+    tops[0].click();
+    expect(host.querySelector(".menu-item")!.getAttribute("role")).toBe("menuitem");
+  });
+
+  it("clicar de novo no mesmo topo fecha; closeAll() fecha programaticamente", () => {
+    const { host, bar } = mount(BASIC);
+    const top = host.querySelectorAll<HTMLButtonElement>(".menubar-top")[0];
+    top.click();
+    expect(host.querySelector(".menu-pop")).not.toBeNull();
+    top.click();
+    expect(host.querySelector(".menu-pop")).toBeNull();
+    top.click();
+    bar.closeAll();
+    expect(host.querySelector(".menu-pop")).toBeNull();
+  });
+
+  it("teclado: ← troca de menu com wrap; menu todo desabilitado não quebra ↓", () => {
+    const menus: MenuSpec[] = [
+      { label: "A", items: [{ cmd: "x", label: "X", enabled: () => false }] },
+      { label: "B", items: [{ cmd: "y", label: "Y" }] },
+    ];
+    const { host } = mount(menus);
+    const tops = host.querySelectorAll<HTMLButtonElement>(".menubar-top");
+    tops[0].click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); // sem itens habilitados: no-op
+    expect(host.querySelector(".menu-pop")).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })); // wrap 0 → último
+    expect(host.querySelector(".menu-pop")!.textContent).toContain("Y");
+  });
+
   it("label() e checked() são reavaliados a cada abertura", () => {
     let on = false;
     const menus: MenuSpec[] = [{

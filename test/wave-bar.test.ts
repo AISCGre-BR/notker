@@ -54,6 +54,15 @@ describe("barra da onda", () => {
     expect(host.textContent).toContain("arraste um tique na vertical");
   });
 
+  it("aviso de solfejo vence a leitura de arrasto", () => {
+    const { host, bar } = mount();
+    bar.setVisible(true);
+    bar.setSolfejo(true);
+    bar.setReading("alongamento ×1,20 — nota 1");
+    expect(host.textContent).toContain("edição da onda só no modo interpretado");
+    expect(host.textContent).not.toContain("alongamento ×1,20");
+  });
+
   it("botão Resetar chama onReset", () => {
     const { host, bar, onReset } = mount();
     bar.setVisible(true);
