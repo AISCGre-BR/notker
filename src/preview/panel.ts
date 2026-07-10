@@ -33,8 +33,11 @@ export function createPreviewPanel(
   let horizontalSpread = 1;
 
   async function doRender(doc: string) {
-    // Largura útil da prancha (descontando padding ~22px de cada lado + moldura).
-    const inner = host.clientWidth ? host.clientWidth - 48 : 0;
+    // Largura útil da prancha: lê o padding REAL (muda com .wave-on) + moldura,
+    // em vez de constante mágica — senão o SVG estoura quando o padding cresce.
+    const cs = getComputedStyle(host);
+    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    const inner = host.clientWidth ? host.clientWidth - pad - 4 : 0;
     const r = await engine.render(doc, {
       widthPx: inner > 120 ? inner : undefined,
       extraLineSpacingPx: extraLineSpacingPx || undefined,

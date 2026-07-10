@@ -153,6 +153,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 export const LANE_HEIGHT = 28;       // altura da lane sob cada sistema (traço/alvo maiores)
 const LANE_GAP = 10;                 // folga entre baseline do sistema e a lane (respiro)
 const BASE_Y = LANE_HEIGHT / 2;      // régua RETA: baseline fixa (a melodia vem dos neumas)
+const MARK_HALF = Math.round(LANE_HEIGHT * 0.22); // meia-altura do tique — escala com a lane
 const END_MARGIN = 5;                // px do trecho da 1ª/última nota e após pausa
 
 export interface LaneHooks {
@@ -223,8 +224,8 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       mark.setAttribute("data-key", key);
       mark.setAttribute("x1", String(n.x));
       mark.setAttribute("x2", String(n.x));
-      mark.setAttribute("y1", String(BASE_Y - 4));
-      mark.setAttribute("y2", String(BASE_Y + 4));
+      mark.setAttribute("y1", String(BASE_Y - MARK_HALF));
+      mark.setAttribute("y2", String(BASE_Y + MARK_HALF));
       marks.push(mark);
 
       const hit = document.createElementNS(SVG_NS, "rect");

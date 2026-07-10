@@ -87,6 +87,15 @@ describe("renderWaveLanes", () => {
     renderWaveLanes(svg, systems, {});
     expect(svg.querySelectorAll(".wave-dot").length).toBe(2);
   });
+  it("tique escala com a lane (~22% de LANE_HEIGHT para cada lado)", () => {
+    const { svg, systems } = svgWithSystems();
+    renderWaveLanes(svg, systems, {});
+    const dot = svg.querySelector<SVGLineElement>(".wave-dot")!;
+    const half = Math.round(LANE_HEIGHT * 0.22);
+    const y1 = Number(dot.getAttribute("y1")), y2 = Number(dot.getAttribute("y2"));
+    expect(y2 - y1).toBe(2 * half);
+    expect((y1 + y2) / 2).toBeCloseTo(LANE_HEIGHT / 2); // centrado na régua
+  });
   it("interrompe o contorno na divisio — a nota após a pausa começa um traço novo", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const systems = [{

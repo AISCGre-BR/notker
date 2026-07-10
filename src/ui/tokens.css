@@ -14,6 +14,10 @@
 }
 * { box-sizing: border-box; }
 body { font-family: var(--font); color: var(--ink); background: var(--cream); }
+::selection { background: var(--rule-soft); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
 
 /* ── Menubar: aparato erudito estilo MuseScore/Office (spec B) ─────────────── */
 .menubar {
@@ -114,7 +118,9 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 }
 #app ::-webkit-scrollbar-thumb, #preview::-webkit-scrollbar-thumb,
 .overlay-list::-webkit-scrollbar-thumb, #doc-list::-webkit-scrollbar-thumb {
-  background: var(--rule); border: 2px solid var(--cream); border-radius: 0;
+  /* inset via clip (não depende da cor do fundo — preview é cream-deep) */
+  background: var(--rule); background-clip: padding-box;
+  border: 2px solid transparent; border-radius: 0;
 }
 #app ::-webkit-scrollbar-thumb:hover, #preview::-webkit-scrollbar-thumb:hover {
   background: var(--ink-muted);
@@ -136,9 +142,10 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   box-shadow: var(--shadow);
 }
 /* onda ativa: a prancha vira mesa de trabalho — mais respiro ao redor e a
-   moldura ganha um filete rubricado discreto sinalizando o modo de edição */
+   moldura inteira assume o tom rubricado suave (simétrica; sem canto emendado) */
+#preview { transition: padding 180ms var(--ease); }
 #preview.wave-on { padding: 36px 30px; }
-#preview.wave-on svg { border-top: 2px solid var(--rubric-soft); }
+#preview.wave-on svg { border-color: var(--rubric-soft); }
 .hl-strong [fill], .hl-strong { fill: var(--rubric) !important; }
 
 /* divisor redimensionável */
