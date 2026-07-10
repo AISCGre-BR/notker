@@ -183,7 +183,11 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
 
     // Zebra por sílaba: faixa de fundo nas sílabas ALTERNADAS (agrupa "estas
     // notas são da mesma sílaba" sem desenhar contorno). Corre por RUNS de
-    // syllableIndex consecutivo na ordem de x.
+    // syllableIndex consecutivo na ordem de x. PREMISSA: dentro de um sistema
+    // as notas de uma sílaba são contíguas em x (mapSystems centra cada nota
+    // na sua box; intercalar exigiria boxes de sílabas entrelaçadas — não
+    // observado nos dados reais; se ocorrer, a sílaba conta como 2 runs e a
+    // alternância local se desloca, sem quebrar nada além da estética).
     let runStart = 0, runOrdinal = 0;
     for (let i = 1; i <= ns.length; i++) {
       if (i < ns.length && ns[i].syllableIndex === ns[runStart].syllableIndex) continue;
@@ -233,14 +237,16 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       col.setAttribute("height", String(h));
       cols.push(col);
 
-      // Pausa (divisio) vira vírgula de respiração no ponto médio até a próxima.
-      if (n.divisioAfter && next) {
-        const bx = (n.x + next.x) / 2;
+      // Pausa (divisio) vira respiração INCLINADA (barra "/" como na notação —
+      // não confunde com coluna curta) no ponto médio até a próxima nota; na
+      // última nota do sistema (finalis de fim de linha), logo à direita dela.
+      if (n.divisioAfter) {
+        const bx = next ? (n.x + next.x) / 2 : n.x + BAND_PAD;
         const breath = document.createElementNS(SVG_NS, "line");
         breath.setAttribute("class", "wave-breath");
-        breath.setAttribute("x1", String(bx));
-        breath.setAttribute("x2", String(bx));
-        breath.setAttribute("y1", String(BASE_LINE_Y));
+        breath.setAttribute("x1", String(bx - 2));
+        breath.setAttribute("x2", String(bx + 2));
+        breath.setAttribute("y1", String(BASE_LINE_Y - 1));
         breath.setAttribute("y2", String(BASE_LINE_Y - BREATH_H));
         breaths.push(breath);
       }

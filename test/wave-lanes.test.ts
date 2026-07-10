@@ -126,15 +126,35 @@ describe("renderWaveLanes — colunas de mensura", () => {
     expect(bx).toBeLessThan(60);
   });
   it("hover no hit: coluna hovered, irmãs da sílaba sibling, guia até o neuma", () => {
-    const { svg, systems } = svgWithSystems();
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const systems = [{
+      yBaseline: 30, yTop: 8, xRange: [10, 90] as [number, number], notes: [
+        { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null, x: 20 },
+        { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 1, pitch: "g", alt: 0, factor: 1, divisioAfter: null, x: 50 }, // irmã
+      ],
+    }];
     renderWaveLanes(svg, systems, {});
     const hit = svg.querySelector<SVGRectElement>('.wave-hit[data-key="0:0"]')!;
     hit.dispatchEvent(new Event("pointerenter"));
     expect(svg.querySelector('.wave-col[data-key="0:0"]')!.classList.contains("hovered")).toBe(true);
+    expect(svg.querySelector('.wave-col[data-key="0:1"]')!.classList.contains("sibling")).toBe(true);
     expect(svg.querySelector(".wave-guide")).not.toBeNull();
     hit.dispatchEvent(new Event("pointerleave"));
     expect(svg.querySelector('.wave-col[data-key="0:0"]')!.classList.contains("hovered")).toBe(false);
+    expect(svg.querySelector('.wave-col[data-key="0:1"]')!.classList.contains("sibling")).toBe(false);
     expect(svg.querySelector(".wave-guide")).toBeNull();
+  });
+  it("divisio na ÚLTIMA nota do sistema também ganha respiração (finalis de fim de linha)", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const systems = [{
+      yBaseline: 30, yTop: 8, xRange: [10, 90] as [number, number], notes: [
+        { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: "finalis" as const, x: 60 },
+      ],
+    }];
+    renderWaveLanes(svg, systems, {});
+    const breath = svg.querySelector<SVGLineElement>(".wave-breath")!;
+    expect(breath).not.toBeNull();
+    expect(Number(breath.getAttribute("x1"))).toBeGreaterThan(60); // à direita da nota
   });
 });
 
@@ -377,6 +397,26 @@ describe("deformLiveSegment — coluna ao vivo durante o arrasto", () => {
     deformLiveSegment(svg, "0:0", 1.0);
     expect(Number(col.getAttribute("height"))).toBe(factorToBarHeight(1));
     expect(col.classList.contains("edited")).toBe(false);
+  });
+});
+
+describe("cursor de playback", () => {
+  it("setCursor pinta a coluna .playing e limpa a anterior", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const readBoxes = () => new Map([[1, [{ syllableIndex: 1, x: 10, y: 5, width: 40, height: 10 }]]]);
+    const ctl = createWaveLanes(() => svg, {}, { readBoxes });
+    ctl.setEnabled(true);
+    ctl.refresh([
+      { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 0, pitch: "f", alt: 0, factor: 1, divisioAfter: null },
+      { syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: 1, pitch: "g", alt: 0, factor: 1, divisioAfter: null },
+    ]);
+    ctl.setCursor("0:0");
+    expect(svg.querySelector('.wave-col[data-key="0:0"]')!.classList.contains("playing")).toBe(true);
+    ctl.setCursor("0:1");
+    expect(svg.querySelector('.wave-col[data-key="0:0"]')!.classList.contains("playing")).toBe(false);
+    expect(svg.querySelector('.wave-col[data-key="0:1"]')!.classList.contains("playing")).toBe(true);
+    ctl.setCursor(null);
+    expect(svg.querySelectorAll(".wave-col.playing").length).toBe(0);
   });
 });
 
