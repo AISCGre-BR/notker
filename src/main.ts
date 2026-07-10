@@ -590,6 +590,9 @@ async function boot() {
       // densos). O re-render dispara onRender → rebuildWave, que (re)desenha as lanes
       // já no layout espaçado.
       panel?.setWaveSpacing(on ? WAVE_LINE_SPACING_PX : 0, on ? WAVE_SPREAD : 1);
+      // Com a onda ativa a partitura vira superfície de TRABALHO: mais respiro
+      // ao redor (padding do preview) acompanha o vão maior entre sistemas.
+      previewHost.classList.toggle("wave-on", on);
       if (on) syncWaveWithDoc();
       waveBar?.setVisible(on);
       waveBar?.setSolfejo(playbackMode !== "interpretado");

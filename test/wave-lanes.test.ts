@@ -234,8 +234,11 @@ describe("constantes de espalhamento (decisão UAT-8, 2026-07-09)", () => {
     // mesmo glifo não desgrudam com ele — por isso o mínimo por nota sobe junto.
     expect(MIN_NOTE_DX).toBe(24);
   });
-  it("WAVE_LINE_SPACING_PX = 36 — vão entre sistemas ≈ altura da lane + folga", () => {
-    expect(WAVE_LINE_SPACING_PX).toBe(36);
+  it("WAVE_LINE_SPACING_PX = 64 — vão generoso: lane + folga dos dois lados (UAT 2026-07-09)", () => {
+    expect(WAVE_LINE_SPACING_PX).toBe(64);
+  });
+  it("LANE_HEIGHT = 28 — lane mais alta = traço e alvo de arrasto maiores", () => {
+    expect(LANE_HEIGHT).toBe(28);
   });
 });
 

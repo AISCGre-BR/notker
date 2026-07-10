@@ -40,7 +40,7 @@ const BAND_GAP_FACTOR = 0.45; // fração da altura mediana: gap maior que isso 
 // a lane acompanhar a abertura. WAVE_LINE_SPACING_PX é o vão vertical extra entre
 // sistemas (≈ altura da lane + folga) — os dois entram juntos em setWaveSpacing.
 export const WAVE_SPREAD = 3.4;
-export const WAVE_LINE_SPACING_PX = 36;
+export const WAVE_LINE_SPACING_PX = 64;
 export const MIN_NOTE_DX = 24; // px mínimos por nota na lane (separa notas de neumas compactos)
 
 /** Agrupa boxes em SISTEMAS (linhas da pauta) por GAP nos TOPOS (y).
@@ -150,8 +150,8 @@ export function pitchToLaneY(pitch: string, laneHeight: number): number {
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-export const LANE_HEIGHT = 22;       // altura da lane sob cada sistema
-const LANE_GAP = 4;                  // folga entre baseline do sistema e a lane
+export const LANE_HEIGHT = 28;       // altura da lane sob cada sistema (traço/alvo maiores)
+const LANE_GAP = 10;                 // folga entre baseline do sistema e a lane (respiro)
 const BASE_Y = LANE_HEIGHT / 2;      // régua RETA: baseline fixa (a melodia vem dos neumas)
 const END_MARGIN = 5;                // px do trecho da 1ª/última nota e após pausa
 

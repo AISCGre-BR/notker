@@ -102,6 +102,26 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   display: inline-block; width: 1px; height: 18px;
   background: var(--rule); margin: 0 8px; align-self: center;
 }
+/* foco por teclado rubricado (a11y) — consistente em toda a faixa superior */
+.toolbar-btn:focus-visible, .menubar-top:focus-visible, .wave-bar-reset:focus-visible {
+  outline: 1px solid var(--rubric); outline-offset: -1px;
+}
+
+/* ── Scrollbars do scriptorium (WebKit) — finas, tinta diluída ─────────────── */
+#app ::-webkit-scrollbar, #preview::-webkit-scrollbar, .overlay-list::-webkit-scrollbar,
+#doc-list::-webkit-scrollbar {
+  width: 9px; height: 9px;
+}
+#app ::-webkit-scrollbar-thumb, #preview::-webkit-scrollbar-thumb,
+.overlay-list::-webkit-scrollbar-thumb, #doc-list::-webkit-scrollbar-thumb {
+  background: var(--rule); border: 2px solid var(--cream); border-radius: 0;
+}
+#app ::-webkit-scrollbar-thumb:hover, #preview::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-muted);
+}
+#app ::-webkit-scrollbar-track, #preview::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 /* ── Workspace / preview como "prancha" emoldurada ─────────────────────────── */
 #workspace { background: var(--cream); }
@@ -115,6 +135,10 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   background: var(--surface); border: 1px solid var(--rule);
   box-shadow: var(--shadow);
 }
+/* onda ativa: a prancha vira mesa de trabalho — mais respiro ao redor e a
+   moldura ganha um filete rubricado discreto sinalizando o modo de edição */
+#preview.wave-on { padding: 36px 30px; }
+#preview.wave-on svg { border-top: 2px solid var(--rubric-soft); }
 .hl-strong [fill], .hl-strong { fill: var(--rubric) !important; }
 
 /* divisor redimensionável */
