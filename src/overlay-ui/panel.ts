@@ -3,8 +3,8 @@
 // neuma com sua própria nomenclatura. Estética herdada de tokens.css (creme/tinta/
 // rubricação): o nome de referência fica em tinta; as glosas do usuário são
 // RUBRICAS (vermelhas), como as anotações escribais. Edição inline real: adicionar,
-// remover, promover a padrão, ocultar — sobre um rascunho clonado do overlay atual,
-// persistido por substituição no Salvar (não-destrutivo via Importar/merge à parte).
+// remover, promover a padrão, ocultar — sobre um rascunho clonado do overlay atual;
+// cada mutação vai ao consumidor via onChange (autosave; não-destrutivo via Importar/merge à parte).
 import type { EffectiveEntry, Overlay, OverlayEntry } from "../neume/types";
 import { glyphSvgEl } from "../neume/render";
 import { promoteToDefault } from "./conflict";
@@ -16,13 +16,15 @@ const RENDER_CAP = 150;
 
 export interface OverlayPanelOpts {
   entries: () => EffectiveEntry[];
-  /** Autosave: chamado após CADA mutação (adicionar/remover/ocultar/promover). */
+  /** Autosave: chamado após CADA mutação (adicionar/remover/ocultar/promover).
+   *  A promessa deve resolver quando a escrita for CONFIRMADA ("salvo ✓") e
+   *  rejeitar se falhar ("erro ao salvar"). */
   onChange: (o: Overlay) => void | Promise<void>;
   /** Overlay atual do usuário, para editar/remover (rascunho parte dele). */
   initial?: () => Overlay;
   onClose?: () => void;
-  /** Exporta o RASCUNHO atual (o que está na tela), não o overlay salvo — assim
-   *  "Exportar" reflete o que o usuário vê, mesmo sem ter clicado Salvar antes. */
+  /** Exporta o RASCUNHO atual (o que está na tela) — inclusive edições cuja
+   *  escrita do autosave ainda está pendente. */
   onExport?: (draft: Overlay) => void;
   onImport?: () => void;
 }

@@ -13,7 +13,8 @@ import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
 import { loadNeumeDb } from "./neume/db-load";
 import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
-import { mergeEntry, addName, mergeOverlays } from "./neume/overlay";
+import { mergeEntry, addName, mergeOverlays, cloneOverlay } from "./neume/overlay";
+import { createAutosave } from "./neume/autosave";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
 import { nabcMoveKeymap, runMove } from "./neume/nabc-move";
@@ -35,8 +36,8 @@ import { buildTimeline } from "./tuotilo/timeline";
 import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuotilo/duration";
 import { syllableRangeOfSelection } from "./preview/source-map";
 import { DEFAULT_PROFILE } from "./tuotilo/profile";
-import { createOverlayPanel } from "./overlay-ui/panel";
-import { debounce } from "./preview/debounce";
+import { createOverlayPanel, type OverlayPanel } from "./overlay-ui/panel";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
@@ -128,13 +129,29 @@ async function boot() {
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
-  // Autosave dos nomes: coalesce rajadas de edição em uma escrita a cada 300 ms.
-  const persistOverlay = debounce((o: Overlay) => {
-    overlay = o;
-    void saveUserOverlay(overlay)
-      .then(() => { reindex(); setStatus("nomes salvos ✓"); })
-      .catch((e) => setStatus("erro ao salvar nomes: " + String(e)));
+  // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora pelo
+  // painel); só a ESCRITA é coalescida (300 ms). schedule() resolve quando o disco
+  // confirma (indicador "salvo ✓" verdadeiro); flush() antes de import/export/fechar.
+  const overlayAutosave = createAutosave(async () => {
+    try {
+      await saveUserOverlay(overlay);
+      reindex();
+      setStatus("nomes salvos ✓");
+    } catch (e) {
+      setStatus("erro ao salvar nomes: " + String(e));
+      throw e;
+    }
   }, 300);
+  // Painel de nomes aberto (se houver): re-sincroniza quando o overlay muda POR FORA
+  // dele (hover "adicionar nome", importar) — senão o próximo autosave do rascunho
+  // antigo apagaria a mudança.
+  let overlayPanel: OverlayPanel | null = null;
+  // Fechar a janela com escrita pendente: grava antes (try/finally — fecha mesmo se falhar).
+  try {
+    void getCurrentWindow().onCloseRequested(async () => {
+      try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
+    }).catch(() => { /* sem permissão/evento: segue sem flush */ });
+  } catch { /* fora do Tauri (testes/probe) */ }
   const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
@@ -180,8 +197,10 @@ async function boot() {
       onAddName: async (id: string) => {
         const name = window.prompt("Novo nome para este neuma:");
         if (!name) return;
+        try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
         overlay = addName(overlay, id, name);
         reindex();
+        overlayPanel?.refresh();
         try { await saveUserOverlay(overlay); setStatus("nome adicionado: " + name); }
         catch (e) { setStatus("nome adicionado (não persistido): " + String(e)); }
       },
@@ -465,9 +484,11 @@ async function boot() {
           setStatus("importar: arquivo de nomes vazio (0 entradas) — nada a importar");
           return;
         }
+        await overlayAutosave.flush();
         overlay = mergeOverlays(overlay, imported);
         await saveUserOverlay(overlay);
         reindex();
+        overlayPanel?.refresh();
         setStatus(`nomes importados: ${n} entrada(s)`);
       } catch (err) {
         setStatus("importar ERRO (arquivo inválido?): " + String(err));
@@ -483,32 +504,30 @@ async function boot() {
     },
     openOverlayPanel: () => {
       const host = document.querySelector<HTMLElement>("#overlay-host")!;
-      const closePanel = () => { host.style.display = "none"; host.innerHTML = ""; };
+      const closePanel = () => { host.style.display = "none"; host.innerHTML = ""; overlayPanel = null; };
       // Toggle: se já está aberto, fecha.
       if (host.style.display === "block") { closePanel(); return; }
       host.style.display = "block";
       const op = createOverlayPanel(host, {
         entries: effectiveRef,
         initial: () => overlay,
-        onChange: (o) => { persistOverlay(o); },
-        onExport: async (draft) => {
-          // Exporta o que está NA TELA: commita o rascunho (persiste) e exporta-o.
-          // Evita "exportei e veio vazio" por escrita pendente do autosave.
-          persistOverlay.cancel(); // a escrita direta abaixo substitui a pendente
-          overlay = draft;
-          await saveUserOverlay(overlay);
-          reindex();
+        onChange: (o) => {
+          overlay = cloneOverlay(o); // em dia JÁ (clone: sem aliasing com o rascunho)
+          return overlayAutosave.schedule();
+        },
+        onExport: async () => {
+          // `overlay` já reflete a tela; grava o pendente antes de exportar.
+          try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
           const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
           await exportOverlay(overlay);
           setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
         },
         onImport: async () => {
-          persistOverlay.cancel(); // escrita pendente do autosave não pode sobrescrever o importado
-          await commands.run("importOverlay");
-          op.refresh(); // recarrega a lista com os nomes importados (evita o autosave sobrescrevê-los)
+          await commands.run("importOverlay"); // flush + merge + refresh do painel lá dentro
         },
         onClose: closePanel,
       });
+      overlayPanel = op;
       op.open();
     },
     togglePreview: () => {
