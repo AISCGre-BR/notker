@@ -1,4 +1,4 @@
-import type { PreviewEngine, SyllableSource } from "./engine";
+import type { NoteAnchor, PreviewEngine, SyllableSource } from "./engine";
 import { debounce } from "./debounce";
 
 /** Extrai N de um elemento com classe `syllable-N`, ou null. */
@@ -11,6 +11,8 @@ export function syllableIndexFromGroup(el: Element | null): number | null {
 export interface PreviewPanel {
   update(doc: string): void;
   sourceMap(): SyllableSource[];
+  /** Âncoras reais das cabeças de nota do último render (vazio se o engine não fornece). */
+  noteAnchors(): NoteAnchor[];
   svgEl(): SVGSVGElement | null;
   onSyllable(cb: (syllableIndex: number) => void): void;
   onRender(cb: () => void): void;
@@ -26,6 +28,7 @@ export function createPreviewPanel(
   opts: { debounceMs: number },
 ): PreviewPanel {
   let map: SyllableSource[] = [];
+  let anchors: NoteAnchor[] = [];
   let cb: ((n: number) => void) | null = null;
   let renderCb: (() => void) | null = null;
   let lastDoc = "";
@@ -44,6 +47,7 @@ export function createPreviewPanel(
       horizontalSpreadFactor: horizontalSpread > 1 ? horizontalSpread : undefined,
     });
     map = r.sourceMap;
+    anchors = r.noteAnchors ?? [];
     host.innerHTML = r.svg;
     host.querySelector("svg")?.addEventListener("click", (ev) => {
       const g = (ev.target as Element).closest('[class*="syllable-"]');
@@ -64,6 +68,7 @@ export function createPreviewPanel(
   return {
     update: (doc) => { lastDoc = doc; render(doc); },
     sourceMap: () => map,
+    noteAnchors: () => anchors,
     svgEl: () => host.querySelector("svg"),
     onSyllable: (fn) => { cb = fn; },
     onRender: (fn) => { renderCb = fn; },

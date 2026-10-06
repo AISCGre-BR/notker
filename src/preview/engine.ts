@@ -3,7 +3,15 @@ export interface SyllableSource {
   from: number;           // offset inicial no doc
   to: number;             // offset final (exclusivo)
 }
-export interface RenderResult { svg: string; sourceMap: SyllableSource[]; }
+/** Âncora REAL de uma cabeça de nota (espaço de usuário do <svg>), em ordem de
+ *  documento — usada pela onda p/ pôr cada coluna sob a sua nota. */
+export interface NoteAnchor {
+  syllableIndex: number; // índice REAL (syllable-N)
+  x: number;             // centro da cabeça de nota
+  y: number;             // topo da linha (pauta) onde a nota caiu — escolhe o sistema
+  pitch: number;         // altura numérica do engine (só a forma da sequência importa)
+}
+export interface RenderResult { svg: string; sourceMap: SyllableSource[]; noteAnchors?: NoteAnchor[]; }
 export interface RenderOptions {
   widthPx?: number;
   /** Espaçamento EXTRA (px) acima de cada sistema — usado p/ abrir vão p/ as lanes

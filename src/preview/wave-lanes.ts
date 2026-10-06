@@ -4,6 +4,8 @@
 
 import { staffOffset } from "../gabc/gabc-pitch";
 import { WAVE_MIN, WAVE_MAX } from "../tuotilo/wave";
+import type { NoteAnchor } from "./engine";
+export type { NoteAnchor };
 
 export interface SylBox {
   syllableIndex: number;
@@ -24,6 +26,18 @@ export interface LaneNote extends NoteIdent {
   x: number; // posição (centro) no espaço de coordenadas do SVG
 }
 
+/** As âncoras servem à sílaba se a contagem bate e a forma melódica coincide
+ *  (diferenças consecutivas de altura) — guarda contra glifos que não são nota
+ *  na timeline (acidentes etc.); senão a sílaba cai no método por boxes. */
+function anchorsMatch(sylNotes: NoteIdent[], anchors: NoteAnchor[] | undefined): anchors is NoteAnchor[] {
+  if (!anchors || anchors.length !== sylNotes.length) return false;
+  const off = (n: NoteIdent) => staffOffset(n.pitch);
+  for (let i = 1; i < anchors.length; i++) {
+    if (anchors[i].pitch - anchors[i - 1].pitch !== off(sylNotes[i]) - off(sylNotes[i - 1])) return false;
+  }
+  return true;
+}
+
 export interface System {
   yBaseline: number;      // base dos glifos do sistema (y + height máx)
   yTop: number;           // topo dos glifos do sistema (y mín) — alvo da linha-guia
@@ -42,6 +56,36 @@ const BAND_GAP_FACTOR = 0.45; // fração da altura mediana: gap maior que isso 
 export const WAVE_SPREAD = 3.4;
 export const WAVE_LINE_SPACING_PX = 64;
 export const MIN_NOTE_DX = 24; // px mínimos por nota na lane (separa notas de neumas compactos)
+/** Vão mínimo entre colunas quando as posições vêm das ÂNCORAS reais: notas
+ *  empilhadas no mesmo glifo (pes, scandicus) abrem só o necessário p/ serem
+ *  distinguíveis/clicáveis, sem sair de baixo do neuma. */
+export const MIN_ANCHOR_DX = 8;
+
+/** Separa posições (ordenadas) que distam menos de `d`: funde vizinhos em clusters
+ *  e redistribui cada cluster com passo `d`, CENTRADO na média das posições reais
+ *  (desloca o mínimo possível). Repete até nenhum cluster encostar no seguinte. */
+export function spreadCoincident(xs: number[], d: number): number[] {
+  let clusters = xs.map((x) => ({ sum: x, n: 1 }));
+  const place = (c: { sum: number; n: number }) => {
+    const mean = c.sum / c.n;
+    return { first: mean - ((c.n - 1) * d) / 2, last: mean + ((c.n - 1) * d) / 2 };
+  };
+  for (let changed = true; changed; ) {
+    changed = false;
+    const next: typeof clusters = [];
+    for (const c of clusters) {
+      const prev = next[next.length - 1];
+      if (prev && place(c).first - place(prev).last < d - 1e-9) {
+        prev.sum += c.sum; prev.n += c.n; changed = true;
+      } else next.push({ ...c });
+    }
+    clusters = next;
+  }
+  return clusters.flatMap((c) => {
+    const { first } = place(c);
+    return Array.from({ length: c.n }, (_, i) => first + i * d);
+  });
+}
 
 /** Agrupa boxes em SISTEMAS (linhas da pauta) por GAP nos TOPOS (y).
  *  Validado contra coordenadas REAIS do nabc-lib (Dies sanctificatus, 121 boxes):
@@ -65,7 +109,11 @@ function clusterByY(boxes: SylBox[]): SylBox[][] {
   return bands;
 }
 
-export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylBox[]>): System[] {
+export function mapSystems(
+  notes: NoteIdent[],
+  boxesBySyllable: Map<number, SylBox[]>,
+  anchors: NoteAnchor[] = [],
+): System[] {
   const allBoxes = [...boxesBySyllable.values()].flat();
   const bands = clusterByY(allBoxes);
   // índice box → sistema
@@ -87,7 +135,30 @@ export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylB
     else bySyl.set(n.realSyllableIndex, [n]);
   }
 
+  const anchorsBySyl = new Map<number, NoteAnchor[]>();
+  for (const a of anchors) {
+    const arr = anchorsBySyl.get(a.syllableIndex);
+    if (arr) arr.push(a);
+    else anchorsBySyl.set(a.syllableIndex, [a]);
+  }
+  // sistema cuja faixa vertical [yTop, yBaseline] está mais perto do y da âncora
+  const systemAt = (y: number): number => {
+    let best = 0, bestD = Infinity;
+    systems.forEach((s, i) => {
+      const d = y < s.yTop ? s.yTop - y : y > s.yBaseline ? y - s.yBaseline : 0;
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  };
+
   for (const [realIdx, sylNotes] of bySyl) {
+    // Caminho principal: x REAL da cabeça de nota (modelo de layout do nabc-lib).
+    const sylAnchors = anchorsBySyl.get(realIdx);
+    if (systems.length > 0 && anchorsMatch(sylNotes, sylAnchors)) {
+      sylNotes.forEach((n, i) => systems[systemAt(sylAnchors[i].y)].notes.push({ ...n, x: sylAnchors[i].x }));
+      continue;
+    }
+    // Fallback (engine sem âncoras / divergência): distribuição pela largura das boxes.
     const boxes = (boxesBySyllable.get(realIdx) ?? []).slice().sort((a, b) => a.y - b.y || a.x - b.x);
     if (boxes.length === 0) continue;
     const K = sylNotes.length;
@@ -120,7 +191,13 @@ export function mapSystems(notes: NoteIdent[], boxesBySyllable: Map<number, SylB
     });
   }
 
-  for (const s of systems) s.notes.sort((a, b) => a.x - b.x);
+  for (const s of systems) {
+    s.notes.sort((a, b) => a.x - b.x);
+    if (anchors.length > 0) {
+      const xs = spreadCoincident(s.notes.map((n) => n.x), MIN_ANCHOR_DX);
+      s.notes.forEach((n, i) => { n.x = xs[i]; });
+    }
+  }
   return systems;
 }
 
@@ -369,7 +446,11 @@ export function readSyllableBoxes(svg: SVGSVGElement): Map<number, SylBox[]> {
 export function createWaveLanes(
   getSvg: () => SVGSVGElement | null,
   hooks: LaneHooks,
-  opts: { readBoxes?: (svg: SVGSVGElement) => Map<number, SylBox[]> } = {},
+  opts: {
+    readBoxes?: (svg: SVGSVGElement) => Map<number, SylBox[]>;
+    /** Âncoras reais das notas (do engine); sem elas, posição sintetizada por boxes. */
+    readAnchors?: () => NoteAnchor[];
+  } = {},
 ): WaveLanes {
   const readBoxes = opts.readBoxes ?? readSyllableBoxes;
   let on = false;
@@ -403,7 +484,7 @@ export function createWaveLanes(
     if (!on) return;
     bindScoreHover(svg);
     const boxes = readBoxes(svg);
-    const systems = mapSystems(lastNotes, boxes);
+    const systems = mapSystems(lastNotes, boxes, opts.readAnchors?.() ?? []);
     // Dump de diagnóstico opt-in: `window.__ondaDebug = true` no console antes de
     // ligar a onda imprime as boxes reais e os sistemas detectados (para calibrar).
     if (typeof window !== "undefined" && (window as unknown as { __ondaDebug?: boolean }).__ondaDebug) {

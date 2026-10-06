@@ -1,4 +1,5 @@
 import type { PreviewEngine, RenderResult, SyllableSource } from "./engine";
+import { extractNoteAnchors, rootOffset, type LayoutLike } from "./note-anchors";
 
 /** Token de clave gabc (c1..c4 / f1..f4, com bemol opcional). A clave é o 1º grupo
  *  `(...)` e, no nabc-lib, recebe `_index` 0 → sai como `class="syllable"` SEM
@@ -103,6 +104,8 @@ export class NabcLibEngine implements PreviewEngine {
     if (distinct !== numbered) {
       console.warn(`[f3] desalinhamento sílaba↔span: índices distintos=${distinct} numeradas=${numbered}`);
     }
-    return { svg, sourceMap: spans };
+    // Âncoras reais das cabeças de nota (modelo de layout pós-render) p/ a onda.
+    const noteAnchors = extractNoteAnchors(renderer as unknown as LayoutLike, rootOffset(svgEl));
+    return { svg, sourceMap: spans, noteAnchors };
   }
 }

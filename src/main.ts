@@ -231,7 +231,7 @@ async function boot() {
       if (syl === null) { clearHighlight(svg); return; }
       highlightSyllable(svg, syl); // syl já é o realSyllableIndex (renderWaveLanes passa o índice real)
     },
-  });
+  }, { readAnchors: () => panel?.noteAnchors?.() ?? [] });
 
   // Rótulo do alongamento p/ a leitura ao vivo no rodapé (na estética: sem floats).
   const fatorLabel = (f: number): string =>

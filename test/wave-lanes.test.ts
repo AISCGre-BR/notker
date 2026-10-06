@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mapSystems, type SylBox, type NoteIdent, factorToBarHeight, pitchToLaneY } from "../src/preview/wave-lanes";
 import { renderWaveLanes, LANE_HEIGHT, factorFromDrag, createWaveLanes, deformLiveSegment } from "../src/preview/wave-lanes";
-import { WAVE_SPREAD, WAVE_LINE_SPACING_PX, MIN_NOTE_DX } from "../src/preview/wave-lanes";
+import { WAVE_SPREAD, WAVE_LINE_SPACING_PX, MIN_NOTE_DX, MIN_ANCHOR_DX, spreadCoincident } from "../src/preview/wave-lanes";
 import { bboxToRoot } from "../src/preview/wave-lanes";
 import { WAVE_MIN, WAVE_MAX } from "../src/tuotilo/wave";
 import diesBoxes from "./fixtures/dies-sanctificatus-boxes.json";
@@ -441,5 +441,88 @@ describe("elo bidirecional pauta → lane (score-hover)", () => {
 
     svg.dispatchEvent(new Event("pointerleave"));
     expect(col.classList.contains("score-hover")).toBe(false);
+  });
+});
+
+describe("mapSystems com ÂNCORAS reais de nota (modelo de layout do nabc-lib)", () => {
+  // 2 sistemas: topos em y=5 e y=80. Âncora.pitch = altura numérica do nabc-lib
+  // (offset constante em relação à letra gabc — só a FORMA da sequência importa).
+  const boxes = new Map<number, SylBox[]>([
+    [0, [
+      { syllableIndex: 0, x: 0, y: 5, width: 100, height: 10 },
+      { syllableIndex: 0, x: 0, y: 5, width: 100, height: 10 }, // <g> duplicado (aninhado)
+    ]],
+    [1, [{ syllableIndex: 1, x: 0, y: 80, width: 60, height: 10 }]],
+  ]);
+
+  it("usa o x REAL de cada cabeça de nota (sem pares no mesmo x) e o sistema pelo y da âncora", () => {
+    const notes = [note(0, 0, "f"), note(0, 1, "e"), note(0, 2, "f"), note(1, 0, "g")];
+    const anchors = [
+      { syllableIndex: 0, x: 12.5, y: 6, pitch: 8 },
+      { syllableIndex: 0, x: 20.5, y: 6, pitch: 7 },
+      { syllableIndex: 0, x: 55.5, y: 6, pitch: 8 },
+      { syllableIndex: 1, x: 30, y: 81, pitch: 9 },
+    ];
+    const sys = mapSystems(notes, boxes, anchors);
+    expect(sys).toHaveLength(2);
+    expect(sys[0].notes.map((n) => [n.noteInSyllable, n.x])).toEqual([[0, 12.5], [1, 20.5], [2, 55.5]]);
+    expect(sys[1].notes.map((n) => n.x)).toEqual([30]);
+  });
+
+  it("sílaba partida por quebra de linha: âncoras distribuem as notas nos dois sistemas", () => {
+    const notes = [note(0, 0, "f"), note(0, 1, "g")];
+    const anchors = [
+      { syllableIndex: 0, x: 90, y: 6, pitch: 8 },
+      { syllableIndex: 0, x: 5, y: 81, pitch: 9 },
+    ];
+    const sys = mapSystems(notes, boxes, anchors);
+    expect(sys[0].notes.map((n) => n.x)).toEqual([90]);
+    expect(sys[1].notes.map((n) => n.x)).toEqual([5]);
+  });
+
+  it("contagem divergente → cai no método por boxes (sem quebrar)", () => {
+    const notes = [note(1, 0, "g"), note(1, 1, "h")];
+    const anchors = [{ syllableIndex: 1, x: 30, y: 81, pitch: 9 }];
+    const sys = mapSystems(notes, boxes, anchors);
+    expect(sys[1].notes).toHaveLength(2);
+    expect(sys[1].notes.map((n) => n.x)).not.toContain(30);
+  });
+
+  it("forma melódica divergente (ex.: acidente contado como nota) → fallback", () => {
+    const notes = [note(1, 0, "g"), note(1, 1, "h")];
+    const anchors = [
+      { syllableIndex: 1, x: 30, y: 81, pitch: 9 },
+      { syllableIndex: 1, x: 40, y: 81, pitch: 8 }, // desce, mas a nota sobe
+    ];
+    const sys = mapSystems(notes, boxes, anchors);
+    expect(sys[1].notes.map((n) => n.x)).not.toEqual([30, 40]);
+  });
+});
+
+describe("spreadCoincident (notas empilhadas: pes, scandicus…)", () => {
+  it("não mexe em notas já separadas", () => {
+    expect(spreadCoincident([10, 30, 50], 8)).toEqual([10, 30, 50]);
+  });
+  it("par coincidente abre simétrico em torno do x real", () => {
+    expect(spreadCoincident([425, 425], 8)).toEqual([421, 429]);
+  });
+  it("cluster que encosta no vizinho funde e reabre centrado na média", () => {
+    // [425,425,434]: par abre p/ 421/429, que fica a 5px do 434 → cluster de 3 em torno de 428
+    expect(spreadCoincident([425, 425, 434], 8)).toEqual([420, 428, 436]);
+  });
+  it("preserva a ordem e o espaçamento mínimo em toda a sequência", () => {
+    const out = spreadCoincident([0, 1, 2, 3, 40], 8);
+    for (let i = 1; i < out.length; i++) expect(out[i] - out[i - 1]).toBeGreaterThanOrEqual(8 - 1e-9);
+  });
+});
+
+describe("mapSystems + âncoras empilhadas", () => {
+  it("pes (2 notas no mesmo x) vira 2 colunas distinguíveis em torno do glifo", () => {
+    const boxes = new Map<number, SylBox[]>([[0, [{ syllableIndex: 0, x: 0, y: 5, width: 40, height: 10 }]]]);
+    const notes = [note(0, 0, "g"), note(0, 1, "h")];
+    const anchors = [{ syllableIndex: 0, x: 20, y: 6, pitch: 9 }, { syllableIndex: 0, x: 20, y: 6, pitch: 10 }];
+    const xs = mapSystems(notes, boxes, anchors)[0].notes.map((n) => n.x);
+    expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(MIN_ANCHOR_DX - 1e-9);
+    expect((xs[0] + xs[1]) / 2).toBeCloseTo(20);
   });
 });

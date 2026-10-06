@@ -18,7 +18,7 @@ async function main(): Promise<void> {
   // Defaults seguem as constantes de produção — passar ?spread=X&ls=Y p/ experimentar.
   const spread = Number(qs.get("spread") ?? WAVE_SPREAD);
   const lineSpacing = Number(qs.get("ls") ?? WAVE_LINE_SPACING_PX);
-  const doc = await fetch("/samples/04-dies-sanctificatus.gabc").then((x) => x.text());
+  const doc = await fetch("/samples/" + (qs.get("sample") ?? "04-dies-sanctificatus.gabc")).then((x) => x.text());
   const engine = new NabcLibEngine();
   const host = document.getElementById("preview")!;
   const res = await engine.render(doc, { widthPx: 680, extraLineSpacingPx: lineSpacing, horizontalSpreadFactor: spread });
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   }));
 
   const boxes = readSyllableBoxes(svg);
-  const systems = mapSystems(notes, boxes);
+  const systems = mapSystems(notes, boxes, qs.get("legacy") ? [] : (res.noteAnchors ?? []));
   renderWaveLanes(svg, systems, {});
 
   // Hover simulado numa nota p/ mostrar a linha-guia + realce no screenshot.
@@ -51,6 +51,13 @@ async function main(): Promise<void> {
     ?? svg.querySelector<SVGRectElement>(".wave-hit");
   hit?.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
 
+  if (qs.get("dumpsvg")) {
+    // Estrutura crua do SVG + notas/boxes (diagnóstico do alinhamento nota↔coluna).
+    dumpEl.textContent = JSON.stringify({ svg: svg.outerHTML, notes, anchors: res.noteAnchors ?? [], boxes: [...boxes.entries()],
+      lane: systems.flatMap((s) => s.notes.map((n) => ({ key: `${n.realSyllableIndex}:${n.noteInSyllable}`, x: r(n.x), pitch: n.pitch }))) });
+    document.title = "PROBE_DONE";
+    return;
+  }
   dumpEl.textContent = JSON.stringify({
     nNotes: notes.length,
     nSystems: systems.length,
