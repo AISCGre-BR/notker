@@ -494,6 +494,7 @@ async function boot() {
         onExport: async (draft) => {
           // Exporta o que está NA TELA: commita o rascunho (persiste) e exporta-o.
           // Evita "exportei e veio vazio" por escrita pendente do autosave.
+          persistOverlay.cancel(); // a escrita direta abaixo substitui a pendente
           overlay = draft;
           await saveUserOverlay(overlay);
           reindex();
@@ -502,6 +503,7 @@ async function boot() {
           setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
         },
         onImport: async () => {
+          persistOverlay.cancel(); // escrita pendente do autosave não pode sobrescrever o importado
           await commands.run("importOverlay");
           op.refresh(); // recarrega a lista com os nomes importados (evita o autosave sobrescrevê-los)
         },
