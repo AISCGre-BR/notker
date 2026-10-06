@@ -13,21 +13,21 @@ function eff(id: string, name: string, names: string[], extra?: Partial<Effectiv
 }
 
 describe("painel de overlay", () => {
-  it("lista entradas com miniatura e nomes; salvar emite o overlay editado", () => {
+  it("lista entradas com miniatura e nomes; mutar dispara onChange (autosave)", () => {
     const host = document.createElement("div");
-    const onSave = vi.fn();
+    const onChange = vi.fn();
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clive longo", "clivis"])],
-      onSave,
+      onChange,
     });
     panel.open();
     expect(host.querySelector(".overlay-panel")).not.toBeNull();
     expect(host.querySelector("svg")).not.toBeNull();
     expect(host.textContent).toContain("clivis");
+    expect(host.querySelector(".overlay-save")).toBeNull(); // não há mais botão Salvar
     panel.addName("stgall:cl", "clive curto");
-    host.querySelector<HTMLButtonElement>(".overlay-save")!.click();
-    expect(onSave).toHaveBeenCalledTimes(1);
-    const ov = onSave.mock.calls[0][0];
+    expect(onChange).toHaveBeenCalled();
+    const ov = onChange.mock.calls.at(-1)![0];
     expect(ov.entries["stgall:cl"].names).toContain("clive curto");
   });
 
@@ -35,7 +35,7 @@ describe("painel de overlay", () => {
     const host = document.createElement("div");
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
-      onSave: vi.fn(),
+      onChange: vi.fn(),
     });
     panel.open();
     expect(host.querySelector("input.overlay-search")).not.toBeNull();
@@ -49,7 +49,7 @@ describe("painel de overlay", () => {
     ];
     const panel = createOverlayPanel(host, {
       entries: () => entries,
-      onSave: vi.fn(),
+      onChange: vi.fn(),
     });
     panel.open();
     // antes de filtrar: 2 linhas
@@ -69,7 +69,7 @@ describe("painel de overlay", () => {
     const host = document.createElement("div");
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl!po", "cl!po", ["cl!po"], { synthetic: true })],
-      onSave: vi.fn(),
+      onChange: vi.fn(),
     });
     panel.open();
     expect(host.querySelector(".overlay-synthetic-badge")).not.toBeNull();
@@ -81,7 +81,7 @@ describe("painel de overlay", () => {
     const onExport = vi.fn();
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
-      onSave: vi.fn(),
+      onChange: vi.fn(),
       onExport,
     });
     panel.open();
@@ -98,7 +98,7 @@ describe("painel de overlay", () => {
     const host = document.createElement("div");
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
-      onSave: vi.fn(),
+      onChange: vi.fn(),
     });
     panel.open();
     host.querySelector<HTMLButtonElement>(".overlay-add-toggle")!.click(); // revela editor
@@ -110,24 +110,23 @@ describe("painel de overlay", () => {
     expect(gloss!.textContent).toContain("clive longo");
   });
 
-  it("remover uma glosa pelo × tira do rascunho ao salvar", () => {
+  it("remover uma glosa pelo × dispara onChange sem o nome", () => {
     const host = document.createElement("div");
-    const onSave = vi.fn();
+    const onChange = vi.fn();
     const initial: Overlay = {
       schema: 1, kind: "notker-neume-overlay",
       entries: { "stgall:cl": { names: ["clive longo"] } },
     };
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clive longo", "clivis"])],
-      onSave,
+      onChange,
       initial: () => structuredClone(initial),
     });
     panel.open();
     expect(host.querySelector(".overlay-gloss")).not.toBeNull();
     host.querySelector<HTMLButtonElement>(".overlay-gloss-remove")!.click();
     expect(host.querySelector(".overlay-gloss")).toBeNull();
-    host.querySelector<HTMLButtonElement>(".overlay-save")!.click();
-    const ov = onSave.mock.calls[0][0];
+    const ov = onChange.mock.calls.at(-1)![0];
     expect(ov.entries["stgall:cl"]?.names ?? []).not.toContain("clive longo");
   });
 
@@ -137,7 +136,7 @@ describe("painel de overlay", () => {
       { schema: 1, kind: "notker-neume-overlay", entries: {} };
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
-      onSave: vi.fn(),
+      onChange: vi.fn(),
       initial: () => structuredClone(ov),
     });
     panel.open();
@@ -153,7 +152,7 @@ describe("painel de overlay", () => {
     const host = document.createElement("div");
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
-      onSave: vi.fn(),
+      onChange: vi.fn(),
     });
     panel.open();
     host.querySelector<HTMLButtonElement>(".overlay-hide")!.click();
@@ -170,11 +169,37 @@ describe("painel de overlay", () => {
     const host = document.createElement("div");
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clivis"], { provenance: [prov] })],
-      onSave: vi.fn(),
+      onChange: vi.fn(),
     });
     panel.open();
     const label = host.querySelector<HTMLSpanElement>(".overlay-row span");
     expect(label).not.toBeNull();
     expect(label!.title).toContain("Cardine");
+  });
+
+  it("ocultar (◉) também dispara onChange (autosave)", () => {
+    const host = document.createElement("div");
+    const onChange = vi.fn();
+    const panel = createOverlayPanel(host, {
+      entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
+      onChange,
+    });
+    panel.open();
+    host.querySelector<HTMLButtonElement>(".overlay-hide")!.click();
+    expect(onChange).toHaveBeenCalled();
+    expect(onChange.mock.calls.at(-1)![0].entries["stgall:cl"].hidden).toBe(true);
+  });
+
+  it("mostra o indicador .overlay-savestate após uma mutação", async () => {
+    const host = document.createElement("div");
+    const panel = createOverlayPanel(host, {
+      entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
+      onChange: () => Promise.resolve(),
+    });
+    panel.open();
+    panel.addName("stgall:cl", "x");
+    expect(host.querySelector(".overlay-savestate")).not.toBeNull();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(host.querySelector(".overlay-savestate")!.textContent).toContain("salvo");
   });
 });

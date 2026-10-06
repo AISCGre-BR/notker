@@ -16,7 +16,8 @@ const RENDER_CAP = 150;
 
 export interface OverlayPanelOpts {
   entries: () => EffectiveEntry[];
-  onSave: (o: Overlay) => void;
+  /** Autosave: chamado após CADA mutação (adicionar/remover/ocultar/promover). */
+  onChange: (o: Overlay) => void | Promise<void>;
   /** Overlay atual do usuário, para editar/remover (rascunho parte dele). */
   initial?: () => Overlay;
   onClose?: () => void;
@@ -50,7 +51,11 @@ export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): O
     : { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let filterQuery = "";
   let editingId: string | null = null;
-  let dirty = false;
+  let saveState: "idle" | "saving" | "saved" | "error" = "idle";
+  const saveStateLabel = (): string =>
+    saveState === "saving" ? "salvando…" :
+    saveState === "saved"  ? "salvo ✓"   :
+    saveState === "error"  ? "erro ao salvar" : "";
 
   const ensure = (id: string): OverlayEntry => (draft.entries[id] ??= {});
   const userNames = (id: string): string[] => draft.entries[id]?.names ?? [];
@@ -62,29 +67,39 @@ export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): O
     return new NeumeSearch(all).query(filterQuery);
   }
 
+  function afterMutation(): void {
+    saveState = "saving";
+    render();
+    let r: void | Promise<void>;
+    try { r = opts.onChange(draft); } catch { r = Promise.reject(new Error("onChange")); }
+    Promise.resolve(r)
+      .then(() => { saveState = "saved"; })
+      .catch(() => { saveState = "error"; })
+      .finally(() => {
+        const tag = host.querySelector(".overlay-savestate");
+        if (tag) tag.textContent = saveStateLabel();
+      });
+  }
+
   function addNameTo(id: string, name: string): void {
     const n = name.trim();
     if (!n) return;
     const e = ensure(id);
     e.names = Array.from(new Set([...(e.names ?? []), n]));
-    dirty = true;
     editingId = null;
-    render();
+    afterMutation();
   }
   function removeNameFrom(id: string, name: string): void {
     draft = removeName(draft, id, name);
-    dirty = true;
-    render();
+    afterMutation();
   }
   function setHiddenTo(id: string, hidden: boolean): void {
     ensure(id).hidden = hidden;
-    dirty = true;
-    render();
+    afterMutation();
   }
   function promoteName(id: string, name: string): void {
     draft = promoteToDefault(draft, id, name);
-    dirty = true;
-    render();
+    afterMutation();
   }
 
   // ── construção de uma linha ──────────────────────────────────────────────
@@ -240,9 +255,9 @@ export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): O
     const foot = el("div", "overlay-foot");
     const count = el("span", "overlay-count", `${rows.length} neuma${rows.length === 1 ? "" : "s"}`);
     foot.appendChild(count);
-    const save = el("button", "overlay-save", dirty ? "Salvar •" : "Salvar");
-    save.addEventListener("click", () => { opts.onSave(draft); dirty = false; render(); });
-    foot.appendChild(save);
+    const state = el("span", "overlay-savestate", saveStateLabel());
+    state.title = "Os nomes são salvos automaticamente.";
+    foot.appendChild(state);
     root.appendChild(foot);
 
     host.appendChild(root);

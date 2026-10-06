@@ -330,13 +330,9 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .overlay-count {
   font: 11px/1 var(--font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted);
 }
-.overlay-save {
-  font: 500 12px/1 var(--font); text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--cream); background: var(--rubric); border: 1px solid var(--rubric);
-  padding: 10px 22px; cursor: pointer;
-  transition: background 180ms var(--ease), transform 180ms var(--ease);
+.overlay-savestate {
+  font: 11px/1 var(--font); letter-spacing: 0.04em; color: var(--ink-muted); opacity: 0.85;
 }
-.overlay-save:hover { background: var(--rubric-soft); transform: translateY(-1px); }
 
 /* ── Paleta de busca (modal) e tooltips ────────────────────────────────────── */
 .neume-palette {
