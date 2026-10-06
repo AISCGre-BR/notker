@@ -526,3 +526,24 @@ describe("mapSystems + âncoras empilhadas", () => {
     expect((xs[0] + xs[1]) / 2).toBeCloseTo(20);
   });
 });
+
+describe("renderWaveLanes — alvos de clique com notas próximas (pes a 8px)", () => {
+  it("hit de cada nota não invade a coluna da vizinha", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    const mk = (n: number, x: number) =>
+      ({ syllableIndex: 0, realSyllableIndex: 1, noteInSyllable: n, pitch: "g", alt: 0, factor: 1, divisioAfter: null, x });
+    renderWaveLanes(svg, [{ yBaseline: 30, yTop: 8, xRange: [400, 450], notes: [mk(0, 421), mk(1, 429)] }], {});
+    const span = (sel: string) => {
+      const r = svg.querySelector<SVGRectElement>(sel)!;
+      const x = Number(r.getAttribute("x"));
+      return [x, x + Number(r.getAttribute("width"))];
+    };
+    const [, hitAR] = span('.wave-hit[data-key="0:0"]');
+    const [hitBL] = span('.wave-hit[data-key="0:1"]');
+    const [, colAR] = span('.wave-col[data-key="0:0"]');
+    const [colBL] = span('.wave-col[data-key="0:1"]');
+    expect(hitAR).toBeLessThanOrEqual(colBL); // hit de A termina antes da coluna de B
+    expect(hitBL).toBeGreaterThanOrEqual(colAR); // hit de B começa depois da coluna de A
+    expect(hitAR).toBeLessThanOrEqual(hitBL); // e não se sobrepõem
+  });
+});

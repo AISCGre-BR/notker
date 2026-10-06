@@ -49,19 +49,23 @@ export function extractNoteAnchors(layout: LayoutLike, root: { x: number; y: num
   }
   // 2) um glifo repartido em vários visualizers (bivirga, inclusive atravessando a
   //    quebra de linha) entrega o MESMO array de notas a cada um: 1 nota por visualizer.
+  //    E um glifo com `startFrom` (torculus resupinus flexus) entrega a 1ª nota num
+  //    visualizer (slice) e o array COMPLETO no seguinte: dedup por identidade da nota.
   const out: NoteAnchor[] = [];
+  const seen = new Set<object>();
+  const emit = (a: NoteAnchor, n: object) => { if (!seen.has(n)) { seen.add(n); out.push(a); } };
   for (let i = 0; i < items.length; ) {
     let j = i + 1;
     while (j < items.length && items[j].notes === items[i].notes) j++;
     const group = items.slice(i, j);
     const notes = items[i].notes;
     if (group.length > 1 && group.length === notes.length) {
-      group.forEach((it, k) => out.push({ syllableIndex: it.syl, x: it.x + it.w / 2, y: it.y, pitch: notes[k].pitch }));
+      group.forEach((it, k) => emit({ syllableIndex: it.syl, x: it.x + it.w / 2, y: it.y, pitch: notes[k].pitch }, notes[k]));
     } else {
       const it = group[0]; // grupo inesperado: 1º visualizer carrega as notas
-      notes.forEach((n, k) => out.push({
+      notes.forEach((n, k) => emit({
         syllableIndex: it.syl, x: it.x + headCenter(it.w, notes.length, k), y: it.y, pitch: n.pitch,
-      }));
+      }, n));
     }
     i = j;
   }

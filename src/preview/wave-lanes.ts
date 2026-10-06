@@ -331,9 +331,13 @@ export function renderWaveLanes(svg: SVGSVGElement, systems: System[], hooks: La
       const hit = document.createElementNS(SVG_NS, "rect");
       hit.setAttribute("class", "wave-hit");
       hit.setAttribute("data-key", key);
-      hit.setAttribute("x", String(Math.min(left, n.x - 7) - 2));
+      // Alvo = coluna + 2px de cada lado (como antes), mas nunca além do ponto médio com a vizinha — com
+      // notas empilhadas abertas a MIN_ANCHOR_DX (pes) o alvo não invade a coluna ao lado.
+      const hitL = prev ? Math.max((prev.x + n.x) / 2, n.x - COL_MAX_HALF - 2) : Math.min(left, n.x - 7) - 2;
+      const hitR = next ? Math.min((n.x + next.x) / 2, n.x + COL_MAX_HALF + 2) : Math.max(right, n.x + 7) + 2;
+      hit.setAttribute("x", String(hitL));
       hit.setAttribute("y", "0");
-      hit.setAttribute("width", String(Math.max(right, n.x + 7) - Math.min(left, n.x - 7) + 4));
+      hit.setAttribute("width", String(Math.max(1, hitR - hitL)));
       hit.setAttribute("height", String(LANE_HEIGHT));
       hit.addEventListener("pointerdown", (ev) => {
         hooks.onFactorDrag?.(key, n.syllableIndex, n.noteInSyllable, n.factor, (ev as PointerEvent).clientY);

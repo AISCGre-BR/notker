@@ -68,3 +68,19 @@ describe("extractNoteAnchors — casos do nabc-lib real", () => {
     expect(extractNoteAnchors(layout, { x: 0, y: 0 }).map((a) => [a.x, a.y])).toEqual([[644.5, 0], [74.5, 200]]);
   });
 });
+
+describe("extractNoteAnchors — glifo com startFrom (torculus resupinus flexus)", () => {
+  it("1º visualizer com slice(0,1) + 2º com o array completo → k âncoras, sem duplicar a 1ª", () => {
+    const n0 = { pitch: 8 }, n1 = { pitch: 10 }, n2 = { pitch: 9 }, n3 = { pitch: 10 }, n4 = { pitch: 8 };
+    const all = [n0, n1, n2, n3, n4];
+    const layout = { lines: [{ bounds: { x: 0, y: 0, width: 600 }, _syllables: [{
+      index: 3, bounds: { x: 100, y: 0, width: 60 }, segments: [{ bounds: { x: 0, y: 0, width: 60 }, visualizers: [
+        { _glyph: { name: "Punctum" }, bounds: { x: 0, y: 0, width: 9 }, notes: all.slice(0, 1) },
+        { _glyph: { name: "PorrectusFlexus" }, bounds: { x: 9, y: 0, width: 40 }, notes: all },
+      ] }],
+    }] }] } as LayoutLike;
+    const a = extractNoteAnchors(layout, { x: 0, y: 0 });
+    expect(a.map((x) => x.pitch)).toEqual([8, 10, 9, 10, 8]);
+    expect(a[0].x).toBe(104.5); // a 1ª nota fica no punctum, não no glifo seguinte
+  });
+});
