@@ -36,6 +36,7 @@ import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuoti
 import { syllableRangeOfSelection } from "./preview/source-map";
 import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel } from "./overlay-ui/panel";
+import { debounce } from "./preview/debounce";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
@@ -127,6 +128,13 @@ async function boot() {
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
+  // Autosave dos nomes: coalesce rajadas de edição em uma escrita a cada 300 ms.
+  const persistOverlay = debounce((o: Overlay) => {
+    overlay = o;
+    void saveUserOverlay(overlay)
+      .then(() => { reindex(); setStatus("nomes salvos ✓"); })
+      .catch((e) => setStatus("erro ao salvar nomes: " + String(e)));
+  }, 300);
   const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
@@ -482,17 +490,10 @@ async function boot() {
       const op = createOverlayPanel(host, {
         entries: effectiveRef,
         initial: () => overlay,
-        onSave: async (o) => {
-          // O rascunho já parte do overlay atual (initial) e foi editado por
-          // completo — substitui (permite remover/renomear), não só unir.
-          overlay = o;
-          await saveUserOverlay(overlay);
-          reindex();
-          setStatus("nomes salvos");
-        },
+        onChange: (o) => { persistOverlay(o); },
         onExport: async (draft) => {
           // Exporta o que está NA TELA: commita o rascunho (persiste) e exporta-o.
-          // Evita "exportei e veio vazio" por não ter clicado Salvar antes.
+          // Evita "exportei e veio vazio" por escrita pendente do autosave.
           overlay = draft;
           await saveUserOverlay(overlay);
           reindex();
@@ -502,7 +503,7 @@ async function boot() {
         },
         onImport: async () => {
           await commands.run("importOverlay");
-          op.refresh(); // recarrega a lista com os nomes importados (evita Salvar apagá-los)
+          op.refresh(); // recarrega a lista com os nomes importados (evita o autosave sobrescrevê-los)
         },
         onClose: closePanel,
       });
