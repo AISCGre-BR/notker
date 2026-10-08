@@ -57,52 +57,9 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   * { transition: none !important; animation: none !important; }
 }
 
-/* ── Menubar: aparato erudito estilo MuseScore/Office (spec B) ─────────────── */
-.menubar {
-  display: flex; align-items: stretch;
-  background: var(--cream);
-  border-bottom: 1px solid var(--rule);
-  padding: 0 6px;
-}
-.menubar-slot { position: relative; display: inline-flex; }
-.menubar-brand {
-  font-size: 18px; padding: 0 12px 0 6px; margin-right: 2px;
-  align-self: center;
-}
-.menubar-brand::after { height: 16px; }
-.menubar-top {
-  font: 500 12px/1 var(--font); color: var(--ink-soft);
-  font-variant-caps: small-caps; letter-spacing: 0.05em;
-  background: transparent; border: none; cursor: pointer;
-  padding: 8px 12px 7px;
-  transition: color 160ms var(--ease), background 160ms var(--ease);
-}
-.menubar-top:hover { color: var(--rubric); }
-.menubar-top.open { color: var(--ink); background: var(--cream-deep); }
-.menu-pop {
-  position: absolute; top: 100%; left: 0; z-index: 1200;
-  min-width: 240px; padding: 4px 0;
-  background: var(--surface); border: 1px solid var(--rule);
-  box-shadow: var(--shadow);
-  display: flex; flex-direction: column;
-}
-.menu-item {
-  display: grid; grid-template-columns: 18px 1fr auto; align-items: baseline;
-  gap: 6px; width: 100%; text-align: left;
-  font: 400 13px/1.35 var(--font); color: var(--ink);
-  background: transparent; border: none; cursor: pointer;
-  padding: 6px 14px 6px 8px;
-  transition: background 120ms var(--ease);
-}
-.menu-item:hover:not(:disabled), .menu-item:focus-visible { background: var(--cream); outline: none; }
-.menu-item:disabled { opacity: 0.45; cursor: default; }
-.menu-check { color: var(--rubric); font-size: 12px; text-align: center; }
-.menu-label { white-space: nowrap; }
-.menu-shortcut {
-  font-size: 11px; color: var(--ink-muted); letter-spacing: 0.04em;
-  padding-left: 18px; white-space: nowrap;
-}
-.menu-sep { height: 1px; background: var(--rule-soft); margin: 4px 10px; }
+/* ── Menubar: estilos vêm do Parchment (sc-menubar/sc-menu) ──────────────── */
+.sc-menubar__title { font: 500 14px/1 var(--font-serif); color: var(--ink); }
+.sc-menubar__state { font-family: var(--font-sans); font-size: 13px; }
 
 /* ── Toolbar: faixa-cabeçalho de aparato erudito ───────────────────────────── */
 .toolbar {
@@ -145,7 +102,7 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   background: var(--rule); margin: 0 8px; align-self: center;
 }
 /* foco por teclado rubricado (a11y) — consistente em toda a faixa superior */
-.toolbar-btn:focus-visible, .menubar-top:focus-visible, .wave-bar-reset:focus-visible {
+.toolbar-btn:focus-visible, .sc-menubar__top:focus-visible, .wave-bar-reset:focus-visible {
   outline: 1px solid var(--rubric); outline-offset: -1px;
 }
 

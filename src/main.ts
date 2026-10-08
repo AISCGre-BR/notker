@@ -4,7 +4,7 @@ import "@fontsource-variable/source-sans-3";
 import "@fontsource-variable/source-serif-4";
 import "@fontsource-variable/source-serif-4/wght-italic.css";
 import "./ui/notker.css";
-import { applyTheme, loadTheme } from "./app/theme";
+import { applyTheme, loadTheme, setTheme, type ThemeChoice } from "./app/theme";
 import { createToaster } from "./ui/pd/toast";
 import { EditorView } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
@@ -31,7 +31,7 @@ import type { Tree } from "web-tree-sitter";
 import { createRegistry } from "./app/commands";
 import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
-import { createMenubar } from "./ui/menubar";
+import { createMenubar, type MenuItem } from "./ui/menubar";
 import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
 import { NabcLibEngine } from "./preview/nabc-lib";
@@ -359,8 +359,10 @@ async function boot() {
     onRemove: (id) => { project = removeDoc(project, id); syncFromProject(); },
   });
 
+  let menubar: ReturnType<typeof createMenubar> | undefined;
   /** Reflete o doc ativo do projeto no editor + indicadores. */
   function syncFromProject(): void {
+    menubar?.setTitle(project.title);
     if (player.playing) stopPlayback();
     replaceDoc(getActiveDoc(project).content);
     docList.render(project);
@@ -425,6 +427,7 @@ async function boot() {
         const path = await saveProject(project);
         if (!path) return;
         project = { ...project, path };
+        menubar?.setTitle(project.title);
         toaster.show("Projeto salvo.");
       } catch (err) { toaster.show("Salvar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
@@ -641,56 +644,77 @@ async function boot() {
     { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() },
   ]);
 
-  // ── Spec B: menubar (comandos completos) + toolbar contextual (frequentes) ──
-  // Rótulos/checks dos menus são funções — reavaliados a cada abertura.
-  createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
+  let themeChoice = loadTheme();
+  const themeCmd = (choice: ThemeChoice, label: string) => ({
+    id: `view.theme.${choice}`, label, run: () => { themeChoice = choice; setTheme(choice); },
+    checked: () => themeChoice === choice,
+  });
+  // Provisórios (toasts) até o diálogo da Task 8.
+  const showShortcuts = () => toaster.show("F2 ou Ctrl+K: buscar neuma · Ctrl+Enter na busca: cadastrar nome · Alt+setas: mover neuma");
+  const showAbout = () => toaster.show("Notker " + __APP_VERSION__ + " — editor de canto gregoriano. GPL-3.");
+  commands.register([
+    themeCmd("system", "Tema: sistema"),
+    themeCmd("light", "Tema: Pergaminho"),
+    themeCmd("dark", "Tema: Vigília"),
+    { id: "help.shortcuts", label: "Atalhos de teclado…", run: showShortcuts },
+    { id: "help.about", label: "Sobre o Notker…", run: showAbout },
+  ]);
+
+  // ── Menubar: menus montados a partir do registro único de comandos ──
+  const menuItem = (id: string): MenuItem => {
+    const def = commands.get(id);
+    return {
+      cmd: id,
+      label: () => commands.label(id),
+      shortcut: commands.shortcut(id),
+      checked: def?.checked,
+      enabled: def?.enabled,
+    };
+  };
+  menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
     {
       label: "Arquivo",
       items: [
-        { cmd: "file.newProject", label: "Novo projeto…" },
-        { cmd: "file.open", label: "Abrir…", shortcut: "Ctrl+O" },
-        { cmd: "file.save", label: "Salvar", shortcut: "Ctrl+S" },
+        menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"),
         "---",
-        { cmd: "file.exportGabc", label: "Exportar .gabc" },
-        { cmd: "file.exportAllGabc", label: "Exportar todos os .gabc" },
+        menuItem("file.exportGabc"), menuItem("file.exportAllGabc"),
+        "---",
+        menuItem("names.import"), menuItem("names.export"),
       ],
     },
     {
       label: "Editar",
       items: [
-        { cmd: "edit.format", label: "Formatar", shortcut: "Ctrl+Shift+F" },
+        { ...menuItem("edit.undo"), shortcut: "Ctrl+Z" },
+        { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" },
         "---",
-        { cmd: "neume.moveLeft", label: "Mover neuma para a esquerda", shortcut: "Alt+←" },
-        { cmd: "neume.moveDown", label: "Mover neuma para baixo", shortcut: "Alt+↓" },
-        { cmd: "neume.moveUp", label: "Mover neuma para cima", shortcut: "Alt+↑" },
-        { cmd: "neume.moveRight", label: "Mover neuma para a direita", shortcut: "Alt+→" },
-        { cmd: "neume.moveReset", label: "Resetar posição do neuma", shortcut: "Alt+0" },
+        menuItem("neume.palette"), menuItem("edit.format"),
+        "---",
+        menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"),
+        menuItem("neume.moveRight"), menuItem("neume.moveReset"),
       ],
     },
     {
       label: "Exibir",
       items: [
-        { cmd: "view.preview", label: "Partitura", checked: () => previewHost.style.display !== "none" },
-        { cmd: "view.split", label: "Lado a lado", checked: () => split.orientation() === "horizontal" },
-        { cmd: "view.legend", label: "Régua da pauta", shortcut: "Ctrl+Alt+L", checked: () => view.state.field(legendVisible) },
+        menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"),
         "---",
-        { cmd: "neume.palette", label: "Buscar neumas…", shortcut: "F2" },
-        { cmd: "names.panel", label: "Nomes dos neumas…", shortcut: "Ctrl+Alt+N" },
+        menuItem("names.panel"), menuItem("doc.toggleFamily"),
         "---",
-        { cmd: "doc.toggleFamily", label: "Família: St. Gall ⇄ Laon", shortcut: "Ctrl+Shift+G" },
+        menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark"),
       ],
     },
     {
       label: "Interpretação",
       items: [
-        { cmd: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar") },
-        { cmd: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo") },
+        menuItem("play.toggle"), menuItem("play.mode"),
         "---",
-        { cmd: "wave.toggle", label: "Onda de interpretação", checked: () => waveLanes.enabled() },
-        { cmd: "wave.reset", label: "Resetar onda", enabled: () => waveLanes.enabled() },
+        menuItem("wave.toggle"), menuItem("wave.reset"),
       ],
     },
+    { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
   ]);
+  menubar.setTitle(project.title);
 
   toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
     { id: "play.toggle", label: "Tocar", title: "playback semiológico (Tuotilo)", primary: true },
