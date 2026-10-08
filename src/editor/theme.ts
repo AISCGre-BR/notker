@@ -6,7 +6,7 @@
  * tokens GABC/NABC (classes `tok-*` aplicadas pelo highlighter) ficam num registro
  * quente e quase-monocromático, com rubrica reservada a clave/barra/separador.
  *
- * Usa as CSS vars de `src/ui/tokens.css` (carregadas em :root) p/ coesão com o resto.
+ * Usa as CSS vars de `src/ui/notker.css` (carregadas em :root) p/ coesão com o resto.
  */
 import { EditorView } from "@codemirror/view";
 

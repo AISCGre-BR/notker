@@ -1,6 +1,6 @@
 // src/overlay-ui/panel.ts
 // "Scriptorium dos nomes" — registro lateral onde o usuário-escriba glosa cada
-// neuma com sua própria nomenclatura. Estética herdada de tokens.css (creme/tinta/
+// neuma com sua própria nomenclatura. Estética herdada de notker.css (creme/tinta/
 // rubricação): o nome de referência fica em tinta; as glosas do usuário são
 // RUBRICAS (vermelhas), como as anotações escribais. Edição inline real: adicionar,
 // remover, promover a padrão, ocultar — sobre um rascunho clonado do overlay atual;
