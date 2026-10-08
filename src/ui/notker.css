@@ -1,17 +1,38 @@
-/* src/ui/tokens.css — Fase 3 (frontend-design).
-   Estética "scriptorium": creme + tinta + rubricação. Hairlines de 1px, sem cantos
-   arredondados, versalete editorial, serifa de alto contraste no wordmark/títulos.
-   Paleta herdada de site-oficial. */
+/* src/ui/notker.css — CSS específico do Notker sobre o Parchment Design.
+   Regra: só variáveis do Parchment (parchment.css). Os aliases abaixo mantêm o CSS
+   legado funcionando enquanto ele é substituído; não use estes nomes em código novo. */
 :root {
-  --cream: #f6f1e7; --cream-deep: #ece3d0; --surface: #fdfcf9;
-  --ink: #222222; --ink-soft: #3d342a; --ink-muted: #7a6a58;
-  --rule: #d4c7ae; --rule-soft: #e5dcc6;
-  --rubric: #a02531; --rubric-soft: #b93744;
-  --font: "Source Serif 4", "Charter", "Iowan Old Style", Georgia, serif;
-  --font-display: "Cormorant Garamond", "Source Serif 4", Georgia, serif;
-  --shadow: 0 8px 30px rgba(58, 46, 30, 0.18);
-  --ease: cubic-bezier(.2, .7, .2, 1);
+  --cream: var(--parchment);
+  --cream-deep: var(--parchment-deep);
+  --font: var(--font-sans);
+  --font-display: var(--font-serif);
+  --shadow: var(--elev-3);
+  --font-mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", monospace;
 }
+
+/* ── Janela: menubar + toolbar + mesa com cartões ──────────────────────────── */
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+#body-row { flex: 1 1 auto; min-height: 0; display: flex; }
+/* Barra lateral RENTE (Mocquereau/adendo §11): não é cartão. */
+.notker-sidebar {
+  flex: 0 0 248px; display: flex; flex-direction: column; min-height: 0;
+  background: var(--parchment); border-right: 1px solid var(--rule);
+}
+#workspace {
+  flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; gap: var(--space-3);
+  padding: var(--space-3);
+}
+#app { flex: 1 1 0; min-width: 0; overflow: auto; }
+#preview { flex: 1 1 0; min-width: 0; overflow: auto; padding: var(--space-4); background: var(--surface); }
+/* Partitura sem firula: folha BRANCA nos dois temas, cores padrão do gabc/nabc. */
+#preview svg { background: #ffffff; border-radius: var(--radius-sm); box-shadow: 0 0 0 1px var(--rule-soft); }
+.hl-strong [fill], .hl-strong { fill: var(--rubric) !important; }
+#tooltip-host { position: fixed; z-index: 2200; display: none; pointer-events: none; }
+#toast-host { position: fixed; left: 50%; bottom: var(--space-4); transform: translateX(-50%); z-index: 2100; display: none; }
+#dialog-host { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); z-index: 2000; display: none; }
+#overlay-host { position: fixed; top: calc(var(--menubar-h) + var(--toolbar-h)); right: 0; width: 420px; max-height: calc(100vh - var(--menubar-h) - var(--toolbar-h)); overflow: auto; z-index: 60; display: none; }
+
 * { box-sizing: border-box; }
 body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 ::selection { background: var(--rule-soft); color: var(--ink); }
@@ -129,45 +150,12 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
   background: transparent;
 }
 
-/* ── Workspace / preview como "prancha" emoldurada ─────────────────────────── */
-#workspace { background: var(--cream); }
-#preview {
-  background: var(--cream-deep); overflow: auto;
-  padding: 22px; display: block;
-}
-/* a partitura assenta numa superfície clara com moldura fina e sombra suave */
-#preview svg {
-  display: block; max-width: none; margin: 0 auto;
-  background: var(--surface); border: 1px solid var(--rule);
-  box-shadow: var(--shadow);
-}
-/* onda ativa: a prancha vira mesa de trabalho — mais respiro ao redor e a
-   moldura inteira assume o tom rubricado suave (simétrica; sem canto emendado) */
-#preview { transition: padding 180ms var(--ease); }
 #preview.wave-on { padding: 36px 30px; }
 #preview.wave-on svg { border-color: var(--rubric-soft); }
-.hl-strong [fill], .hl-strong { fill: var(--rubric) !important; }
 
 /* divisor redimensionável */
 .split-gutter { background: var(--rule); transition: background 160ms var(--ease); }
 .split-gutter:hover { background: var(--rubric-soft); }
-
-/* ── Rodapé: cólofon ───────────────────────────────────────────────────────── */
-#footer-bar {
-  flex: 0 0 auto; display: flex; align-items: stretch;
-  background: var(--cream-deep); border-top: 1px solid var(--rule);
-}
-#status {
-  flex: 1 1 auto; font: 11px/1.6 var(--font); letter-spacing: 0.04em;
-  color: var(--ink-muted); padding: 4px 12px; white-space: pre; border: none;
-}
-#family {
-  flex: 0 0 auto; font: 11px/1.6 var(--font); letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--rubric);
-  padding: 4px 12px; cursor: pointer; border-left: 1px solid var(--rule);
-  white-space: nowrap; user-select: none; transition: background 160ms var(--ease);
-}
-#family:hover { background: var(--cream); }
 
 /* ── Régua da pauta (letra GABC ↔ altura) ──────────────────────────────────── */
 .staff-legend {
@@ -420,3 +408,19 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .doc-item.active { background: var(--cream-deep); border-left: 2px solid var(--rubric-soft); }
 .doc-item-label { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .doc-remove { border: none; background: transparent; cursor: pointer; color: var(--ink-muted); }
+
+/* ── Paleta de neumas, tooltips e régua de pauta (movidos do index.html) ────── */
+.neume-palette { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); width: 520px; max-height: 60vh; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); box-shadow: var(--elev-3); display: flex; flex-direction: column; z-index: 1000; font-family: var(--font-sans); }
+.neume-palette input { padding: 10px; border: none; border-bottom: 1px solid var(--rule); font-size: 15px; background: transparent; }
+.neume-palette-list { overflow: auto; }
+.neume-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; cursor: pointer; }
+.neume-fam-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.neume-fam-cell span { font-size: 9px; color: var(--ink-muted); line-height: 1; }
+.neume-fam-sep { display: inline-block; width: 1px; height: 30px; background: var(--rule); margin: 0 3px; align-self: center; }
+.neume-row.sel, .neume-row:hover { background: var(--cream-deep); }
+.neume-row svg, .neume-tooltip svg { color: var(--ink); }
+.neume-tooltip, .gabc-tooltip { max-width: 320px; padding: 8px 10px; font-family: var(--font-sans); background: var(--surface); color: var(--ink); }
+.staff-legend { padding: 4px 10px; font-family: var(--font-sans); font-size: 13px; border-top: 1px solid var(--rule); background: var(--cream-deep); }
+.staff-legend .legend-cell { margin-right: 8px; white-space: nowrap; }
+/* NABC em composição — campo inteiro tratado como um único neuma */
+.nabc-composing { background: var(--cream-deep); border-bottom: 2px solid var(--rubric-soft); }

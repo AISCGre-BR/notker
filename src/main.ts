@@ -1,4 +1,9 @@
-import "./ui/tokens.css";
+import "parchment-design/parchment.css";
+import "parchment-design/components.css";
+import "@fontsource-variable/source-sans-3";
+import "@fontsource-variable/source-serif-4";
+import "@fontsource-variable/source-serif-4/wght-italic.css";
+import "./ui/notker.css";
 import { EditorView } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
 import { createEditor, externalLinter } from "./editor/editor";
