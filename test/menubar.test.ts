@@ -13,8 +13,10 @@ function mount(menus: MenuSpec[]) {
   document.body.appendChild(host);
   const { commands, run } = fakeCommands();
   const bar = createMenubar(host, commands, menus);
+  bars.push(bar);
   return { host, run, bar };
 }
+const bars: { destroy(): void }[] = [];
 
 const BASIC: MenuSpec[] = [
   {
@@ -31,7 +33,7 @@ const BASIC: MenuSpec[] = [
   },
 ];
 
-beforeEach(() => { document.body.innerHTML = ""; });
+beforeEach(() => { bars.splice(0).forEach((b) => b.destroy()); document.body.innerHTML = ""; });
 
 describe("menubar", () => {
   it("renderiza os rótulos de topo, sem dropdown aberto", () => {
@@ -243,6 +245,31 @@ describe("menubar — Alt e foco", () => {
     ed.focus();
     host.querySelector<HTMLButtonElement>(".sc-menubar__top")!.click();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe(ed);
+  });
+
+  it("abrir com o mouse (mousedown, foco no botão, click) e Esc devolve o foco", () => {
+    const { host } = mount(BASIC);
+    const ed = document.createElement("textarea");
+    document.body.appendChild(ed);
+    ed.focus();
+    const top = host.querySelector<HTMLButtonElement>(".sc-menubar__top")!;
+    top.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    top.focus();
+    top.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe(ed);
+  });
+
+  it("Alt com menu aberto fecha o menu e devolve o foco", () => {
+    const { host } = mount(BASIC);
+    const ed = document.createElement("textarea");
+    document.body.appendChild(ed);
+    ed.focus();
+    host.querySelector<HTMLButtonElement>(".sc-menubar__top")!.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt", altKey: true, bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt", bubbles: true }));
+    expect(host.querySelector(".sc-menu")).toBeNull();
     expect(document.activeElement).toBe(ed);
   });
 });

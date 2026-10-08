@@ -15,7 +15,7 @@ export interface MenuSpec { label: string; items: MenuEntry[]; }
 
 export function createMenubar(
   host: HTMLElement, commands: Commands, menus: MenuSpec[], opts?: { brand?: string },
-): { closeAll(): void; setTitle(title: string, edited?: boolean): void } {
+): { closeAll(): void; setTitle(title: string, edited?: boolean): void; destroy(): void } {
   const bar = document.createElement("div");
   bar.className = "sc-menubar";
   bar.setAttribute("role", "menubar");
@@ -106,7 +106,7 @@ export function createMenubar(
       check.className = "sc-menu__check";
       check.textContent = entry.checked?.() ? "✓" : "";
       const label = document.createElement("span");
-            label.textContent = typeof entry.label === "function" ? entry.label() : entry.label;
+      label.textContent = typeof entry.label === "function" ? entry.label() : entry.label;
       const shortcut = document.createElement("span");
       shortcut.className = "sc-menu__kbd";
       shortcut.textContent = entry.shortcut ?? "";
@@ -172,13 +172,14 @@ export function createMenubar(
 
   menus.forEach((menu, i) => {
     const slot = document.createElement("span");
-    slot.className = "menubar-slot";
-    slot.style.position = "relative";
+    slot.style.position = "relative"; // ancora o dropdown absoluto
     const top = document.createElement("button");
     top.className = "sc-menubar__top";
     top.textContent = menu.label;
     top.setAttribute("aria-haspopup", "menu");
     top.setAttribute("aria-expanded", "false");
+    // Antes de o foco mover para o botão (mouse), guarda quem o tinha.
+    top.addEventListener("mousedown", rememberFocus);
     top.addEventListener("click", () => {
       if (openIdx === i) closeAll(true);
       else openMenu(i);
@@ -192,22 +193,30 @@ export function createMenubar(
     tops.push(top);
   });
 
-  // Alt sozinho (keydown+keyup sem outra tecla no meio) foca o 1º menu.
+  // Alt sozinho (keydown+keyup sem outra tecla no meio) foca o 1º menu; com
+  // um menu aberto, fecha-o e devolve o foco.
+  const ac = new AbortController();
+  const { signal } = ac;
   let altAlone = false;
   const inField = (t: EventTarget | null) =>
     t instanceof HTMLElement && (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable);
   document.addEventListener("keydown", (e) => {
     altAlone = e.key === "Alt" && !e.ctrlKey && !e.shiftKey && !e.metaKey && !inField(e.target);
-  }, true);
+  }, { capture: true, signal });
   document.addEventListener("keyup", (e) => {
     if (e.key === "Alt" && altAlone) {
       altAlone = false;
+      e.preventDefault();
+      if (openIdx !== null) { closeAll(true); return; }
       rememberFocus();
       tops[0]?.focus();
-      e.preventDefault();
     }
     altAlone = false;
-  }, true);
+  }, { capture: true, signal });
 
-  return { closeAll: () => closeAll(), setTitle };
+  return {
+    closeAll: () => closeAll(),
+    setTitle,
+    destroy: () => { ac.abort(); closeAll(); bar.remove(); },
+  };
 }
