@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMenubar, type MenuSpec } from "../src/ui/menubar";
-import type { Commands } from "../src/ui/commands";
+import type { Commands } from "../src/app/commands";
 
 function fakeCommands() {
   const run = vi.fn(async () => {});

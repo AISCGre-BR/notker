@@ -27,7 +27,8 @@ import { nabcMoveKeymap, runMove } from "./neume/nabc-move";
 import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
-import { createCommands } from "./ui/commands";
+import { createRegistry } from "./app/commands";
+import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { createMenubar } from "./ui/menubar";
 import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
@@ -358,8 +359,8 @@ async function boot() {
   /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
   function stopPlayback(reason?: string): void {
     player.stop();
-    toolbarHandle?.setLabel("playToggle", "Tocar");
-    toolbarHandle?.setPressed("playToggle", false);
+    toolbarHandle?.setLabel("play.toggle", "Tocar");
+    toolbarHandle?.setPressed("play.toggle", false);
     const svg = panel?.svgEl?.() ?? null;
     if (svg) clearHighlight(svg);
     waveCursorClear();
@@ -413,7 +414,8 @@ async function boot() {
   }
   docList.render(project);
 
-  const commands = createCommands({
+  const commands = createRegistry();
+  const h = {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
     // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
     newProjectCmd: async () => {
@@ -530,7 +532,7 @@ async function boot() {
           setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
         },
         onImport: async () => {
-          await commands.run("importOverlay"); // flush + merge + refresh do painel lá dentro
+          await commands.run("names.import"); // flush + merge + refresh do painel lá dentro
         },
         onClose: closePanel,
       });
@@ -554,7 +556,7 @@ async function boot() {
     // (leitura de solmização); sinais e legato só no interpretado.
     modeToggle: () => {
       playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
-      toolbarHandle?.setLabel("modeToggle", playbackMode === "interpretado" ? "Interpretado" : "Solfejo");
+      toolbarHandle?.setLabel("play.mode", playbackMode === "interpretado" ? "Interpretado" : "Solfejo");
       waveBar?.setSolfejo(playbackMode !== "interpretado");
       if (player.playing) stopPlayback("playback: parado (troca de modo)");
       setStatus("modo de playback: " + playbackMode);
@@ -594,8 +596,8 @@ async function boot() {
         return;
       }
       const svg = panel?.svgEl?.() ?? null;
-      toolbarHandle?.setLabel("playToggle", "Parar");
-      toolbarHandle?.setPressed("playToggle", true);
+      toolbarHandle?.setLabel("play.toggle", "Parar");
+      toolbarHandle?.setPressed("play.toggle", true);
       setStatus(range ? "playback: da seleção ao fim…" : "playback: tocando…");
       let lastSyl = -1;
       player.play(
@@ -625,7 +627,7 @@ async function boot() {
       if (on) syncWaveWithDoc();
       waveBar?.setVisible(on);
       waveBar?.setSolfejo(playbackMode !== "interpretado");
-      toolbarHandle?.setPressed("toggleWave", on);
+      toolbarHandle?.setPressed("wave.toggle", on);
       setStatus(on ? "onda: visível" : "onda: oculta");
     },
     resetWave: () => {
@@ -633,7 +635,36 @@ async function boot() {
       rebuildWave();
       setStatus("onda: restaurada ao neumático");
     },
-  });
+  };
+
+  commands.register([
+    { id: "file.newProject", label: "Novo projeto…", run: h.newProjectCmd },
+    { id: "file.open", label: "Abrir…", run: h.openFile, keys: ["Ctrl+O"] },
+    { id: "file.save", label: "Salvar", run: h.saveFile, keys: ["Ctrl+S"] },
+    { id: "file.exportGabc", label: "Exportar .gabc do canto…", run: h.exportGabc },
+    { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: h.exportAllGabcCmd },
+    { id: "names.export", label: "Exportar nomes…", run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
+    { id: "names.import", label: "Importar nomes…", run: h.importOverlay, keys: ["Ctrl+Alt+I"] },
+    { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); } },
+    { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); } },
+    { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"] },
+    { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true },
+    { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true },
+    { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true },
+    { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true },
+    { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"] },
+    // Provisório até a Task 9 (paleta própria).
+    { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K"] },
+    { id: "names.panel", label: "Nomes dos neumas…", icon: "tag", run: h.openOverlayPanel, keys: ["Ctrl+Alt+N"] },
+    { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
+    { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
+    { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
+    { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible) },
+    { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
+    { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), run: h.modeToggle },
+    { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },
+    { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() },
+  ]);
 
   // ── Spec B: menubar (comandos completos) + toolbar contextual (frequentes) ──
   // Rótulos/checks dos menus são funções — reavaliados a cada abertura.
@@ -641,103 +672,77 @@ async function boot() {
     {
       label: "Arquivo",
       items: [
-        { cmd: "newProjectCmd", label: "Novo projeto…" },
-        { cmd: "openFile", label: "Abrir…", shortcut: "Ctrl+O" },
-        { cmd: "saveFile", label: "Salvar", shortcut: "Ctrl+S" },
+        { cmd: "file.newProject", label: "Novo projeto…" },
+        { cmd: "file.open", label: "Abrir…", shortcut: "Ctrl+O" },
+        { cmd: "file.save", label: "Salvar", shortcut: "Ctrl+S" },
         "---",
-        { cmd: "exportGabc", label: "Exportar .gabc" },
-        { cmd: "exportAllGabcCmd", label: "Exportar todos os .gabc" },
+        { cmd: "file.exportGabc", label: "Exportar .gabc" },
+        { cmd: "file.exportAllGabc", label: "Exportar todos os .gabc" },
       ],
     },
     {
       label: "Editar",
       items: [
-        { cmd: "format", label: "Formatar", shortcut: "Ctrl+Shift+F" },
+        { cmd: "edit.format", label: "Formatar", shortcut: "Ctrl+Shift+F" },
         "---",
-        { cmd: "moveLeft", label: "Mover neuma para a esquerda", shortcut: "Alt+←" },
-        { cmd: "moveDown", label: "Mover neuma para baixo", shortcut: "Alt+↓" },
-        { cmd: "moveUp", label: "Mover neuma para cima", shortcut: "Alt+↑" },
-        { cmd: "moveRight", label: "Mover neuma para a direita", shortcut: "Alt+→" },
-        { cmd: "moveReset", label: "Resetar posição do neuma", shortcut: "Alt+0" },
+        { cmd: "neume.moveLeft", label: "Mover neuma para a esquerda", shortcut: "Alt+←" },
+        { cmd: "neume.moveDown", label: "Mover neuma para baixo", shortcut: "Alt+↓" },
+        { cmd: "neume.moveUp", label: "Mover neuma para cima", shortcut: "Alt+↑" },
+        { cmd: "neume.moveRight", label: "Mover neuma para a direita", shortcut: "Alt+→" },
+        { cmd: "neume.moveReset", label: "Resetar posição do neuma", shortcut: "Alt+0" },
       ],
     },
     {
       label: "Exibir",
       items: [
-        { cmd: "togglePreview", label: "Partitura", checked: () => previewHost.style.display !== "none" },
-        { cmd: "toggleSplit", label: "Lado a lado", checked: () => split.orientation() === "horizontal" },
-        { cmd: "toggleLegend", label: "Régua da pauta", shortcut: "Ctrl+Alt+L", checked: () => view.state.field(legendVisible) },
+        { cmd: "view.preview", label: "Partitura", checked: () => previewHost.style.display !== "none" },
+        { cmd: "view.split", label: "Lado a lado", checked: () => split.orientation() === "horizontal" },
+        { cmd: "view.legend", label: "Régua da pauta", shortcut: "Ctrl+Alt+L", checked: () => view.state.field(legendVisible) },
         "---",
-        { cmd: "openSearch", label: "Buscar neumas…", shortcut: "F2" },
-        { cmd: "openOverlayPanel", label: "Nomes dos neumas…", shortcut: "Ctrl+Alt+N" },
+        { cmd: "neume.palette", label: "Buscar neumas…", shortcut: "F2" },
+        { cmd: "names.panel", label: "Nomes dos neumas…", shortcut: "Ctrl+Alt+N" },
         "---",
-        { cmd: "toggleFamily", label: "Família: St. Gall ⇄ Laon", shortcut: "Ctrl+Shift+G" },
+        { cmd: "doc.toggleFamily", label: "Família: St. Gall ⇄ Laon", shortcut: "Ctrl+Shift+G" },
       ],
     },
     {
       label: "Interpretação",
       items: [
-        { cmd: "playToggle", label: () => (player.playing ? "Parar" : "Tocar") },
-        { cmd: "modeToggle", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo") },
+        { cmd: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar") },
+        { cmd: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo") },
         "---",
-        { cmd: "toggleWave", label: "Onda de interpretação", checked: () => waveLanes.enabled() },
-        { cmd: "resetWave", label: "Resetar onda", enabled: () => waveLanes.enabled() },
+        { cmd: "wave.toggle", label: "Onda de interpretação", checked: () => waveLanes.enabled() },
+        { cmd: "wave.reset", label: "Resetar onda", enabled: () => waveLanes.enabled() },
       ],
     },
   ]);
 
   toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { id: "playToggle", label: "Tocar", title: "playback semiológico (Tuotilo)", primary: true },
-    { id: "modeToggle", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
-    { id: "toggleWave", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
+    { id: "play.toggle", label: "Tocar", title: "playback semiológico (Tuotilo)", primary: true },
+    { id: "play.mode", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
+    { id: "wave.toggle", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
     "|",
-    { id: "moveLeft", label: "◀", title: "Alt+← — mover neuma para a esquerda" },
-    { id: "moveDown", label: "▼", title: "Alt+↓ — mover neuma para baixo" },
-    { id: "moveUp", label: "▲", title: "Alt+↑ — mover neuma para cima" },
-    { id: "moveRight", label: "▶", title: "Alt+→ — mover neuma para a direita" },
-    { id: "moveReset", label: "⟳", title: "Alt+0 — resetar posição do neuma" },
+    { id: "neume.moveLeft", label: "◀", title: "Alt+← — mover neuma para a esquerda" },
+    { id: "neume.moveDown", label: "▼", title: "Alt+↓ — mover neuma para baixo" },
+    { id: "neume.moveUp", label: "▲", title: "Alt+↑ — mover neuma para cima" },
+    { id: "neume.moveRight", label: "▶", title: "Alt+→ — mover neuma para a direita" },
+    { id: "neume.moveReset", label: "⟳", title: "Alt+0 — resetar posição do neuma" },
     "|",
-    { id: "openSearch", label: "Buscar", title: "F2" },
-    { id: "openOverlayPanel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
+    { id: "neume.palette", label: "Buscar", title: "F2" },
+    { id: "names.panel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
   ]);
 
   // Estado inicial dos toggles da toolbar (a11y: aria-pressed desde o boot).
-  toolbarHandle.setPressed("toggleWave", false);
+  toolbarHandle.setPressed("wave.toggle", false);
 
   waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
-    void commands.run("resetWave");
+    void commands.run("wave.reset");
   });
 
-  window.addEventListener("keydown", (e) => {
-    if (e.ctrlKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
-      e.preventDefault();
-      void commands.run("openFile");
-    }
-    if (e.ctrlKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
-      e.preventDefault();
-      void commands.run("saveFile");
-    }
-    if (e.ctrlKey && e.shiftKey && (e.key === "F" || e.key === "f")) {
-      e.preventDefault();
-      void commands.run("format");
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "e" || e.key === "E")) {
-      e.preventDefault();
-      void commands.run("exportOverlay");
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "i" || e.key === "I")) {
-      e.preventDefault();
-      void commands.run("importOverlay");
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "n" || e.key === "N")) {
-      e.preventDefault();
-      void commands.run("openOverlayPanel");
-    }
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "g" || e.key === "G")) {
-      e.preventDefault();
-      void commands.run("toggleFamily");
-    }
-  });
+  // Atalhos no nível da JANELA (registro único), em fase de BOLHA: o CodeMirror
+  // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com
+  // preventDefault; o registro ignora eventos já tratados (sem disparo duplo).
+  window.addEventListener("keydown", (e) => { commands.handleKey(e); });
 }
 
 boot().catch((err) => {

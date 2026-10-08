@@ -1,4 +1,4 @@
-import type { Commands } from "./commands";
+import type { Commands } from "../app/commands";
 
 /** Barra de menus estilo MuseScore/Office (spec B). Rótulos e checks são
  *  FUNÇÕES reavaliadas a cada abertura — o dropdown é reconstruído na hora,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createToolbar, type ToolbarEntry } from "../src/ui/toolbar";
-import type { Commands } from "../src/ui/commands";
+import type { Commands } from "../src/app/commands";
 
 describe("toolbar", () => {
   it("cada botão dispara o comando correspondente", () => {

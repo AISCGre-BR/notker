@@ -1,4 +1,4 @@
-import type { Commands } from "./commands";
+import type { Commands } from "../app/commands";
 
 export interface ToolbarItem { id: string; label: string; title?: string; primary?: boolean; }
 export type ToolbarEntry = ToolbarItem | "|";
