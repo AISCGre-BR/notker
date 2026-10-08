@@ -5,6 +5,7 @@ import "@fontsource-variable/source-serif-4";
 import "@fontsource-variable/source-serif-4/wght-italic.css";
 import "./ui/notker.css";
 import { applyTheme, loadTheme } from "./app/theme";
+import { createToaster } from "./ui/pd/toast";
 import { EditorView } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
 import { createEditor, externalLinter } from "./editor/editor";
@@ -63,13 +64,8 @@ type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
 const URI = "inmemory://notker.gabc";
 let diagnostics: Diagnostic[] = [];
 
-/** Escreve uma linha de status no rodapé (instrumentação visível de runtime). */
-function setStatus(msg: string): void {
-  const el = document.querySelector("#status");
-  if (el) el.textContent = msg;
-}
-
 async function boot() {
+  const toaster = createToaster(document.querySelector<HTMLElement>("#toast-host")!);
   applyTheme(loadTheme());
   const app = document.querySelector<HTMLElement>("#app")!;
   app.textContent = "";
@@ -79,15 +75,15 @@ async function boot() {
   const extraExtensions: Parameters<typeof createEditor>[2] = [highlightTheme];
 
   // Highlighter é opcional: uma falha de carga do WASM não pode impedir o editor
-  // de montar. Reportamos o resultado no rodapé de status.
-  let highlightStatus = "realce: ativo";
+  // de montar. Falha vira aviso (toast) depois que o editor está de pé.
+  let highlightFailed = false;
   let getTree: () => Tree | null = () => null;
   try {
     const ts = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
     extraExtensions.push(ts.extension);
     getTree = ts.getTree;
   } catch (err) {
-    highlightStatus = "realce: FALHOU — " + String(err);
+    highlightFailed = true;
     console.error("[notker] falha ao carregar highlighter WASM:", err);
   }
 
@@ -129,7 +125,7 @@ async function boot() {
   });
   onDocChange = sync;
 
-  setStatus(highlightStatus + "  ·  LSP: conectado");
+  if (highlightFailed) toaster.show("O realce de sintaxe não carregou. O editor funciona sem cores.", { kind: "warn" });
 
   // effectiveRef: hoistado para fora do bloco F2 para que os comandos o alcancem.
   let effectiveRef: () => EffectiveEntry[] = () => [];
@@ -144,9 +140,8 @@ async function boot() {
     try {
       await saveUserOverlay(overlay);
       reindex();
-      setStatus("nomes salvos ✓");
     } catch (e) {
-      setStatus("erro ao salvar nomes: " + String(e));
+      toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" });
       throw e;
     }
   }, 300);
@@ -163,19 +158,11 @@ async function boot() {
   const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
-  function updateFamilyIndicator(): void {
-    const el = document.querySelector("#family");
-    if (el) {
-      el.textContent = "✠ " + familyLabel(currentFamily());
-      (el as HTMLElement).title = "Família ativa (clique ou Ctrl/Cmd+Shift+G para alternar)";
-    }
-  }
   function toggleFamily(): void {
     const f: Family = currentFamily() === "stgall" ? "laon" : "stgall";
     project = setDocFamily(project, project.activeId, f);
-    updateFamilyIndicator();
     reindex();
-    setStatus("família do documento: " + familyLabel(f) + " — busca/hover priorizam esta notação");
+    toaster.show("Família do canto: " + familyLabel(f) + ".");
   }
 
   // Carrega db de neumas e reconfigura o compartment F2.
@@ -209,16 +196,14 @@ async function boot() {
         overlay = addName(overlay, id, name);
         reindex();
         overlayPanel?.refresh();
-        try { await saveUserOverlay(overlay); setStatus("nome adicionado: " + name); }
-        catch (e) { setStatus("nome adicionado (não persistido): " + String(e)); }
+        try { await saveUserOverlay(overlay); }
+        catch (e) { toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" }); }
       },
     };
     view.dispatch({ effects: neumeCompartment.reconfigure([...neumeExtensions(rt), ...gabcAssistExtensions(getTree)]) });
-    updateFamilyIndicator();
-    document.querySelector("#family")?.addEventListener("click", toggleFamily);
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
-    setStatus("neumas: indisponível — " + String(err));
+    toaster.show("O catálogo de neumas não carregou. " + String(err), { kind: "error" });
   }
 
   /** Substitui todo o conteúdo do editor (usado ao abrir arquivo). */
@@ -250,7 +235,7 @@ async function boot() {
 
   const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
     onFactorDrag: (key, syl, note, startFactor, startClientY) => {
-      if (playbackMode !== "interpretado") { setStatus("onda: edição só no modo interpretado"); return; }
+      if (playbackMode !== "interpretado") { toaster.show("A onda só é editável no modo interpretado.", { kind: "warn" }); return; }
       dragState = { key, syl, note, startFactor, startClientY };
     },
     onHover: (syl) => {
@@ -320,7 +305,7 @@ async function boot() {
     // Primeira vez (hash vazio): adota o hash sem marcar como stale
     if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
     if (Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h)
-      setStatus("interpretação desatualizada — o canto foi editado");
+      toaster.show("O canto mudou depois da interpretação. Revise a onda.", { kind: "warn" });
     rebuildWave();
   }
 
@@ -352,19 +337,18 @@ async function boot() {
   }
 
   // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
-  // O panel pode ser null se o preview falhou — todos os caminhos degradam com setStatus.
+  // O panel pode ser null se o preview falhou — todos os caminhos degradam com toast.
   const player = createPlayer(() => new AudioContext(), "voz");
   let playbackMode: PlaybackMode = "interpretado";
 
   /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
-  function stopPlayback(reason?: string): void {
+  function stopPlayback(): void {
     player.stop();
     toolbarHandle?.setLabel("play.toggle", "Tocar");
     toolbarHandle?.setPressed("play.toggle", false);
     const svg = panel?.svgEl?.() ?? null;
     if (svg) clearHighlight(svg);
     waveCursorClear();
-    setStatus(reason ?? "playback: parado");
   }
 
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
@@ -377,10 +361,9 @@ async function boot() {
 
   /** Reflete o doc ativo do projeto no editor + indicadores. */
   function syncFromProject(): void {
-    if (player.playing) stopPlayback("playback: interrompido (troca de canto)");
+    if (player.playing) stopPlayback();
     replaceDoc(getActiveDoc(project).content);
     docList.render(project);
-    updateFamilyIndicator();
     reindex();
     // Onda: restaura a interpretação persistida, ou cria vazia para o novo canto
     wave = getActiveDoc(project).interpretation ?? emptyWave(gabcBodyHash(getActiveDoc(project).content));
@@ -410,7 +393,6 @@ async function boot() {
     project = setActive(project, project.docs[project.docs.length - 1].id);
     syncFromProject();
     view.focus();
-    setStatus(`canto adicionado: ${r.name ?? "Novo"}`);
   }
   docList.render(project);
 
@@ -424,53 +406,48 @@ async function boot() {
         warning: "substitui o projeto atual — alterações não salvas serão perdidas",
         okLabel: "Substituir",
       });
-      if (!r) { setStatus("Novo: cancelado"); return; }
+      if (!r) return;
       project = newProject({ family: r.family, name: r.name, office: r.office });
       syncFromProject();
       view.focus();
-      setStatus("novo projeto — família " + familyLabel(r.family));
     },
     openFile: async () => {
       try {
-        setStatus("abrindo…");
         const p = await openProject();
-        if (!p) { setStatus("abrir: cancelado"); return; }
+        if (!p) return;
         project = p;
         syncFromProject();
-        setStatus("aberto: " + (p.path ?? "projeto (.gabc importado)"));
-      } catch (err) { setStatus("abrir ERRO: " + String(err)); console.error(err); }
+      } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     saveFile: async () => {
       try {
         captureEditorIntoProject();
-        setStatus("salvando projeto…");
         const path = await saveProject(project);
-        if (!path) { setStatus("salvar: cancelado"); return; }
+        if (!path) return;
         project = { ...project, path };
-        setStatus("salvo: " + path);
-      } catch (err) { setStatus("salvar ERRO: " + String(err)); console.error(err); }
+        toaster.show("Projeto salvo.");
+      } catch (err) { toaster.show("Salvar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     exportGabc: async () => {
       try {
         captureEditorIntoProject();
         const out = await exportCurrentGabc(project);
-        setStatus(out ? "exportado .gabc: " + out : "exportar: cancelado");
-      } catch (err) { setStatus("exportar ERRO: " + String(err)); console.error(err); }
+        if (out) toaster.show("Exportado.");
+      } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     exportAllGabcCmd: async () => {
       try {
         captureEditorIntoProject();
         const n = await exportAllGabc(project);
-        setStatus(n ? `exportados ${n} .gabc` : "exportar todos: cancelado");
-      } catch (err) { setStatus("exportar todos ERRO: " + String(err)); console.error(err); }
+        if (n) toaster.show(`${n} cantos exportados.`);
+      } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     format: async () => {
       try {
         const f = await formatDocument(client, URI, view.state.doc);
-        if (f != null) { replaceDoc(f); setStatus("formatado"); }
-        else setStatus("formatar: sem alterações");
+        if (f != null) replaceDoc(f);
       } catch (err) {
-        setStatus("Ctrl+Shift+F ERRO: " + String(err));
+        toaster.show("Formatar falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao formatar:", err);
       }
     },
@@ -478,19 +455,20 @@ async function boot() {
       try {
         const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
         await exportOverlay(overlay);
-        setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
+        if (n) toaster.show(`${n} nomes exportados.`);
+        else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
       } catch (err) {
-        setStatus("Ctrl+Alt+E ERRO: " + String(err));
+        toaster.show("Exportar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao exportar overlay:", err);
       }
     },
     importOverlay: async () => {
       try {
         const imported = await importOverlay();
-        if (!imported) { setStatus("importar: cancelado"); return; }
+        if (!imported) return;
         const n = Object.keys(imported.entries).length;
         if (n === 0) {
-          setStatus("importar: arquivo de nomes vazio (0 entradas) — nada a importar");
+          toaster.show("O arquivo não tem nomes para importar.", { kind: "warn" });
           return;
         }
         await overlayAutosave.flush();
@@ -498,9 +476,9 @@ async function boot() {
         await saveUserOverlay(overlay);
         reindex();
         overlayPanel?.refresh();
-        setStatus(`nomes importados: ${n} entrada(s)`);
+        toaster.show(`${n} nomes importados.`);
       } catch (err) {
-        setStatus("importar ERRO (arquivo inválido?): " + String(err));
+        toaster.show("Importar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao importar overlay:", err);
       }
     },
@@ -529,7 +507,8 @@ async function boot() {
           try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
           const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
           await exportOverlay(overlay);
-          setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
+          if (n) toaster.show(`${n} nomes exportados.`);
+        else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
         },
         onImport: async () => {
           await commands.run("names.import"); // flush + merge + refresh do painel lá dentro
@@ -558,8 +537,7 @@ async function boot() {
       playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
       toolbarHandle?.setLabel("play.mode", playbackMode === "interpretado" ? "Interpretado" : "Solfejo");
       waveBar?.setSolfejo(playbackMode !== "interpretado");
-      if (player.playing) stopPlayback("playback: parado (troca de modo)");
-      setStatus("modo de playback: " + playbackMode);
+      if (player.playing) stopPlayback();
     },
     // Tuotilo: alterna Tocar↔Parar no playback semiológico.
     playToggle: () => {
@@ -570,7 +548,7 @@ async function boot() {
       // Obtém mapa de sílabas do preview; sem preview → degrada com status
       const map = panel?.sourceMap?.();
       if (!map || map.length === 0) {
-        setStatus("playback indisponível (preview sem dados)");
+        toaster.show("Nada para tocar: a partitura ainda não foi desenhada.", { kind: "warn" });
         return;
       }
       const texto = view.state.doc.toString();
@@ -580,7 +558,7 @@ async function boot() {
       const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
       const syls = extractAll(texto, map);
       if (syls.length === 0) {
-        setStatus("playback: nenhuma sílaba encontrada");
+        toaster.show("Nada para tocar neste canto.", { kind: "warn" });
         return;
       }
       const tl = buildTimeline(syls);
@@ -592,13 +570,12 @@ async function boot() {
       const range = syllableRangeOfSelection(map, sel.from, sel.to);
       const toPlay = range ? sliceFromSyllable(shaped, range[0]) : shaped;
       if (toPlay.notes.length === 0) {
-        setStatus("playback: seleção sem notas");
+        toaster.show("A seleção não tem notas.", { kind: "warn" });
         return;
       }
       const svg = panel?.svgEl?.() ?? null;
       toolbarHandle?.setLabel("play.toggle", "Parar");
       toolbarHandle?.setPressed("play.toggle", true);
-      setStatus(range ? "playback: da seleção ao fim…" : "playback: tocando…");
       let lastSyl = -1;
       player.play(
         toPlay,
@@ -611,7 +588,7 @@ async function boot() {
           // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
           waveLanes.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
         },
-        () => { stopPlayback("playback: fim"); },
+        () => { stopPlayback(); },
       );
     },
     toggleWave: () => {
@@ -628,12 +605,10 @@ async function boot() {
       waveBar?.setVisible(on);
       waveBar?.setSolfejo(playbackMode !== "interpretado");
       toolbarHandle?.setPressed("wave.toggle", on);
-      setStatus(on ? "onda: visível" : "onda: oculta");
     },
     resetWave: () => {
       wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
       rebuildWave();
-      setStatus("onda: restaurada ao neumático");
     },
   };
 
@@ -748,6 +723,5 @@ async function boot() {
 boot().catch((err) => {
   const app = document.querySelector("#app");
   if (app) app.textContent = "Falha ao iniciar o Notker: " + String(err);
-  setStatus("BOOT ERRO: " + String(err));
   console.error(err);
 });
