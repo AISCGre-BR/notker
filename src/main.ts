@@ -4,6 +4,7 @@ import "@fontsource-variable/source-sans-3";
 import "@fontsource-variable/source-serif-4";
 import "@fontsource-variable/source-serif-4/wght-italic.css";
 import "./ui/notker.css";
+import { applyTheme, loadTheme } from "./app/theme";
 import { EditorView } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
 import { createEditor, externalLinter } from "./editor/editor";
@@ -68,6 +69,7 @@ function setStatus(msg: string): void {
 }
 
 async function boot() {
+  applyTheme(loadTheme());
   const app = document.querySelector<HTMLElement>("#app")!;
   app.textContent = "";
 

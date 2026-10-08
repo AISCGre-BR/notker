@@ -10,6 +10,23 @@
   --font-mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", monospace;
 }
 
+/* Realce de sintaxe do editor — Pergaminho (claro). */
+:root {
+  --tok-header-key: #6b5636; --tok-header-val: #7a6a50; --tok-note: #3f4a6b;
+  --tok-alteration: #6d4a86; --tok-rhythmic: #7a5f12; --tok-nabc: #8e4f24; --tok-neume-shape: #7a4521;
+}
+/* Vigília (escuro): mesmos papéis, clareados p/ ≥ 4.5:1 sobre --surface escuro. */
+:root[data-theme="dark"] {
+  --tok-header-key: #d8bf92; --tok-header-val: #c2b08f; --tok-note: #a9b8e6;
+  --tok-alteration: #d2a6e8; --tok-rhythmic: #e3c46a; --tok-nabc: #eba275; --tok-neume-shape: #f0b48a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tok-header-key: #d8bf92; --tok-header-val: #c2b08f; --tok-note: #a9b8e6;
+    --tok-alteration: #d2a6e8; --tok-rhythmic: #e3c46a; --tok-nabc: #eba275; --tok-neume-shape: #f0b48a;
+  }
+}
+
 /* ── Janela: menubar + toolbar + mesa com cartões ──────────────────────────── */
 html, body { height: 100%; }
 body { display: flex; flex-direction: column; overflow: hidden; }
