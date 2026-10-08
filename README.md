@@ -44,6 +44,12 @@ Atalhos: `Ctrl+Space` busca de neumas · `Ctrl+Alt+L` régua de altura na pauta 
 - Fontes `gregall`/`grelaon` e a referência NABC (`GregorioNabcRef`, `gregoriotex-nabc.lua`): **The Gregorio Project** — GPLv3 com exceção de fonte.
 - Tabela semiológica / letras significativas: **Dom Eugène Cardine**.
 
+### Interface
+
+- Ícones: [Lucide](https://lucide.dev), licença ISC — SVGs copiados em `src/ui/pd/icons.ts`.
+- Fontes: [Source Sans 3](https://github.com/adobe-fonts/source-sans) e [Source Serif 4](https://github.com/adobe-fonts/source-serif) (Adobe, SIL Open Font License 1.1) via [@fontsource](https://fontsource.org).
+- Linguagem visual: [Parchment Design](https://github.com/AISCGre-BR/parchment-design) (AISCGre-BR, MIT).
+
 ## Instalação (builds não assinadas)
 
 As builds de release ainda não são assinadas/notarizadas (alpha).
