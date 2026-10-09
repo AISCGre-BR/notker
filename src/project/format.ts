@@ -3,6 +3,7 @@
  *  empacota). Schema 2 = árvore + chants[]; o schema 1 (documents[]) é lido como raiz
  *  plana e regravado como 2. Leitura TOLERANTE: nenhum canto existente se perde. */
 import type { Family } from "../neume/types";
+import { gabcBodyHash } from "../tuotilo/wave";
 import {
   type NotkerProject, type TreeNode, type ChantNode, type Interpretation,
   genId, gabcSkeleton, flattenChants, flattenNodes,
@@ -53,12 +54,15 @@ export function toBundle(p: NotkerProject): Bundle {
   return { project_json: JSON.stringify(meta, null, 2), files };
 }
 
-function readInterp(files: Record<string, string>, file: string): Interpretation | undefined {
+function readInterp(files: Record<string, string>, file: string, content: string): Interpretation | undefined {
   const raw = files[`interpretation/${baseOf(file)}.json`];
   if (raw === undefined) return undefined;
   try {
     const v = JSON.parse(raw) as Interpretation;
-    if (v && typeof v.gabcBodyHash === "string" && isObj(v.factors)) return v;
+    if (v && typeof v.gabcBodyHash === "string" && isObj(v.factors)) {
+      // Onda legada sem hash: adota o do texto (como o editor faz), senão ligar a onda sujaria o projeto.
+      return v.gabcBodyHash === "" ? { ...v, gabcBodyHash: gabcBodyHash(content) } : v;
+    }
   } catch { /* JSON inválido: a onda fica de fora, o canto não */ }
   return undefined;
 }
@@ -66,7 +70,7 @@ function readInterp(files: Record<string, string>, file: string): Interpretation
 function chantFrom(meta: Record<string, unknown>, files: Record<string, string>): ChantNode {
   const file = typeof meta.file === "string" ? meta.file : "";
   const family = asFamily(meta.family);
-  const interpretation = file ? readInterp(files, file) : undefined;
+  const interpretation = file ? readInterp(files, file, files[file] ?? "") : undefined;
   return {
     kind: "chant",
     id: typeof meta.id === "string" && meta.id ? meta.id : genId(),

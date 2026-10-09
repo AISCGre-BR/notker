@@ -467,6 +467,9 @@ async function boot() {
     projectEpoch++;
     toaster.dismiss();   // um "Desfazer" pendente era do projeto antigo
     project = p;
+    // Baseline ANTES do sync (o renderTree dele atualiza o título): nunca pisca "Editado".
+    // O sync pode normalizar o texto via capture, então re-marca depois.
+    dirty.markSaved(project);
     syncFromProject();
     captureEditorIntoProject();
     dirty.markSaved(project); // recém-aberto/criado = sem alterações
@@ -544,10 +547,11 @@ async function boot() {
    *  LANÇA em erro de gravação (quem chama decide: toast ou diálogo de fechar). */
   async function doSave(saveAs: boolean): Promise<boolean> {
     captureEditorIntoProject();
-    const path = await saveProject(project, { saveAs });
+    const snap = project; // o que vai ao disco: edições durante o await não entram no "salvo"
+    const path = await saveProject(snap, { saveAs });
     if (!path) return false;
+    dirty.markSaved(snap);
     project = { ...project, path };
-    dirty.markSaved(project);
     updateTitle();
     toaster.show("Projeto salvo.");
     return true;

@@ -1,6 +1,7 @@
 // test/project-format.test.ts
 import { describe, it, expect } from "vitest";
 import { toBundle, fromBundle, gabcExportPlan, slug, FUTURE_SCHEMA_MESSAGE } from "../src/project/format";
+import { gabcBodyHash } from "../src/tuotilo/wave";
 import {
   type NotkerProject, type TreeNode, type ChantNode, type GroupNode,
   getActiveChant, moveSibling, invariantErrors, flattenChants,
@@ -125,5 +126,14 @@ describe("exportação e slug", () => {
     expect(slug("Ofício de Nossa Senhora")).toBe("oficio-de-nossa-senhora");
     expect(slug("???")).toBe("canto");
     expect(slug("", "grupo")).toBe("grupo");
+  });
+  it("onda legada com hash vazio adota o hash do texto ao abrir", () => {
+    const p: NotkerProject = { ...sample(), root: [c("x", "X", { interpretation: { gabcBodyHash: "", factors: { "0:0": 1.2 } } })], activeId: "x" };
+    const b = toBundle(p);
+    const q = fromBundle(b.project_json, b.files, "/x.notker");
+    const w = getActiveChant(q).interpretation!;
+    expect(w.gabcBodyHash).toBe(gabcBodyHash(getActiveChant(q).content));
+    expect(w.gabcBodyHash).not.toBe("");
+    expect(w.factors).toEqual({ "0:0": 1.2 });
   });
 });
