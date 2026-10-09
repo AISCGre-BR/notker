@@ -39,6 +39,7 @@ import { debounce } from "./preview/debounce";
 import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
 import { openDialog } from "./ui/pd/dialog";
+import { askSaveChanges, resolveUnsaved, type UnsavedGuard } from "./app/session";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
@@ -176,12 +177,6 @@ async function boot() {
   // dele (hover "adicionar nome", importar) — senão o próximo autosave do rascunho
   // antigo apagaria a mudança.
   let overlayPanel: OverlayPanel | null = null;
-  // Fechar a janela com escrita pendente: grava antes (try/finally — fecha mesmo se falhar).
-  try {
-    void getCurrentWindow().onCloseRequested(async () => {
-      try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
-    }).catch(() => { /* sem permissão/evento: segue sem flush */ });
-  } catch { /* fora do Tauri (testes/probe) */ }
   const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
@@ -561,22 +556,29 @@ async function boot() {
     catch (err) { toaster.show("Salvar falhou. " + String(err), { kind: "error" }); console.error(err); }
   };
 
+  const unsaved: UnsavedGuard = {
+    isDirty: () => { captureEditorIntoProject(); return dirty.isDirty(project); },
+    title: () => project.title,
+    save: () => doSave(false),
+    ask: (title, error) => askSaveChanges(dialogHost, title, error),
+  };
+
   const commands = createRegistry();
   const h = {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
     // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
+    // Primeiro decide as alterações do atual; depois o diálogo (sem o aviso antigo
+    // de "alterações serão perdidas" — a pergunta já cuidou disso).
     newProjectCmd: async () => {
-      const r = await newDocumentDialog(dialogHost, {
-        title: "Novo projeto",
-        warning: "O projeto atual será fechado. Alterações não salvas serão perdidas.",
-        okLabel: "Criar",
-      });
+      if (!(await resolveUnsaved(unsaved))) return;
+      const r = await newDocumentDialog(dialogHost, { title: "Novo projeto", okLabel: "Criar" });
       if (!r) return;
       loadProject(newProject({ family: r.family, name: r.name, office: r.office }));
       view.focus();
     },
     openFile: async () => {
       try {
+        if (!(await resolveUnsaved(unsaved))) return;
         const p = await openProject();
         if (!p) return;
         loadProject(p);
@@ -908,6 +910,18 @@ async function boot() {
   captureEditorIntoProject();
   dirty.markSaved(project);
   updateTitle();
+
+  // Fechar a janela: com alterações, pergunta; grava os nomes pendentes; NUNCA prende a
+  // janela (falha inesperada na guarda → fecha). O wrapper do Tauri só chama destroy()
+  // se o preventDefault não foi chamado.
+  try {
+    void getCurrentWindow().onCloseRequested(async (ev) => {
+      let proceed = true;
+      try { proceed = await resolveUnsaved(unsaved); } catch (e) { console.error("[notker] fechar:", e); }
+      if (!proceed) { ev.preventDefault(); return; }
+      try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
+    }).catch(() => { /* sem permissão/evento: segue sem guarda */ });
+  } catch { /* fora do Tauri (testes/probe) */ }
 }
 
 boot().catch((err) => {
