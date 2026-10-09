@@ -373,3 +373,8 @@ body.notker-dragging, body.notker-dragging * { cursor: grabbing !important; }
 /* Miniatura de sequência (partes lado a lado) ou código quando não há glifo. */
 .neume-thumb--parts { display: inline-flex; align-items: center; gap: 1px; }
 .neume-thumb--code { font: 12px/1 var(--font-mono); color: var(--ink-soft); }
+
+/* Medição do desenho de cadeias nabc: fora da tela, com layout (não display:none). */
+#measure-host { position: fixed; left: -10000px; top: 0; visibility: hidden; pointer-events: none; }
+.neume-drawing-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.neume-drawing-wrap--code { font: 16px/1 var(--font-mono); color: var(--ink-soft); }
