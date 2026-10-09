@@ -35,21 +35,25 @@ import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
 import { createMenubar, type MenuItem } from "./ui/menubar";
 import { createDirtyTracker } from "./app/dirty";
+import { chantCapture } from "./app/chant-capture";
 import { debounce } from "./preview/debounce";
-import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
+// PLAYBACK-OFF (2026-10-09): barra da onda.
+// import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
 import { openDialog } from "./ui/pd/dialog";
 import { askSaveChanges, resolveUnsaved, type UnsavedGuard } from "./app/session";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
-import { highlightSyllable, clearHighlight } from "./preview/highlight";
-import { createPlayer } from "./tuotilo/player";
-import { extractAll } from "./tuotilo/signs";
-import { buildTimeline } from "./tuotilo/timeline";
-import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuotilo/duration";
-import { syllableRangeOfSelection } from "./preview/source-map";
-import { DEFAULT_PROFILE } from "./tuotilo/profile";
+// PLAYBACK-OFF (2026-10-09): realce de playback/onda.
+// import { highlightSyllable, clearHighlight } from "./preview/highlight";
+// PLAYBACK-OFF (2026-10-09): player e linha do tempo.
+// import { createPlayer } from "./tuotilo/player";
+// import { extractAll } from "./tuotilo/signs";
+// import { buildTimeline } from "./tuotilo/timeline";
+// import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuotilo/duration";
+// import { syllableRangeOfSelection } from "./preview/source-map";
+// import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { createOverlayPanel, type OverlayPanel } from "./overlay-ui/panel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
@@ -61,9 +65,11 @@ import {
   findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode,
 } from "./project/tree";
 import { createTreePanel } from "./project/tree-panel";
-import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
+// PLAYBACK-OFF (2026-10-09): faixas da onda.
+// import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
 import type { WaveOverlay } from "./tuotilo/wave";
-import { emptyWave, setWaveFactor, applyWave, gabcBodyHash, waveKey } from "./tuotilo/wave";
+// PLAYBACK-OFF (2026-10-09): setWaveFactor, applyWave, waveKey (só a UI da onda os usava).
+import { emptyWave, gabcBodyHash } from "./tuotilo/wave"; // a interpretação salva continua sendo lida e regravada
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -248,100 +254,104 @@ async function boot() {
   // mesmo que o motor de preview (webview-only) falhe.
   const previewHost = document.querySelector<HTMLElement>("#preview")!;
 
-  // Referência mutável para limpar o cursor da onda no stopPlayback.
-  let waveCursorClear: () => void = () => {};
+  // PLAYBACK-OFF (2026-10-09): cursor da onda.
+  // // Referência mutável para limpar o cursor da onda no stopPlayback.
+  // let waveCursorClear: () => void = () => {};
   // Handles de UI atribuídos no fim do boot; os closures abaixo rodam depois.
   let toolbarHandle: ToolbarHandle | null = null;
-  let waveBar: WaveBarHandle | null = null;
+  // PLAYBACK-OFF (2026-10-09): barra da onda.
+  // let waveBar: WaveBarHandle | null = null;
 
   // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
-  // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
-  const WAVE_SEED = 12345;
+  // PLAYBACK-OFF (2026-10-09): semente do playback.
+  // // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
+  // const WAVE_SEED = 12345;
   // Espaçamento com onda ativa (WAVE_LINE_SPACING_PX + WAVE_SPREAD): wave-lanes.ts.
   let wave: WaveOverlay = emptyWave("");
 
-  // Estado do arrasto vertical de fator.
-  let dragState: { key: string; syl: number; note: number; startFactor: number; startClientY: number } | null = null;
-  // Contagem de notas por sílaba (interna) p/ a leitura "nota N de M" no rodapé.
-  let waveNotesPerSyl = new Map<number, number>();
+  // PLAYBACK-OFF (2026-10-09): faixas da onda (wave-lanes), arrasto e toasts de onda desatualizada.
+  // // Estado do arrasto vertical de fator.
+  // let dragState: { key: string; syl: number; note: number; startFactor: number; startClientY: number } | null = null;
+  // // Contagem de notas por sílaba (interna) p/ a leitura "nota N de M" no rodapé.
+  // let waveNotesPerSyl = new Map<number, number>();
 
-  const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
-    onFactorDrag: (key, syl, note, startFactor, startClientY) => {
-      if (playbackMode !== "interpretado") { toaster.show("A onda só é editável no modo interpretado.", { kind: "warn" }); return; }
-      dragState = { key, syl, note, startFactor, startClientY };
-    },
-    onHover: (syl) => {
-      const svg = panel?.svgEl?.(); if (!svg) return;
-      if (syl === null) { clearHighlight(svg); return; }
-      highlightSyllable(svg, syl); // syl já é o realSyllableIndex (renderWaveLanes passa o índice real)
-    },
-  }, { readAnchors: () => panel?.noteAnchors?.() ?? [] });
+  // const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
+  //   onFactorDrag: (key, syl, note, startFactor, startClientY) => {
+  //     if (playbackMode !== "interpretado") { toaster.show("A onda só é editável no modo interpretado.", { kind: "warn" }); return; }
+  //     dragState = { key, syl, note, startFactor, startClientY };
+  //   },
+  //   onHover: (syl) => {
+  //     const svg = panel?.svgEl?.(); if (!svg) return;
+  //     if (syl === null) { clearHighlight(svg); return; }
+  //     highlightSyllable(svg, syl); // syl já é o realSyllableIndex (renderWaveLanes passa o índice real)
+  //   },
+  // }, { readAnchors: () => panel?.noteAnchors?.() ?? [] });
 
-  // Rótulo do alongamento p/ a leitura ao vivo no rodapé (na estética: sem floats).
-  const fatorLabel = (f: number): string =>
-    Math.abs(f - 1) < 0.01 ? "neumático puro" : `×${f.toFixed(2).replace(".", ",")}`;
-  const notaLabel = (d: NonNullable<typeof dragState>): string => {
-    const total = waveNotesPerSyl.get(d.syl);
-    return total && total > 1 ? `nota ${d.note + 1} de ${total}` : `nota ${d.note + 1}`;
-  };
-  window.addEventListener("pointermove", (ev) => {
-    if (!dragState) return;
-    const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
-    const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
-    // Leitura ao vivo na barra da onda (perto do gesto); rodapé fica p/ status geral.
-    waveBar?.setReading(`alongamento ${fatorLabel(f)} — ${notaLabel(dragState)}`);
-  });
-  window.addEventListener("pointerup", (ev) => {
-    if (!dragState) return;
-    const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
-    wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
-    waveBar?.setReading(null);
-    dragState = null;
-    rebuildWave();
-    scheduleTitle();
-  });
-  window.addEventListener("pointercancel", () => { dragState = null; waveBar?.setReading(null); });
+  // // Rótulo do alongamento p/ a leitura ao vivo no rodapé (na estética: sem floats).
+  // const fatorLabel = (f: number): string =>
+  //   Math.abs(f - 1) < 0.01 ? "neumático puro" : `×${f.toFixed(2).replace(".", ",")}`;
+  // const notaLabel = (d: NonNullable<typeof dragState>): string => {
+  //   const total = waveNotesPerSyl.get(d.syl);
+  //   return total && total > 1 ? `nota ${d.note + 1} de ${total}` : `nota ${d.note + 1}`;
+  // };
+  // window.addEventListener("pointermove", (ev) => {
+  //   if (!dragState) return;
+  //   const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
+  //   const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
+  //   // Leitura ao vivo na barra da onda (perto do gesto); rodapé fica p/ status geral.
+  //   waveBar?.setReading(`alongamento ${fatorLabel(f)} — ${notaLabel(dragState)}`);
+  // });
+  // window.addEventListener("pointerup", (ev) => {
+  //   if (!dragState) return;
+  //   const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
+  //   wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
+  //   waveBar?.setReading(null);
+  //   dragState = null;
+  //   rebuildWave();
+  //   scheduleTitle();
+  // });
+  // window.addEventListener("pointercancel", () => { dragState = null; waveBar?.setReading(null); });
 
-  // Liga a referência mutável usada em stopPlayback.
-  waveCursorClear = () => waveLanes.setCursor(null);
+  // // Liga a referência mutável usada em stopPlayback.
+  // waveCursorClear = () => waveLanes.setCursor(null);
 
-  /** Recomputa a onda a partir do doc atual + overlay WaveOverlay e repassa para
-   *  o controller de lanes integrado ao SVG da partitura. */
-  function rebuildWave(): void {
-    waveBar?.setCount(Object.keys(wave.factors).length);
-    toolbarHandle?.refresh(); // wave.reset só habilita com fatores editados
-    const map = panel?.sourceMap?.() ?? [];
-    const texto = view.state.doc.toString();
-    const reals = map.filter((s) => s.syllableIndex >= 1);
-    const syls = extractAll(texto, map);
-    if (syls.length === 0) { waveLanes.refresh([]); return; }
-    const tl = buildTimeline(syls);
-    // base = durações neumáticas PURAS (sem applyWave); o fator vem do overlay
-    const base = computeTimedNotes(tl, DEFAULT_PROFILE, WAVE_SEED, "interpretado");
-    const notes: NoteIdent[] = base.notes.map((n) => ({
-      syllableIndex: n.syllableIndex,                                                         // INTERNO — overlay/cursor/data-key
-      realSyllableIndex: reals[n.syllableIndex]?.syllableIndex ?? (n.syllableIndex + 1),      // REAL (syllable-N)
-      noteInSyllable: n.noteInSyllable,
-      pitch: n.pitch, alt: n.alt,
-      factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
-      divisioAfter: n.pauseAfterMs > 0
-        ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
-        : null,
-    }));
-    waveNotesPerSyl = new Map();
-    for (const n of notes) waveNotesPerSyl.set(n.syllableIndex, (waveNotesPerSyl.get(n.syllableIndex) ?? 0) + 1);
-    waveLanes.refresh(notes);
-  }
+  // /** Recomputa a onda a partir do doc atual + overlay WaveOverlay e repassa para
+  //  *  o controller de lanes integrado ao SVG da partitura. */
+  // function rebuildWave(): void {
+  //   waveBar?.setCount(Object.keys(wave.factors).length);
+  //   toolbarHandle?.refresh(); // wave.reset só habilita com fatores editados
+  //   const map = panel?.sourceMap?.() ?? [];
+  //   const texto = view.state.doc.toString();
+  //   const reals = map.filter((s) => s.syllableIndex >= 1);
+  //   const syls = extractAll(texto, map);
+  //   if (syls.length === 0) { waveLanes.refresh([]); return; }
+  //   const tl = buildTimeline(syls);
+  //   // base = durações neumáticas PURAS (sem applyWave); o fator vem do overlay
+  //   const base = computeTimedNotes(tl, DEFAULT_PROFILE, WAVE_SEED, "interpretado");
+  //   const notes: NoteIdent[] = base.notes.map((n) => ({
+  //     syllableIndex: n.syllableIndex,                                                         // INTERNO — overlay/cursor/data-key
+  //     realSyllableIndex: reals[n.syllableIndex]?.syllableIndex ?? (n.syllableIndex + 1),      // REAL (syllable-N)
+  //     noteInSyllable: n.noteInSyllable,
+  //     pitch: n.pitch, alt: n.alt,
+  //     factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
+  //     divisioAfter: n.pauseAfterMs > 0
+  //       ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
+  //       : null,
+  //   }));
+  //   waveNotesPerSyl = new Map();
+  //   for (const n of notes) waveNotesPerSyl.set(n.syllableIndex, (waveNotesPerSyl.get(n.syllableIndex) ?? 0) + 1);
+  //   waveLanes.refresh(notes);
+  // }
 
-  /** Verifica hash do canto e sinaliza onda desatualizada (D4). */
-  function syncWaveWithDoc(): void {
-    const h = gabcBodyHash(view.state.doc.toString());
-    // Primeira vez (hash vazio): adota o hash sem marcar como stale
-    if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
-    if (Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h)
-      toaster.show("O canto mudou depois da interpretação. Revise a onda.", { kind: "warn" });
-    rebuildWave();
-  }
+  // /** Verifica hash do canto e sinaliza onda desatualizada (D4). */
+  // function syncWaveWithDoc(): void {
+  //   const h = gabcBodyHash(view.state.doc.toString());
+  //   // Primeira vez (hash vazio): adota o hash sem marcar como stale
+  //   if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
+  //   if (Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h)
+  //     toaster.show("O canto mudou depois da interpretação. Revise a onda.", { kind: "warn" });
+  //   rebuildWave();
+  // }
 
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
@@ -351,15 +361,17 @@ async function boot() {
     panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
-    // Re-injeta as wave lanes após cada render (sobrevive a debounce e resize).
-    panel.onRender(() => { if (waveLanes.enabled()) rebuildWave(); });
+    // PLAYBACK-OFF (2026-10-09): faixas da onda na partitura.
+    // // Re-injeta as wave lanes após cada render (sobrevive a debounce e resize).
+    // panel.onRender(() => { if (waveLanes.enabled()) rebuildWave(); });
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
     const prevOnDocChange = onDocChange;
     onDocChange = () => {
       prevOnDocChange();
       panel!.update(view.state.doc.toString());
-      // Onda: re-sincroniza apenas se as lanes estiverem habilitadas.
-      if (waveLanes.enabled()) syncWaveWithDoc();
+      // PLAYBACK-OFF (2026-10-09): onda.
+      // // Onda: re-sincroniza apenas se as lanes estiverem habilitadas.
+      // if (waveLanes.enabled()) syncWaveWithDoc();
     };
     // Realce de sílaba segue o cursor.
     view.dom.addEventListener("keyup", () => syncFromCursor(view, panel!));
@@ -370,19 +382,20 @@ async function boot() {
     console.error("[notker] preview ao vivo indisponível:", err);
   }
 
-  // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
-  // O panel pode ser null se o preview falhou — todos os caminhos degradam com toast.
-  const player = createPlayer(() => new AudioContext(), "voz");
-  let playbackMode: PlaybackMode = "interpretado";
+  // PLAYBACK-OFF (2026-10-09): player e AudioContext.
+  // // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
+  // // O panel pode ser null se o preview falhou — todos os caminhos degradam com toast.
+  // const player = createPlayer(() => new AudioContext(), "voz");
+  // let playbackMode: PlaybackMode = "interpretado";
 
-  /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
-  function stopPlayback(): void {
-    player.stop();
-    toolbarHandle?.refresh();
-    const svg = panel?.svgEl?.() ?? null;
-    if (svg) clearHighlight(svg);
-    waveCursorClear();
-  }
+  // /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
+  // function stopPlayback(): void {
+  //   player.stop();
+  //   toolbarHandle?.refresh();
+  //   const svg = panel?.svgEl?.() ?? null;
+  //   if (svg) clearHighlight(svg);
+  //   waveCursorClear();
+  // }
 
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
   const dialogHost = document.querySelector<HTMLElement>("#dialog-host")!;
@@ -420,7 +433,8 @@ async function boot() {
    *  histórico). O LSP recebe didChange completo; partitura e onda refazem. */
   function syncFromProject(): void {
     if (shownId) chantStates.remember(shownId, view.state, view.scrollSnapshot());
-    if (player.playing) stopPlayback();
+    // PLAYBACK-OFF (2026-10-09): não há player.
+    // if (player.playing) stopPlayback();
     const chant = getActiveChant(project);
     const legend = view.state.field(legendVisible, false) ?? false;
     diagnostics = []; // eram do texto anterior; o LSP republica após o didChange
@@ -439,10 +453,7 @@ async function boot() {
   }
   function captureEditorIntoProject(): void {
     if (!shownId) return;
-    project = updateChant(project, shownId, {
-      content: view.state.doc.toString(),
-      interpretation: Object.keys(wave.factors).length > 0 ? wave : undefined,
-    });
+    project = updateChant(project, shownId, chantCapture(view.state.doc.toString(), wave));
   }
   /** Aplica uma mudança no projeto. O editor é capturado ANTES; se o ativo deixou de ser
    *  o canto exibido, o editor passa a mostrar o novo ativo. */
@@ -711,86 +722,87 @@ async function boot() {
     moveLeft: () => { runMove(view, () => getTree(), "left"); },
     moveRight: () => { runMove(view, () => getTree(), "right"); },
     moveReset: () => { runMove(view, () => getTree(), "reset"); },
-    // Tuotilo: alterna interpretado ↔ solfejo. No solfejo toda nota vale baseMs
-    // (leitura de solmização); sinais e legato só no interpretado.
-    modeToggle: () => {
-      playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
-      toolbarHandle?.refresh();
-      waveBar?.setSolfejo(playbackMode !== "interpretado");
-      if (player.playing) stopPlayback();
-    },
-    // Tuotilo: alterna Tocar↔Parar no playback semiológico.
-    playToggle: () => {
-      if (player.playing) {
-        stopPlayback();
-        return;
-      }
-      // Obtém mapa de sílabas do preview; sem preview → degrada com status
-      const map = panel?.sourceMap?.();
-      if (!map || map.length === 0) {
-        toaster.show("Nada para tocar: a partitura ainda não foi desenhada.", { kind: "warn" });
-        return;
-      }
-      const texto = view.state.doc.toString();
-      // Contrato de índices: extractAll filtra sílabas reais (syllableIndex>=1) na
-      // MESMA ordem de svgIndices; note.syllableIndex (0-based na timeline) é,
-      // portanto, posição válida em svgIndices.
-      const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
-      const syls = extractAll(texto, map);
-      if (syls.length === 0) {
-        toaster.show("Nada para tocar neste canto.", { kind: "warn" });
-        return;
-      }
-      const tl = buildTimeline(syls);
-      const playback = computeTimedNotes(tl, DEFAULT_PROFILE, Date.now() % 9973, playbackMode);
-      // Onda: aplicar fatores do overlay apenas no modo interpretado (D4)
-      const shaped = playbackMode === "interpretado" ? applyWave(playback, wave) : playback;
-      // Seleção não-vazia do mouse ⇒ toca só o trecho (spec B2a)
-      const sel = view.state.selection.main;
-      const range = syllableRangeOfSelection(map, sel.from, sel.to);
-      const toPlay = range ? sliceFromSyllable(shaped, range[0]) : shaped;
-      if (toPlay.notes.length === 0) {
-        toaster.show("A seleção não tem notas.", { kind: "warn" });
-        return;
-      }
-      const svg = panel?.svgEl?.() ?? null;
-      toolbarHandle?.refresh();
-      let lastSyl = -1;
-      player.play(
-        toPlay,
-        (note) => {
-          // Realce na partitura: por sílaba (sem mudar o guard existente)
-          if (note.syllableIndex !== lastSyl) {
-            lastSyl = note.syllableIndex;
-            if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
-          }
-          // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
-          waveLanes.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
-        },
-        () => { stopPlayback(); },
-      );
-      toolbarHandle?.refresh(); // agora player.playing já é true
-    },
-    toggleWave: () => {
-      const on = !waveLanes.enabled();
-      waveLanes.setEnabled(on);
-      // Abre/fecha o vão entre sistemas + espalha as notas na horizontal (melismas
-      // densos). O re-render dispara onRender → rebuildWave, que (re)desenha as lanes
-      // já no layout espaçado.
-      panel?.setWaveSpacing(on ? WAVE_LINE_SPACING_PX : 0, on ? WAVE_SPREAD : 1);
-      // Com a onda ativa a partitura vira superfície de TRABALHO: mais respiro
-      // ao redor (padding do preview) acompanha o vão maior entre sistemas.
-      previewHost.classList.toggle("wave-on", on);
-      if (on) syncWaveWithDoc();
-      waveBar?.setVisible(on);
-      waveBar?.setSolfejo(playbackMode !== "interpretado");
-      toolbarHandle?.refresh();
-    },
-    resetWave: () => {
-      wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
-      rebuildWave();
-      scheduleTitle();
-    },
+    // PLAYBACK-OFF (2026-10-09): handlers de Tocar/modo/onda.
+    // // Tuotilo: alterna interpretado ↔ solfejo. No solfejo toda nota vale baseMs
+    // // (leitura de solmização); sinais e legato só no interpretado.
+    // modeToggle: () => {
+    //   playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
+    //   toolbarHandle?.refresh();
+    //   waveBar?.setSolfejo(playbackMode !== "interpretado");
+    //   if (player.playing) stopPlayback();
+    // },
+    // // Tuotilo: alterna Tocar↔Parar no playback semiológico.
+    // playToggle: () => {
+    //   if (player.playing) {
+    //     stopPlayback();
+    //     return;
+    //   }
+    //   // Obtém mapa de sílabas do preview; sem preview → degrada com status
+    //   const map = panel?.sourceMap?.();
+    //   if (!map || map.length === 0) {
+    //     toaster.show("Nada para tocar: a partitura ainda não foi desenhada.", { kind: "warn" });
+    //     return;
+    //   }
+    //   const texto = view.state.doc.toString();
+    //   // Contrato de índices: extractAll filtra sílabas reais (syllableIndex>=1) na
+    //   // MESMA ordem de svgIndices; note.syllableIndex (0-based na timeline) é,
+    //   // portanto, posição válida em svgIndices.
+    //   const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
+    //   const syls = extractAll(texto, map);
+    //   if (syls.length === 0) {
+    //     toaster.show("Nada para tocar neste canto.", { kind: "warn" });
+    //     return;
+    //   }
+    //   const tl = buildTimeline(syls);
+    //   const playback = computeTimedNotes(tl, DEFAULT_PROFILE, Date.now() % 9973, playbackMode);
+    //   // Onda: aplicar fatores do overlay apenas no modo interpretado (D4)
+    //   const shaped = playbackMode === "interpretado" ? applyWave(playback, wave) : playback;
+    //   // Seleção não-vazia do mouse ⇒ toca só o trecho (spec B2a)
+    //   const sel = view.state.selection.main;
+    //   const range = syllableRangeOfSelection(map, sel.from, sel.to);
+    //   const toPlay = range ? sliceFromSyllable(shaped, range[0]) : shaped;
+    //   if (toPlay.notes.length === 0) {
+    //     toaster.show("A seleção não tem notas.", { kind: "warn" });
+    //     return;
+    //   }
+    //   const svg = panel?.svgEl?.() ?? null;
+    //   toolbarHandle?.refresh();
+    //   let lastSyl = -1;
+    //   player.play(
+    //     toPlay,
+    //     (note) => {
+    //       // Realce na partitura: por sílaba (sem mudar o guard existente)
+    //       if (note.syllableIndex !== lastSyl) {
+    //         lastSyl = note.syllableIndex;
+    //         if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
+    //       }
+    //       // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
+    //       waveLanes.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
+    //     },
+    //     () => { stopPlayback(); },
+    //   );
+    //   toolbarHandle?.refresh(); // agora player.playing já é true
+    // },
+    // toggleWave: () => {
+    //   const on = !waveLanes.enabled();
+    //   waveLanes.setEnabled(on);
+    //   // Abre/fecha o vão entre sistemas + espalha as notas na horizontal (melismas
+    //   // densos). O re-render dispara onRender → rebuildWave, que (re)desenha as lanes
+    //   // já no layout espaçado.
+    //   panel?.setWaveSpacing(on ? WAVE_LINE_SPACING_PX : 0, on ? WAVE_SPREAD : 1);
+    //   // Com a onda ativa a partitura vira superfície de TRABALHO: mais respiro
+    //   // ao redor (padding do preview) acompanha o vão maior entre sistemas.
+    //   previewHost.classList.toggle("wave-on", on);
+    //   if (on) syncWaveWithDoc();
+    //   waveBar?.setVisible(on);
+    //   waveBar?.setSolfejo(playbackMode !== "interpretado");
+    //   toolbarHandle?.refresh();
+    // },
+    // resetWave: () => {
+    //   wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
+    //   rebuildWave();
+    //   scheduleTitle();
+    // },
   };
 
   commands.register([
@@ -819,10 +831,11 @@ async function boot() {
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
     { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible, false) ?? false },
-    { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
-    { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
-    { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },
-    { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() && Object.keys(wave.factors).length > 0 },
+    // PLAYBACK-OFF (2026-10-09): comandos de áudio e da onda.
+    // { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
+    // { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
+    // { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },
+    // { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() && Object.keys(wave.factors).length > 0 },
   ]);
 
   let themeChoice = loadTheme();
@@ -895,14 +908,15 @@ async function boot() {
         menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark"),
       ],
     },
-    {
-      label: "Interpretação",
-      items: [
-        menuItem("play.toggle"), menuItem("play.mode"),
-        "---",
-        menuItem("wave.toggle"), menuItem("wave.reset"),
-      ],
-    },
+    // PLAYBACK-OFF (2026-10-09): menu Interpretação.
+    // {
+    //   label: "Interpretação",
+    //   items: [
+    //     menuItem("play.toggle"), menuItem("play.mode"),
+    //     "---",
+    //     menuItem("wave.toggle"), menuItem("wave.reset"),
+    //   ],
+    // },
     { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
   ]);
   menubar.setTitle(project.title);
@@ -913,13 +927,15 @@ async function boot() {
     { group: ["edit.format", "neume.palette", "names.panel"] },
     { group: ["view.split", "view.legend"] },
     "spacer",
-    { group: ["play.mode", "wave.toggle", "wave.reset"] },
-    { primary: "play.toggle" },
+    // PLAYBACK-OFF (2026-10-09): modo, onda e Tocar na toolbar.
+    // { group: ["play.mode", "wave.toggle", "wave.reset"] },
+    // { primary: "play.toggle" },
   ]);
 
-  waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
-    void commands.run("wave.reset");
-  });
+  // PLAYBACK-OFF (2026-10-09): barra da onda.
+  // waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
+  //   void commands.run("wave.reset");
+  // });
 
   installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
 
