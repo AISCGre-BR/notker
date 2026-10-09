@@ -219,3 +219,15 @@ describe("teclas da vista", () => {
     expect(card("stgall:cl").querySelector(".neumas-card__name")!.textContent).toBe("clivis de fora");
   });
 });
+
+describe("nota: flush da vista", () => {
+  it("digitar a nota e chamar view.flush() antes do debounce grava", async () => {
+    const { view, ov } = setup();
+    view.open({ select: "stgall:pe" });
+    const t = q<HTMLTextAreaElement>(".neumas-note__input");
+    t.value = "anotei"; t.dispatchEvent(new Event("input"));
+    view.flush();
+    await flush();
+    expect(ov().entries["stgall:pe"].note).toBe("anotei");
+  });
+});

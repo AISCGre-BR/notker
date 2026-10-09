@@ -1,5 +1,5 @@
 // test/neumas-bench.test.ts — cartão Bancada (DOM)
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createBench, type BenchCallbacks, type BenchStatus, type BenchItem } from "../src/neumas/bench";
 import type { EffectiveEntry } from "../src/neume/types";
 
@@ -131,5 +131,47 @@ describe("bancada: sequência editável e rascunho", () => {
     b.render(null, st());
     expect(host.textContent).toContain("tecle S");
     expect(b.focusName()).toBe(false);
+  });
+});
+
+describe("bancada: nota grava ao digitar (debounce 400 ms)", () => {
+  const typeNote = (v: string) => { const t = q<HTMLTextAreaElement>(".neumas-note__input"); t.value = v; t.dispatchEvent(new Event("input")); return t; };
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+  it("digitar e esperar 400 ms grava; antes disso não", () => {
+    const cb = cbs(); const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    typeNote("nova nota");
+    vi.advanceTimersByTime(399); expect(cb.onNote).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1); expect(cb.onNote).toHaveBeenCalledWith("nova nota");
+    expect(cb.onNote).toHaveBeenCalledTimes(1);
+  });
+  it("flushNote grava na hora e o debounce não grava de novo", () => {
+    const cb = cbs(); const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    typeNote("urgente");
+    b.flushNote();
+    expect(cb.onNote).toHaveBeenCalledWith("urgente");
+    vi.advanceTimersByTime(1000);
+    expect(cb.onNote).toHaveBeenCalledTimes(1);
+  });
+  it("re-render com a nota em foco ou pendente não apaga o texto digitado", () => {
+    const cb = cbs(); const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    const t = typeNote("digitando");
+    b.render({ kind: "entry", entry: glyph }, st()); // fora de foco, mas pendente
+    expect(t.value).toBe("digitando");
+    t.focus();
+    vi.advanceTimersByTime(400);
+    b.render({ kind: "entry", entry: glyph }, st()); // em foco
+    expect(t.value).toBe("digitando");
+  });
+  it("blur sem mudança não grava", () => {
+    const cb = cbs(); const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    const t = q<HTMLTextAreaElement>(".neumas-note__input");
+    t.focus(); t.blur();
+    vi.advanceTimersByTime(1000);
+    expect(cb.onNote).not.toHaveBeenCalled();
   });
 });

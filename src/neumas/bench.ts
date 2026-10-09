@@ -42,6 +42,8 @@ export interface Bench {
   /** Foca "Novo nome…". false se não há item. */
   focusName(): boolean;
   focusChain(): void;
+  /** Grava já a nota pendente (debounce), se houver. */
+  flushNote(): void;
 }
 
 export type DrawFn = (family: Family, nabc: string) => Promise<Element>;
@@ -86,6 +88,14 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     family: Family; editable: boolean;
   } | null = null;
   let drawn = "";
+  /** Nota gravada do item atual e debounce da gravação ao digitar. */
+  let savedNote = "";
+  let noteTimer: ReturnType<typeof setTimeout> | null = null;
+  const writeNote = (): void => {
+    if (noteTimer !== null) { clearTimeout(noteTimer); noteTimer = null; }
+    const t = refs?.note;
+    if (t && t.value !== savedNote) { savedNote = t.value; cb.onNote(t.value); }
+  };
   let drawToken = 0;
 
   const redraw = debounce((family: Family, nabc: string) => {
@@ -186,7 +196,12 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
       note = el("textarea", "sc-textarea neumas-note__input");
       note.rows = 2;
       note.value = entry.userNote ?? "";
-      note.addEventListener("blur", () => cb.onNote(note!.value));
+      savedNote = note.value;
+      note.addEventListener("input", () => {
+        if (noteTimer !== null) clearTimeout(noteTimer);
+        noteTimer = setTimeout(writeNote, 400);
+      });
+      note.addEventListener("blur", () => writeNote());
       fieldKeys(note, null, () => cb.onFieldEscape());
       noteField.appendChild(note);
     }
@@ -248,7 +263,10 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
       r.names.appendChild(chip);
     });
     if (!userNames.length) r.names.appendChild(el("span", "neumas-names__none", "Nenhum nome seu ainda."));
-    if (r.note && entry && document.activeElement !== r.note) r.note.value = entry.userNote ?? "";
+    if (r.note && entry) {
+      savedNote = entry.userNote ?? "";
+      if (document.activeElement !== r.note && noteTimer === null) r.note.value = savedNote;
+    }
     if (r.hide && entry) r.hide.textContent = entry.hidden ? "Mostrar na busca" : "Ocultar da busca";
     r.save.textContent = st.saveState;
     ensureDrawing(r.family, st.chain, item.kind === "entry" && !entry?.userSequence);
@@ -266,6 +284,7 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
       patch(item, st);
     },
     focusName() { if (!refs) return false; refs.newName.focus(); return true; },
+    flushNote() { writeNote(); },
     focusChain() { if (!refs) return; refs.chain.focus(); refs.chain.setSelectionRange(refs.chain.value.length, refs.chain.value.length); },
   };
 }

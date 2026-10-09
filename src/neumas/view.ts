@@ -36,6 +36,8 @@ export interface NeumasView {
   refresh(): void;
   focusSearch(): void;
   family(): Family;
+  /** Grava já o que estiver pendente (nota em debounce). Chamar antes de trocar de vista. */
+  flush(): void;
 }
 
 const isField = (t: EventTarget | null): boolean =>
@@ -56,7 +58,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
 
   const catalog = createCatalog(host, {
     onQuery: (q) => { query = q; render(); },
-    onFamily: (f) => { if (f !== family) { family = f; selectedId = null; draft = null; composing = false; editChain = null; render(); } },
+    onFamily: (f) => { if (f !== family) { bench.flushNote(); family = f; selectedId = null; draft = null; composing = false; editChain = null; render(); } },
     onFilter: (f) => { filter = f; render(); },
     onSelect: (id) => select(id),
     onActivate: (id) => { if (composing && (draft || selectedIsUserSeq())) appendToChain(id); else select(id); },
@@ -133,6 +135,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
 
   // ── ações ──
   function select(id: string): void {
+    bench.flushNote();
     const wasComposing = composing || !!draft;
     draft = null; editChain = null; composing = false;
     selectedId = id;
@@ -141,6 +144,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     if (!wasComposing && catalog.markSelected(id)) renderBench(); else render();
   }
   function newSequence(prefill: string): void {
+    bench.flushNote();
     selectedId = null; editChain = null;
     draft = { nabc: normalizeNabc(prefill) };
     composing = prefill === "";
@@ -281,5 +285,6 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     refresh: () => render(),
     focusSearch: () => catalog.focusSearch(),
     family: () => family,
+    flush: () => bench.flushNote(),
   };
 }
