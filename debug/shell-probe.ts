@@ -302,7 +302,7 @@ async function main(): Promise<void> {
     const sheet = view.dom.querySelector(".cm-tooltip-autocomplete li");
     rows.push(`cm: autocomplete ${sheet ? "aberto" : "não abriu"}`);
   }
-  // ── Vista Neumas: ?view=neumas [&sel=<id>] [&draft=<cadeia>] [&focus=name] [&q=<busca>] ──
+  // ── Vista Neumas: ?view=neumas [&sel=<id>] [&draft=<cadeia>] [&compose=1] [&focus=name] [&q=<busca>] ──
   if (qs.get("view") === "neumas") {
     document.body.dataset.view = "neumas";
     let ov = emptyOverlay();
@@ -326,6 +326,7 @@ async function main(): Promise<void> {
     const draft = qs.get("draft");
     if (draft !== null) nv.open({ family: "stgall", newChain: draft });
     else nv.open({ family: "stgall", select: qs.get("sel") ?? s1.id, focus: qs.get("focus") === "name" ? "name" : "grid" });
+    if (qs.get("compose")) document.querySelector<HTMLButtonElement>(".neumas-compose")?.click();
     const query = qs.get("q");
     if (query) {
       nv.focusSearch();
