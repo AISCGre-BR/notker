@@ -6,7 +6,7 @@ import { inNabcTextual } from "../editor/context";
 import { insertNabcAtCursor } from "./insert";
 import { neumeThumb } from "./render";
 import type { NeumeSearch } from "./search";
-import type { EffectiveEntry } from "./types";
+import type { EffectiveEntry, Family } from "./types";
 
 export interface NeumePalette {
   keymap: Extension;
@@ -16,6 +16,8 @@ export interface NeumePalette {
 export interface PaletteDeps {
   getTree: () => Tree | null;
   search: () => NeumeSearch;
+  /** Família do canto ativo, lida a cada consulta: a paleta mostra só ela. */
+  activeFamily: () => Family;
   onName: (ids: string[], name: string) => void | Promise<void>;
 }
 
@@ -63,7 +65,7 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
     let naming: number | null = null;
 
     const render = () => {
-      const flat = deps.search().query(input.value, 120);
+      const flat = deps.search().query(input.value, 120, { family: deps.activeFamily() });
       groups = groupByNabc(flat);
       sel = Math.min(sel, Math.max(0, groups.length - 1));
       if (naming !== null && naming >= groups.length) naming = null;

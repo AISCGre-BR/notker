@@ -1,7 +1,7 @@
 // test/hover-name.test.ts
 import { readFileSync } from "node:fs";
 import { describe, it, expect, vi } from "vitest";
-import { buildEntryRow, buildPartLabel, buildUnknownInfo } from "../src/neume/hover-nabc";
+import { buildEntryRow, buildPartLabel, buildUnknownInfo, ofFamily } from "../src/neume/hover-nabc";
 import type { EffectiveEntry } from "../src/neume/types";
 
 const e: EffectiveEntry = {
@@ -130,5 +130,14 @@ describe("hover — sequências do usuário e tela de nomes", () => {
   });
   it("sem onOpen, não há botão", () => {
     expect(buildEntryRow(e, true).querySelector(".neume-open-names")).toBeNull();
+  });
+});
+
+describe("hover — só a família do canto", () => {
+  const lao: EffectiveEntry = { ...e, id: "laon:cl", family: "laon" };
+  it("ofFamily descarta a outra família (lista vazia = cai no nome sistemático)", () => {
+    expect(ofFamily([lao, e], "stgall").map((x) => x.id)).toEqual(["stgall:cl"]);
+    expect(ofFamily([lao, e], "laon").map((x) => x.id)).toEqual(["laon:cl"]);
+    expect(ofFamily([lao], "stgall")).toEqual([]);
   });
 });

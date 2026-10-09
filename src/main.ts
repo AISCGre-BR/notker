@@ -230,11 +230,11 @@ async function boot() {
     let lookup = byNabcIndex(effectiveCache);
     const effective = (): EffectiveEntry[] => effectiveCache;
     effectiveRef = effective;
-    let searchInst = new NeumeSearch(effectiveCache, currentFamily());
+    let searchInst = new NeumeSearch(effectiveCache);
     const rebuildIndex = (): void => {
       effectiveCache = buildEffective(db.all(), overlay, glyphOf);
       lookup = byNabcIndex(effectiveCache);
-      searchInst = new NeumeSearch(effectiveCache, currentFamily());
+      searchInst = new NeumeSearch(effectiveCache);
     };
     reindex = () => { rebuildIndex(); if (views.current() === "neumas") neumasView?.refresh(); };
     commitOverlay = (next) => { overlay = next; rebuildIndex(); return overlayAutosave.schedule(); };

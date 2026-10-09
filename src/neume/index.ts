@@ -18,13 +18,13 @@ export interface NeumeRuntime {
   openNames?: OpenNames;
 }
 export function neumeExtensions(rt: NeumeRuntime): { extensions: Extension[]; palette: NeumePalette } {
-  const palette = neumePalette({ getTree: rt.getTree, search: rt.search, onName: rt.onName });
+  const palette = neumePalette({ getTree: rt.getTree, search: rt.search, activeFamily: rt.activeFamily, onName: rt.onName });
   return {
     palette,
     extensions: [
       composeFromField,
       nabcHover(rt.getTree, rt.lookupByNabc, rt.activeFamily, rt.onName, rt.openNames),
-      ...nabcCompletion(rt.search),
+      ...nabcCompletion(rt.search, rt.activeFamily),
       palette.keymap,
       nabcComposeHighlight,
     ],

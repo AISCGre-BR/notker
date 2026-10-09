@@ -11,6 +11,11 @@ function familyLabel(f: Family): string {
   return f === "stgall" ? "St. Gall" : "Laon";
 }
 
+/** Só as entradas da família dada (o hover nunca mostra a outra família). */
+export function ofFamily(list: EffectiveEntry[], family: Family): EffectiveEntry[] {
+  return list.filter((e) => e.family === family);
+}
+
 /** "Abrir na tela de nomes": `id` quando o item existe; senão a cadeia nova. */
 export type OpenNames = (t: { id?: string; family: Family; nabc: string }) => void;
 
@@ -134,12 +139,15 @@ export function buildUnknownInfo(
 
 export function nabcHover(
   getTree: () => Tree | null,
-  lookupByNabc: (nabc: string) => EffectiveEntry[],
+  lookupAll: (nabc: string) => EffectiveEntry[],
   activeFamily: () => Family,
   onName?: (ids: string[], name: string) => void | Promise<void>,
   onOpen?: OpenNames,
 ) {
   return hoverTooltip((view, pos) => {
+    // Família do canto lida AGORA; todas as buscas abaixo só enxergam essa família.
+    const af = activeFamily();
+    const lookupByNabc = (nabc: string): EffectiveEntry[] => ofFamily(lookupAll(nabc), af);
     const tree = getTree();
     if (!tree) return null;
     const doc = view.state.doc.toString();
@@ -169,11 +177,7 @@ export function nabcHover(
     // Partes elementares do neuma externo.
     const rawParts = nabcPartsAt(tree as any, doc, pos);
 
-    // Ordena composto: família ativa primeiro.
-    const af = activeFamily();
-    const sorted = composite.slice().sort(
-      (a, b) => Number(b.family === af) - Number(a.family === af),
-    );
+    const sorted = composite;
 
     return {
       pos: ctx.tokenFrom, end: ctx.tokenTo, above: true,
