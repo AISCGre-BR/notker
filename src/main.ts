@@ -228,6 +228,7 @@ async function boot() {
     const f: Family = currentFamily() === "stgall" ? "laon" : "stgall";
     applyTree((p) => setChantFamily(p, p.activeId, f));
     reindex();
+    panel?.update(view.state.doc.toString()); // a partitura troca a fonte dos neumas
     toaster.show("Família do canto: " + familyLabel(f) + ".");
   }
 
@@ -421,7 +422,7 @@ async function boot() {
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
   try {
     const engine = new NabcLibEngine();
-    panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
+    panel = createPreviewPanel(previewHost, engine, { debounceMs: 150, family: currentFamily });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
     // PLAYBACK-OFF (2026-10-09): faixas da onda na partitura.
@@ -482,7 +483,7 @@ async function boot() {
     onRemove: (id) => void removeWithUndo(id),
     onSetFamily: (id, f) => {
       applyTree((p) => setChantFamily(p, id, f));
-      if (id === project.activeId) reindex();
+      if (id === project.activeId) { reindex(); panel?.update(view.state.doc.toString()); }
       toaster.show("Família do canto: " + familyLabel(f) + ".");
     },
     onNewChant: (parentId, index) => void newChantAt(parentId, index),

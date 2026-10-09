@@ -1,4 +1,4 @@
-import type { PreviewEngine, RenderResult, SyllableSource } from "./engine";
+import type { PreviewEngine, RenderOptions, RenderResult, SyllableSource } from "./engine";
 import { extractNoteAnchors, rootOffset, type LayoutLike } from "./note-anchors";
 
 /** Token de clave gabc (c1..c4 / f1..f4, com bemol opcional). A clave é o 1º grupo
@@ -35,7 +35,7 @@ export function syllableSpans(doc: string): SyllableSource[] {
 
 export class NabcLibEngine implements PreviewEngine {
   readonly id = "nabc-lib";
-  async render(doc: string, opts?: { widthPx?: number; extraLineSpacingPx?: number; horizontalSpreadFactor?: number }): Promise<RenderResult> {
+  async render(doc: string, opts?: RenderOptions): Promise<RenderResult> {
     const [lib, fonts] = await Promise.all([
       import("@testneumz/nabc-lib"),
       import("./nabc-fonts"),
@@ -47,6 +47,8 @@ export class NabcLibEngine implements PreviewEngine {
     const ctx = new ChantContext();
     // Largura de linha = largura útil do painel (preview responsivo); fallback 800.
     if (opts?.widthPx && opts.widthPx > 120) ctx.lineWidthPx = Math.round(opts.widthPx);
+    // Família do canto: o parser e a fonte dos neumas (gregall/grelaon) dependem dela.
+    if (opts?.family) ctx.nabcMode = opts.family === "laon" ? "laon" : "gall";
     // Espaçamento extra ENTRE sistemas (vão p/ as lanes da onda). O empilhamento de
     // linhas usa `spaceabovelines` (default 0); lengthToPx(mm) = space × pxInCm/10,
     // então convertemos o px desejado para mm com o pxInCm do contexto.
