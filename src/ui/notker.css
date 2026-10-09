@@ -412,6 +412,8 @@ body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none;
 .neumas-card__fig svg { max-height: 40px; min-width: 0; flex: 0 1 auto; }
 .neumas-card__name { font: 500 14px/18px var(--font-serif); text-align: center; overflow-wrap: anywhere; }
 .neumas-card__name.is-mine { color: var(--rubric); }
+/* Selecionado: rubrica sobre rubric-wash dá 4,25:1 na Vigília; a tinta mantém o contraste (o ponto e a borda seguem marcando "meu"). */
+.neumas-card[aria-selected="true"] .neumas-card__name.is-mine { color: var(--ink); }
 .neumas-card__code { font: 11px/14px var(--font-mono); color: var(--ink-muted); overflow-wrap: anywhere; text-align: center; }
 .neumas-card__mine { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 3px; background: var(--rubric); }
 .neumas-more { margin-top: var(--space-2); color: var(--ink-muted); font-size: 12px; }

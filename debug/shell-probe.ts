@@ -28,6 +28,12 @@ import { mergeEntry } from "../src/neume/overlay";
 import { neumeExtensions } from "../src/neume/index";
 import { gabcAssistExtensions } from "../src/gabc/index";
 import { Compartment } from "@codemirror/state";
+import { emptyOverlay, addName, addSequence } from "../src/neume/overlay";
+import { buildEffective, glyphIndex } from "../src/neume/effective";
+import { validateNabc, type NabcParser } from "../src/neume/validate-nabc";
+import { createNeumeDrawer } from "../src/neume/draw";
+import { createNabcOnlyRenderer } from "../src/preview/nabc-only";
+import { createNeumasView } from "../src/neumas/view";
 
 const qs = new URLSearchParams(location.search);
 const theme = qs.get("theme") === "dark" ? "dark" : "light";
@@ -52,7 +58,9 @@ commands.register([
   { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: noop, keys: ["Alt+ArrowRight"] },
   { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: noop, keys: ["Alt+0"] },
   { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: noop, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
-  { id: "names.panel", label: "Nomes dos neumas…", icon: "tag", run: noop, keys: ["Ctrl+Alt+N"] },
+  { id: "view.edicao", label: "Edição", run: noop, keys: ["Ctrl+Digit1"], checked: () => qs.get("view") !== "neumas" },
+  { id: "view.neumas", label: "Neumas", run: noop, keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => qs.get("view") === "neumas" },
+  { id: "neume.name", label: "Nomear neuma…", icon: "tag", run: noop, keys: ["Ctrl+Shift+N"] },
   { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: noop, keys: ["Ctrl+Shift+G"] },
   { id: "view.preview", label: "Partitura", run: noop, checked: () => true },
   { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: noop, checked: () => true },
@@ -75,20 +83,17 @@ const menuItem = (id: string): MenuItem => {
 const menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
   { label: "Arquivo", items: [menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"), "---", menuItem("file.exportGabc"), menuItem("file.exportAllGabc"), "---", menuItem("names.import"), menuItem("names.export")] },
   { label: "Editar", items: [{ ...menuItem("edit.undo"), shortcut: "Ctrl+Z" }, { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" }, "---", menuItem("neume.palette"), menuItem("edit.format"), "---", menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"), menuItem("neume.moveRight"), menuItem("neume.moveReset")] },
-  { label: "Exibir", items: [menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"), "---", menuItem("names.panel"), menuItem("doc.toggleFamily"), "---", menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark")] },
-  { label: "Interpretação", items: [menuItem("play.toggle"), menuItem("play.mode"), "---", menuItem("wave.toggle"), menuItem("wave.reset")] },
+  { label: "Exibir", items: [menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"), "---", menuItem("view.edicao"), menuItem("view.neumas"), "---", menuItem("doc.toggleFamily"), "---", menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark")] },
   { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
 ]);
 menubar.setTitle("Kyrie — Missa de teste", !!qs.get("edited"));
 
 createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-  { group: ["edit.undo", "edit.redo"] },
-  { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"] },
-  { group: ["edit.format", "neume.palette", "names.panel"] },
-  { group: ["view.split", "view.legend"] },
-  "spacer",
-  { group: ["play.mode", "wave.toggle", "wave.reset"] },
-  { primary: "play.toggle" },
+  { tabs: ["view.edicao", "view.neumas"], label: "Vistas" },
+  { group: ["edit.undo", "edit.redo"], view: "edicao" },
+  { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"], view: "edicao" },
+  { group: ["edit.format", "neume.palette", "neume.name"], view: "edicao" },
+  { group: ["view.split", "view.legend"], view: "edicao" },
 ]);
 installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
 const toaster = createToaster(document.querySelector<HTMLElement>("#toast-host")!);
@@ -113,10 +118,12 @@ async function main(): Promise<void> {
   const text = await fetch("/samples/02-kyrie.gabc").then((r) => r.text());
   const extra: Parameters<typeof createEditor>[2] = [highlightTheme];
   let getTree: () => import("web-tree-sitter").Tree | null = () => null;
+  let nabcParser: NabcParser | null = null;
   try {
     const ts = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
     extra.push(ts.extension);
     getTree = ts.getTree;
+    nabcParser = { parse: ts.parse };
   } catch (e) { console.error("highlighter", e); }
   const comp = new Compartment();
   extra.push(comp.of([]));
@@ -203,7 +210,8 @@ async function main(): Promise<void> {
   check(".neume-tip-fam", synth.querySelector(".neume-tip-fam"));
   const toolBtn = q(".sc-toolbar .sc-seg button");
   check("toolbar: ícone", toolBtn);
-  check("toolbar: Tocar (preenchido)", q(".sc-btn--filled"));
+  check("toolbar: aba de vista (selecionada)", q('.notker-views [aria-selected="true"]'));
+  check("toolbar: aba de vista (outra)", q('.notker-views [aria-selected="false"]'));
   // menu aberto (item de menu) — abre 3º menu temporariamente
   tops[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   const item = document.querySelector('[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]');
@@ -294,8 +302,50 @@ async function main(): Promise<void> {
     const sheet = view.dom.querySelector(".cm-tooltip-autocomplete li");
     rows.push(`cm: autocomplete ${sheet ? "aberto" : "não abriu"}`);
   }
+  // ── Vista Neumas: ?view=neumas [&sel=<id>] [&draft=<cadeia>] [&focus=name] [&q=<busca>] ──
+  if (qs.get("view") === "neumas") {
+    document.body.dataset.view = "neumas";
+    let ov = emptyOverlay();
+    ov = addName(ov, "stgall:pe", "podatus");
+    const s1 = addSequence(ov, "stgall", "vi!pe", "2026-10-09T10:00:00.000Z");
+    ov = addName(s1.overlay, s1.id, "virga e pes");
+    const s2 = addSequence(ov, "stgall", "pe!vi!cl!to", "2026-10-09T11:00:00.000Z");
+    ov = addName(s2.overlay, s2.id, "subida longa");
+    const glyphOf = glyphIndex(db.all());
+    const drawer = createNeumeDrawer(glyphOf, createNabcOnlyRenderer(document.querySelector<HTMLElement>("#measure-host")!));
+    const nv = createNeumasView(document.querySelector<HTMLElement>("#neumas-view")!, {
+      entries: () => buildEffective(db.all(), ov, glyphOf),
+      overlay: () => ov,
+      commit: async (o) => { ov = o; },
+      validate: (n) => validateNabc(nabcParser, n),
+      draw: (f, n) => drawer.draw(f, n, 96),
+      insert: noop, exit: noop,
+      toast: (t, o) => toaster.show(t, o),
+      now: () => new Date().toISOString(),
+    });
+    const draft = qs.get("draft");
+    if (draft !== null) nv.open({ family: "stgall", newChain: draft });
+    else nv.open({ family: "stgall", select: qs.get("sel") ?? s1.id, focus: qs.get("focus") === "name" ? "name" : "grid" });
+    const query = qs.get("q");
+    if (query) {
+      nv.focusSearch();
+      const si = document.querySelector<HTMLInputElement>(".neumas-search")!;
+      si.value = query; si.dispatchEvent(new Event("input"));
+    }
+    await new Promise((r) => setTimeout(r, 800)); // desenho pelo motor (assíncrono)
+    check("neumas: nome do cartão", q('.neumas-card:not([aria-selected="true"]) .neumas-card__name:not(.is-mine)'));
+    check("neumas: nome meu (rubrica)", q('.neumas-card:not([aria-selected="true"]) .neumas-card__name.is-mine'));
+    check("neumas: código do cartão", q('.neumas-card:not([aria-selected="true"]) .neumas-card__code'));
+    check("neumas: cartão selecionado", q('.neumas-card[aria-selected="true"] .neumas-card__name'));
+    check("neumas: título de seção", q(".neumas-section__title"));
+    check("neumas: ficha de filtro", q(".neumas-filter:not(.sc-chip--active)"));
+    check("neumas: rótulo da bancada", q(".neumas-label"));
+    check("neumas: cadeia nabc", q(".neumas-chain__input"));
+    if (q(".neumas-validity:not(:empty)")) check("neumas: validade", q(".neumas-validity:not(:empty)"));
+    rows.push(`neumas: cartões=${document.querySelectorAll(".neumas-card").length} desenho=${q(".neumas-figure svg, .neumas-figure .neume-drawing-wrap--code") ? "ok" : "vazio"}`);
+  }
   const h = (sel: string) => Math.round((document.querySelector(sel) as HTMLElement | null)?.getBoundingClientRect().height ?? -1);
-  rows.push(`geom: menubar=${h(".sc-menubar")}px toolbar=${h(".sc-toolbar")}px ícone=${Math.round(document.querySelector(".sc-toolbar svg")?.getBoundingClientRect().width ?? -1)}px filled=${document.querySelectorAll(".sc-btn--filled").length} folha=${getComputedStyle(document.querySelector("#preview svg")!).backgroundColor}`);
+  rows.push(`geom: menubar=${h(".sc-menubar")}px toolbar=${h(".sc-toolbar")}px ícone=${Math.round(document.querySelector(".sc-toolbar svg")?.getBoundingClientRect().width ?? -1)}px filled=${document.querySelectorAll(".sc-btn--filled").length} folha=${getComputedStyle(document.querySelector("#preview svg") ?? document.body).backgroundColor}`);
   rows.push(`FALHAS: ${fails}`);
   const dump = document.getElementById("dump")!;
   dump.textContent = rows.join("\n");
