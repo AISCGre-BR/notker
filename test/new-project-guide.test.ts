@@ -51,6 +51,13 @@ describe("passos", () => {
     key(cur().querySelector("input")!, "Enter", { isComposing: true });
     expect(states()).toEqual(["current", "todo", "todo"]);
   });
+  it("Enter com keyCode 229 (IME do WebKitGTK) não avança nem cria", () => {
+    key(cur().querySelector("input")!, "Enter", { keyCode: 229 });
+    expect(states()).toEqual(["current", "todo", "todo"]);
+    clickText("Continuar"); clickText("Continuar");
+    key(cur().querySelector("input")!, "Enter", { keyCode: 229 });
+    expect(deps.onCreate).not.toHaveBeenCalled();
+  });
   it("família em segmentado; ← → alternam; resumo 'Laon'", () => {
     clickText("Continuar");
     const [sg, ln] = [...cur().querySelectorAll<HTMLButtonElement>(".sc-seg button")];
@@ -127,6 +134,11 @@ describe("cancelar", () => {
     document.body.dispatchEvent(e);
     document.getElementById("dialog-host")!.innerHTML = '<div role="dialog"></div>';
     key(document.body, "Escape");
+    await tick();
+    expect(deps.onCancel).not.toHaveBeenCalled();
+  });
+  it("Esc com keyCode 229 (IME) não cancela", async () => {
+    key(document.body, "Escape", { keyCode: 229 });
     await tick();
     expect(deps.onCancel).not.toHaveBeenCalled();
   });

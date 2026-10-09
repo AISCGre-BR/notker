@@ -55,7 +55,9 @@ function hint(text: string): HTMLElement {
   p.textContent = text;
   return p;
 }
-const enterKey = (e: KeyboardEvent): boolean => e.key === "Enter" && !e.isComposing;
+/** keyCode 229 = tecla tratada pelo IME (o WebKitGTK nem sempre marca isComposing). */
+const composing = (e: KeyboardEvent): boolean => e.isComposing || e.keyCode === 229;
+const enterKey = (e: KeyboardEvent): boolean => e.key === "Enter" && !composing(e);
 
 export function mountNewProjectGuide(
   host: HTMLElement, deps: GuideDeps, initial: NewProjectDraft = emptyDraft(),
@@ -202,7 +204,7 @@ export function mountNewProjectGuide(
   // Esc em qualquer ponto do guia (inclusive num campo: aqui ele não tem outro sentido),
   // menos compondo acento (IME) ou com diálogo/menu aberto (que tratam o próprio Esc).
   function onKey(e: KeyboardEvent): void {
-    if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || asking) return;
+    if (e.key !== "Escape" || e.defaultPrevented || composing(e) || asking) return;
     if (document.querySelector('[role="dialog"], [role="menu"]')) return;
     e.preventDefault();
     void requestCancel();
