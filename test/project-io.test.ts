@@ -45,6 +45,20 @@ describe("project-io", () => {
     expect((args as { project_json: string }).project_json).toContain('"schema": 2');
   });
 
+  it("saveProject com saveAs pede caminho mesmo tendo um, e garante a extensão .notker", async () => {
+    invoke.mockResolvedValueOnce(undefined);
+    vi.mocked(save).mockResolvedValueOnce("/proj/novo" as never);
+    const p = { ...newProject({ family: "stgall", name: "Z" }), path: "/proj/z.notker" };
+    expect(await saveProject(p, { saveAs: true })).toBe("/proj/novo.notker");
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "Z.notker" }));
+    expect((invoke.mock.calls[0][1] as { path: string }).path).toBe("/proj/novo.notker");
+  });
+  it("saveProject sem saveAs usa o caminho que já tem (sem diálogo)", async () => {
+    invoke.mockResolvedValueOnce(undefined);
+    await saveProject({ ...newProject({ family: "stgall", name: "Z" }), path: "/proj/z.notker" });
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("exportCurrentGabc escreve o conteúdo do doc ativo como .gabc puro", async () => {
     const p = newProject({ family: "stgall", name: "Z" });
     const out = await exportCurrentGabc(p);

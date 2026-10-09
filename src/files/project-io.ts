@@ -32,13 +32,15 @@ export async function pickGabcFile(): Promise<{ name: string; content: string } 
   return { name: baseName(path).replace(/\.gabc$/i, ""), content: await readTextFile(path) };
 }
 
-/** Salva o projeto como `.notker`. Se não tem path, pede um (Salvar como). */
-export async function saveProject(p: NotkerProject): Promise<string | null> {
-  let path = p.path;
+/** Salva o projeto como `.notker`. Sem caminho, ou com `saveAs`, pede um; o GTK não
+ *  acrescenta a extensão sozinho, então ela é garantida aqui. */
+export async function saveProject(p: NotkerProject, opts: { saveAs?: boolean } = {}): Promise<string | null> {
+  let path = opts.saveAs ? undefined : p.path;
   if (!path) {
-    const chosen = await save({ filters: [NOTKER_FILTER] });
+    const name = (p.title || "Projeto").replace(/[\\/:*?"<>|]+/g, "-");
+    const chosen = await save({ filters: [NOTKER_FILTER], defaultPath: `${name}.notker` });
     if (!chosen) return null;
-    path = chosen;
+    path = /\.notker$/i.test(chosen) ? chosen : `${chosen}.notker`;
   }
   const bundle = toBundle(p);
   await invoke("write_project", { path, project_json: bundle.project_json, files: bundle.files });

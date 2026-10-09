@@ -34,6 +34,8 @@ import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
 import { createMenubar, type MenuItem } from "./ui/menubar";
+import { createDirtyTracker } from "./app/dirty";
+import { debounce } from "./preview/debounce";
 import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
 import { openDialog } from "./ui/pd/dialog";
@@ -118,6 +120,17 @@ async function boot() {
   let shownId: string | null = project.activeId;
   /** Muda a cada projeto carregado: um "Desfazer" antigo não age no projeto novo. */
   let projectEpoch = 0;
+  const dirty = createDirtyTracker();
+  /** Só depois do boot o título reage (captureEditorIntoProject lê `wave`, criada adiante). */
+  let booted = false;
+  let menubar: ReturnType<typeof createMenubar> | undefined;
+  /** Título na menubar com "— Editado" quando o projeto difere do último salvo/aberto. */
+  function updateTitle(): void {
+    if (!booted) return;
+    captureEditorIntoProject();
+    menubar?.setTitle(project.title, dirty.isDirty(project));
+  }
+  const scheduleTitle = debounce(updateTitle, 250);
 
   const client = new LspClient(new SidecarTransport());
   client.onNotification("textDocument/publishDiagnostics", (p: { uri: string; diagnostics: LspDiagnosticParam[] }) => {
@@ -136,7 +149,7 @@ async function boot() {
     textDocument: { uri: URI, version: ++version },
     contentChanges: [{ text: view.state.doc.toString() }],
   });
-  onDocChange = sync;
+  onDocChange = () => { sync(); scheduleTitle(); };
 
   if (highlightFailed) toaster.show("O realce de sintaxe não carregou. O editor funciona sem cores.", { kind: "warn" });
 
@@ -290,6 +303,7 @@ async function boot() {
     waveBar?.setReading(null);
     dragState = null;
     rebuildWave();
+    scheduleTitle();
   });
   window.addEventListener("pointercancel", () => { dragState = null; waveBar?.setReading(null); });
 
@@ -405,14 +419,12 @@ async function boot() {
     onImport: () => void importGabcAsChant(),
   });
 
-  let menubar: ReturnType<typeof createMenubar> | undefined;
-  function renderTree(): void { treePanel.render(project); }
+  function renderTree(): void { treePanel.render(project); updateTitle(); }
   /** Mostra no editor o canto ativo, com o EditorState DELE. Guarda antes o estado do
    *  canto que sai (inclusive se ele acabou de ser excluído: o Desfazer o devolve com
    *  histórico). O LSP recebe didChange completo; partitura e onda refazem. */
   function syncFromProject(): void {
     if (shownId) chantStates.remember(shownId, view.state, view.scrollSnapshot());
-    menubar?.setTitle(project.title);
     if (player.playing) stopPlayback();
     const chant = getActiveChant(project);
     const legend = view.state.field(legendVisible, false) ?? false;
@@ -456,6 +468,9 @@ async function boot() {
     toaster.dismiss();   // um "Desfazer" pendente era do projeto antigo
     project = p;
     syncFromProject();
+    captureEditorIntoProject();
+    dirty.markSaved(project); // recém-aberto/criado = sem alterações
+    updateTitle();
   }
   /** Pai ainda válido depois de um diálogo assíncrono; senão a raiz. */
   const liveParent = (parentId: string | null): string | null =>
@@ -525,6 +540,23 @@ async function boot() {
   }
   renderTree();
 
+  /** Salva (ou Salvar como). Devolve false se o usuário cancelou a escolha do caminho;
+   *  LANÇA em erro de gravação (quem chama decide: toast ou diálogo de fechar). */
+  async function doSave(saveAs: boolean): Promise<boolean> {
+    captureEditorIntoProject();
+    const path = await saveProject(project, { saveAs });
+    if (!path) return false;
+    project = { ...project, path };
+    dirty.markSaved(project);
+    updateTitle();
+    toaster.show("Projeto salvo.");
+    return true;
+  }
+  const saveCmd = (saveAs: boolean) => async (): Promise<void> => {
+    try { await doSave(saveAs); }
+    catch (err) { toaster.show("Salvar falhou. " + String(err), { kind: "error" }); console.error(err); }
+  };
+
   const commands = createRegistry();
   const h = {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
@@ -545,16 +577,6 @@ async function boot() {
         if (!p) return;
         loadProject(p);
       } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
-    },
-    saveFile: async () => {
-      try {
-        captureEditorIntoProject();
-        const path = await saveProject(project);
-        if (!path) return;
-        project = { ...project, path };
-        menubar?.setTitle(project.title);
-        toaster.show("Projeto salvo.");
-      } catch (err) { toaster.show("Salvar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     exportGabc: async () => {
       try {
@@ -738,13 +760,15 @@ async function boot() {
     resetWave: () => {
       wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
       rebuildWave();
+      scheduleTitle();
     },
   };
 
   commands.register([
     { id: "file.newProject", label: "Novo projeto…", run: h.newProjectCmd },
     { id: "file.open", label: "Abrir…", run: h.openFile, keys: ["Ctrl+O"] },
-    { id: "file.save", label: "Salvar", run: h.saveFile, keys: ["Ctrl+S"] },
+    { id: "file.save", label: "Salvar", run: saveCmd(false), keys: ["Ctrl+S"] },
+    { id: "file.saveAs", label: "Salvar como…", run: saveCmd(true), keys: ["Ctrl+Shift+S"] },
     { id: "project.newChant", label: "Novo canto…", run: () => newChantAt(null, Infinity) },
     { id: "project.newGroup", label: "Novo grupo", run: () => newGroupAt(null, Infinity) },
     { id: "project.importGabc", label: "Importar .gabc…", run: importGabcAsChant },
@@ -811,7 +835,7 @@ async function boot() {
     {
       label: "Arquivo",
       items: [
-        menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"),
+        menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"), menuItem("file.saveAs"),
         "---",
         menuItem("project.newChant"), menuItem("project.newGroup"), menuItem("project.importGabc"),
         "---",
@@ -874,6 +898,12 @@ async function boot() {
   // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com
   // preventDefault; o registro ignora eventos já tratados (sem disparo duplo).
   window.addEventListener("keydown", (e) => { commands.handleKey(e); });
+
+  // Boot pronto: o projeto inicial conta como "sem alterações".
+  booted = true;
+  captureEditorIntoProject();
+  dirty.markSaved(project);
+  updateTitle();
 }
 
 boot().catch((err) => {
