@@ -4,8 +4,15 @@
 export interface CtxItem { label: string; run: () => void; danger?: boolean; shortcut?: string; checked?: boolean }
 export type CtxEntry = CtxItem | "---";
 
-export function openContextMenu(anchorHost: HTMLElement, x: number, y: number, items: CtxEntry[], returnFocus?: HTMLElement): () => void {
-  anchorHost.querySelectorAll(".notker-ctx").forEach((m) => m.remove());
+let current: (() => void) | null = null;
+/** Fecha o menu aberto (se houver), removendo seus listeners. */
+export function closeContextMenu(): void { current?.(); }
+
+export function openContextMenu(
+  anchorHost: HTMLElement, x: number, y: number, items: CtxEntry[],
+  returnFocus?: HTMLElement, opts: { openUp?: boolean } = {},
+): () => void {
+  current?.();
   const m = document.createElement("div");
   m.className = "sc-menu notker-ctx";
   m.setAttribute("role", "menu");
@@ -30,6 +37,7 @@ export function openContextMenu(anchorHost: HTMLElement, x: number, y: number, i
     buttons.push(b);
   }
   const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Tab") { close(); return; }
     if (e.key === "Escape") { e.preventDefault(); close(); return; }
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -39,19 +47,28 @@ export function openContextMenu(anchorHost: HTMLElement, x: number, y: number, i
     }
   };
   const onDown = (e: MouseEvent) => { if (!(e.target instanceof Node) || !m.contains(e.target)) close(); };
+  const onBlur = () => close();
+  let closed = false;
   function close(): void {
+    if (closed) return;
+    closed = true;
+    if (current === close) current = null;
+    window.removeEventListener("blur", onBlur);
     document.removeEventListener("keydown", onKey, true);
     document.removeEventListener("mousedown", onDown, true);
     m.remove();
     returnFocus?.focus();
   }
+  current = close;
+  window.addEventListener("blur", onBlur);
   document.addEventListener("keydown", onKey, true);
   document.addEventListener("mousedown", onDown, true);
   anchorHost.appendChild(m);
   // não deixar sair da janela
   const r = m.getBoundingClientRect();
   if (r.right > window.innerWidth) m.style.left = `${Math.max(4, window.innerWidth - r.width - 4)}px`;
-  if (r.bottom > window.innerHeight) m.style.top = `${Math.max(4, y - r.height)}px`;
+  if (opts.openUp) m.style.top = `${Math.max(4, y - r.height)}px`;
+  else if (r.bottom > window.innerHeight) m.style.top = `${Math.max(4, y - r.height)}px`;
   buttons[0]?.focus();
   return close;
 }

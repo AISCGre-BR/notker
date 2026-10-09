@@ -65,4 +65,49 @@ describe("barra lateral de cantos", () => {
     [...host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")].find((b) => b.textContent!.includes("Importar .gabc"))!.click();
     expect(o.onImport).toHaveBeenCalled();
   });
+  it("render fecha o menu aberto e não deixa listeners (Esc/↓ não são interceptados)", () => {
+    const dl = createDocList(host, opts());
+    dl.render(proj());
+    host.querySelector<HTMLElement>(".notker-row")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    dl.render(proj());
+    expect(host.querySelector(".sc-menu")).toBeNull();
+    for (const key of ["Escape", "ArrowDown"]) {
+      const ev = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      document.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(false);
+    }
+  });
+  it("após Mover (re-render) o foco fica na linha do mesmo canto", () => {
+    const dl = createDocList(host, { ...opts(), onMove: (id, d) => {
+      const p = proj(); const docs = [...p.docs]; const i = docs.findIndex((x) => x.id === id);
+      [docs[i], docs[i + d]] = [docs[i + d], docs[i]];
+      dl.render({ ...p, docs });
+    } });
+    dl.render(proj());
+    const row = host.querySelectorAll<HTMLElement>(".notker-row")[2];
+    row.focus();
+    row.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true }));
+    [...host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")].find((b) => b.textContent!.includes("Mover para cima"))!.click();
+    const active = document.activeElement as HTMLElement;
+    expect(active.classList.contains("notker-row")).toBe(true);
+    expect(active.dataset.id).toBe("c");
+    expect(host.querySelectorAll<HTMLElement>(".notker-row")[1]).toBe(active);
+  });
+  it("Home/End levam ao primeiro/último", () => {
+    createDocList(host, opts()).render(proj());
+    const rows = host.querySelectorAll<HTMLElement>(".notker-row");
+    rows[1].focus();
+    rows[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(document.activeElement).toBe(rows[2]);
+    rows[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    expect(document.activeElement).toBe(rows[0]);
+  });
+  it("menu do rodapé abre acima do botão", () => {
+    createDocList(host, opts()).render(proj());
+    const more = host.querySelectorAll<HTMLButtonElement>(".notker-sidebar__foot button")[1];
+    more.getBoundingClientRect = () => ({ top: 300, left: 10, bottom: 330, right: 40, width: 30, height: 30, x: 10, y: 300, toJSON() {} });
+    more.click();
+    const top = parseFloat(host.querySelector<HTMLElement>(".sc-menu")!.style.top);
+    expect(top).toBeLessThan(300);
+  });
 });

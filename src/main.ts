@@ -367,7 +367,7 @@ async function boot() {
     onSelect: (id) => switchToDoc(id),
     onAdd: () => void addNewDoc(),
     onImport: () => void importGabcAsDoc(),
-    onRemove: (id) => { project = removeDoc(project, id); syncFromProject(); },
+    onRemove: (id) => { captureEditorIntoProject(); project = removeDoc(project, id); syncFromProject(); },
     onSetFamily: (id, f) => {
       captureEditorIntoProject();
       project = setDocFamily(project, id, f);

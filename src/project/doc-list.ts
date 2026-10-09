@@ -1,7 +1,7 @@
 import type { NotkerProject } from "./model";
 import type { Family } from "../neume/types";
 import { icon } from "../ui/pd/icons";
-import { openContextMenu, type CtxEntry } from "../ui/pd/context-menu";
+import { openContextMenu, closeContextMenu, type CtxEntry } from "../ui/pd/context-menu";
 
 export interface DocListOpts {
   onSelect(id: string): void; onAdd(): void; onImport(): void; onRemove(id: string): void;
@@ -30,6 +30,9 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): { render(p:
 
   function render(p: NotkerProject): void {
     project = p;
+    closeContextMenu();
+    const ae = document.activeElement;
+    const focusId = ae && host.contains(ae) ? (ae as HTMLElement).closest<HTMLElement>(".notker-row")?.dataset.id : undefined;
     host.innerHTML = "";
     const list = document.createElement("div");
     list.className = "notker-sidebar__list";
@@ -40,6 +43,7 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): { render(p:
       const row = document.createElement("div");
       row.className = "notker-row";
       row.setAttribute("role", "option");
+      row.dataset.id = d.id;
       const active = d.id === p.activeId;
       row.setAttribute("aria-selected", String(active));
       row.tabIndex = active ? 0 : -1;
@@ -79,17 +83,14 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): { render(p:
     more.appendChild(icon("chevron-up"));
     more.addEventListener("click", () => {
       const r = more.getBoundingClientRect();
-      const close = openContextMenu(host, r.left, r.top - 8, [
+      openContextMenu(host, r.left, r.top - 8, [
         { label: "Novo canto", run: () => opts.onAdd() },
         { label: "Importar .gabc…", run: () => opts.onImport() },
-      ], more);
-      // abre PARA CIMA: reposiciona pela altura real
-      const m = host.querySelector<HTMLElement>(".notker-ctx");
-      if (m) m.style.top = `${Math.max(4, r.top - m.getBoundingClientRect().height - 6)}px`;
-      void close;
+      ], more, { openUp: true });
     });
     foot.append(add, more);
     host.append(list, foot);
+    if (focusId) rows.find((r) => r.dataset.id === focusId)?.focus();
   }
   return { render };
 }

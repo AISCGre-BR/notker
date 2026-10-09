@@ -313,8 +313,6 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .wave-guide { stroke: var(--rubric-soft); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.75; vector-effect: non-scaling-stroke; pointer-events: none; }
 .wave-hit { fill: transparent; cursor: ns-resize; }
 
-/* ── Lista lateral de documentos ──────────────────────────────────────────── */
-
 /* ── Paleta de neumas, tooltips e régua de pauta (movidos do index.html) ────── */
 .neume-palette { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); max-height: 60vh; display: flex; flex-direction: column; gap: 4px; z-index: 1000; }
 .neume-palette > .sc-input { margin: 2px 2px 4px; }

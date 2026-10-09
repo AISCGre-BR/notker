@@ -30,4 +30,12 @@ describe("menu de contexto", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     expect(document.activeElement!.textContent).toContain("B");
   });
+  it("Tab fecha; abrir outro menu fecha o anterior sem vazar listeners", () => {
+    const anchor = document.getElementById("anchor")!;
+    openContextMenu(anchor, 0, 0, [{ label: "A", run: vi.fn() }]);
+    openContextMenu(anchor, 0, 0, [{ label: "B", run: vi.fn() }]);
+    expect(anchor.querySelectorAll(".sc-menu").length).toBe(1);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    expect(anchor.querySelector(".sc-menu")).toBeNull();
+  });
 });
