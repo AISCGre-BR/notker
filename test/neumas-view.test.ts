@@ -512,3 +512,69 @@ describe("nome digitado e não confirmado com Enter", () => {
     expect(b.deps.commit).not.toHaveBeenCalled();
   });
 });
+
+describe("rodada 1: gravar no blur não rouba foco nem engole clique", () => {
+  const nameBlur = () => q(".neumas-newname").dispatchEvent(new FocusEvent("blur"));
+  it("mousedown no cartão B com nome pendente: grava em A, o cartão B continua no DOM e o clique seleciona B", async () => {
+    const { view, ov } = setup();
+    view.open({ family: "stgall", select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    const b = card("stgall:vi");
+    b.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    b.focus(); // o blur do campo dispara aqui (jsdom), com o foco já em B
+    await flush();
+    expect(ov().entries["stgall:pe"].names).toEqual(["podatus"]);
+    expect(card("stgall:vi")).toBe(b); // a grade não foi recriada
+    expect(document.activeElement).toBe(b); // e o foco não voltou ao item antigo
+    expect(card("stgall:pe").querySelector(".neumas-card__name")!.textContent).toBe("podatus"); // cartão atualizado no lugar
+    b.click();
+    await flush();
+    expect(card("stgall:vi").getAttribute("aria-selected")).toBe("true");
+    expect(ov().entries["stgall:pe"].names).toEqual(["podatus"]);
+  });
+  it("nome pendente e foco indo para a Nota: o foco fica na Nota", async () => {
+    const { view } = setup();
+    view.open({ family: "stgall", select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    const note = q<HTMLTextAreaElement>(".neumas-note__input");
+    note.focus();
+    await flush();
+    expect(document.activeElement).toBe(note);
+  });
+  it("nome repetido: o aviso não se repete a cada blur; Enter explícito avisa de novo", async () => {
+    const { view, toasts } = setup(addName(emptyOverlay(), "stgall:pe", "podatus"));
+    view.open({ family: "stgall", select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    nameBlur(); await flush();
+    nameBlur(); await flush();
+    view.flush(); await flush();
+    expect(toasts.filter((t) => t.text === "Esse nome já existe.").length).toBe(1);
+    key(q(".neumas-newname"), "Enter"); await flush();
+    expect(toasts.filter((t) => t.text === "Esse nome já existe.").length).toBe(2);
+  });
+});
+
+describe("rodada 1: Mostrar mais mantém foco e posição", () => {
+  const BIG = Array.from({ length: 400 }, (_, i) => { const c = `g${String(i).padStart(3, "0")}`; return ne("stgall", c, c, "glifo " + c); });
+  it("foca o 1º cartão recém-revelado, sem rolar; Mostrar todos idem", () => {
+    const { view } = setup(emptyOverlay(), BIG);
+    view.open({ family: "stgall" });
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    q<HTMLButtonElement>(".neumas-more-btn").click();
+    expect((document.activeElement as HTMLElement).dataset.id).toBe("stgall:g150");
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    q<HTMLButtonElement>(".neumas-all-btn").click();
+    expect((document.activeElement as HTMLElement).dataset.id).toBe("stgall:g300");
+    focus.mockRestore();
+  });
+  it("a rolagem da lista é preservada ao ampliar", () => {
+    const { view } = setup(emptyOverlay(), BIG);
+    view.open({ family: "stgall" });
+    q(".neumas-list").scrollTop = 500;
+    const desc = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+    expect(q(".neumas-list").scrollTop).toBe(500); // jsdom guarda o valor
+    q<HTMLButtonElement>(".neumas-more-btn").click();
+    expect(q(".neumas-list").scrollTop).toBe(500);
+    void desc;
+  });
+});

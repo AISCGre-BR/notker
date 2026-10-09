@@ -56,6 +56,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   let composing = false;
   /** Teto de cartões por seção; ausente = SECTION_CAP. Volta ao padrão ao mudar família, filtro ou busca. */
   let caps: Partial<Record<SectionId, number>> = {};
+  let focusAfter: { section: SectionId; index: number } | null = null;
   let saveState: BenchStatus["saveState"] = "";
   /** A vista está na tela (open → exit/flush). Só então o foco perdido é devolvido. */
   let opened = false;
@@ -67,13 +68,18 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     onSelect: (id) => select(id),
     onActivate: (id) => { if (composing && (draft || selectedIsUserSeq())) appendToChain(id); else select(id); },
     onNewSequence: () => newSequence(""),
-    onMore: (id, all) => { caps[id] = all ? Infinity : (caps[id] ?? SECTION_CAP) + SECTION_CAP; render(); },
+    onMore: (id, all) => {
+      const shown = host.querySelectorAll(`[data-section="${id}"] .neumas-card`).length;
+      caps[id] = all ? Infinity : (caps[id] ?? SECTION_CAP) + SECTION_CAP;
+      focusAfter = { section: id, index: shown };
+      render();
+    },
     onSearchEscape: () => { if (!catalog.focusGrid()) bench.focusName(); },
   });
   const bench = createBench(host, {
     onChainInput: (n) => { if (draft) draft.nabc = n; else editChain = n; renderBench(); },
     onChainCommit: (n, how) => commitChain(n, how),
-    onAddName: (n) => addUserName(n),
+    onAddName: (n, how) => addUserName(n, how),
     onRemoveName: (n) => { if (selectedId) save(removeName(deps.overlay(), selectedId, n)); },
     onPromoteName: (n) => { if (selectedId) save(promoteName(deps.overlay(), selectedId, n)); },
     onNote: (n) => { if (selectedId) save(setNote(deps.overlay(), selectedId, n)); },
@@ -142,7 +148,8 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     const all = deps.entries();
     if (selectedId && !all.some((e) => e.id === selectedId)) { selectedId = null; editChain = null; }
     const sections = catalogSections(all, family, filter, query, { pin: selectedId, caps });
-    catalog.render(sections, { family, filter, query, selectedId, composing });
+    catalog.render(sections, { family, filter, query, selectedId, composing, focusAfter });
+    focusAfter = null;
     renderBench();
     restoreFocus();
   }
@@ -154,11 +161,14 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   }
 
   // ── gravação ──
-  function save(next: Overlay): Promise<void> {
+  function save(next: Overlay, inPlace = false): Promise<void> {
     if (next === deps.overlay()) return Promise.resolve();
     saveState = "salvando…";
     const p = deps.commit(next);
-    render();
+    // inPlace (o usuário só saiu do campo): não recria a grade — o clique que causou o blur
+    // ainda vai chegar ao cartão. Atualiza só o cartão do item e a bancada.
+    const cur = inPlace ? selectedEntry() : undefined;
+    if (cur && catalog.updateCard(cur)) renderBench(); else render();
     return p.then(
       // Só o estado de gravação mudou: refaz a bancada, não a grade (centenas de cartões).
       () => { saveState = "salvo ✓"; renderBench(); },
@@ -173,7 +183,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     discardDraft();
     selectedId = id;
     const e = entryById(id);
-    if (e && e.family !== family) { family = e.family; render(); catalog.reveal(id); return; }
+    if (e && e.family !== family) { family = e.family; caps = {}; render(); catalog.reveal(id); return; }
     if (!wasComposing && catalog.markSelected(id)) renderBench(); else render();
     catalog.reveal(id);
   }
@@ -228,7 +238,9 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     editChain = null;
     void save(r.overlay);
   }
-  async function addUserName(name: string): Promise<boolean> {
+  /** `how` blur/flush = o usuário só saiu do campo: nada de roubar o foco nem recriar a grade. */
+  async function addUserName(name: string, how: "enter" | "blur" | "flush" = "enter"): Promise<boolean> {
+    const quiet = how !== "enter";
     bench.flushNote();
     if (draft) {
       const st = chainStatus();
@@ -239,15 +251,15 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
         selectedId = target.id;
         const r = addNameToEntries(deps.overlay(), [{ id: target.id, displayNames: target.displayNames }], name);
         if (!r.changed) { render(); deps.toast("Esse nome já existe.", { kind: "warn" }); return false; }
-        await save(r.overlay);
+        await save(r.overlay, quiet);
         deps.toast(`Nome “${name}” adicionado a “${st.duplicate.label}”, que já existia.`);
-        catalog.focusGrid();
+        if (!quiet) catalog.focusGrid();
         return true;
       }
       const id = await createFromDraft();
       if (!id) return false; // não criou (cadeia vazia/inválida/repetida): o nome digitado fica
-      await save(addName(deps.overlay(), id, name));
-      catalog.focusGrid();
+      await save(addName(deps.overlay(), id, name), quiet);
+      if (!quiet) catalog.focusGrid();
       return true;
     }
     const e = selectedEntry();
@@ -255,14 +267,14 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     const r = addNameToEntries(deps.overlay(), [{ id: e.id, displayNames: e.displayNames }], name);
     if (!r.changed) { deps.toast("Esse nome já existe.", { kind: "warn" }); return false; }
     const before = cardIds();
-    void save(r.overlay);
+    void save(r.overlay, quiet);
     // Filtro "Sem nome": o item sai da grade ao ser nomeado; o foco vai ao vizinho.
-    if (!cardIds().includes(e.id)) {
+    if (!quiet && !cardIds().includes(e.id)) {
       const i = before.indexOf(e.id);
       const nid = before[i + 1] ?? before[i - 1];
       if (nid && nid !== e.id) select(nid);
     }
-    catalog.focusGrid();
+    if (!quiet) catalog.focusGrid();
     return true;
   }
   function insertCurrent(): void {

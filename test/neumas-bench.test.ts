@@ -67,7 +67,7 @@ describe("bancada: glifo do catálogo", () => {
     key(n, "Enter", { isComposing: true });
     expect(cb.onAddName).not.toHaveBeenCalled();
     const ev = key(n, "Enter");
-    expect(cb.onAddName).toHaveBeenCalledWith("pes alto");
+    expect(cb.onAddName).toHaveBeenCalledWith("pes alto", "enter");
     expect(ev.defaultPrevented).toBe(true);
     expect(n.value).toBe("");
     const outer = vi.fn();
@@ -236,7 +236,7 @@ describe("bancada: Novo nome grava ao sair do campo", () => {
     n.value = " pes alto ";
     blur(n);
     expect(cb.onAddName).toHaveBeenCalledTimes(1);
-    expect(cb.onAddName).toHaveBeenCalledWith("pes alto");
+    expect(cb.onAddName).toHaveBeenCalledWith("pes alto", "blur");
     expect(n.value).toBe("");
   });
   it("Enter e depois blur: uma só gravação", () => {
@@ -281,7 +281,7 @@ describe("bancada: Novo nome grava ao sair do campo", () => {
     b.render({ kind: "entry", entry: glyph }, st());
     q<HTMLInputElement>(".neumas-newname").value = "pendente";
     b.flushName();
-    expect(cb.onAddName).toHaveBeenCalledWith("pendente");
+    expect(cb.onAddName).toHaveBeenCalledWith("pendente", "flush");
     b.flushName();
     expect(cb.onAddName).toHaveBeenCalledTimes(1);
   });

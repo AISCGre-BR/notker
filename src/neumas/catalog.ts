@@ -21,10 +21,14 @@ export interface CatalogCallbacks {
 }
 export interface CatalogState {
   family: Family; filter: CatalogFilter; query: string; selectedId: string | null; composing: boolean;
+  /** Após ampliar uma seção: foca (sem rolar) o cartão de índice `index` dela. */
+  focusAfter?: { section: SectionId; index: number } | null;
 }
 export interface Catalog {
   render(sections: CatalogSection[], st: CatalogState): void;
   focusSearch(): void;
+  /** Recria só o cartão desse item, no lugar (foco e seleção preservados); false se não está na grade. */
+  updateCard(e: EffectiveEntry): boolean;
   /** Foca o cartão selecionado (ou o primeiro). Devolve false se a grade está vazia. */
   focusGrid(): boolean;
   /** Só remarca a seleção (sem refazer a grade). false se o cartão não está na grade. */
@@ -153,6 +157,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
       });
       card.classList.toggle("is-composing", st.composing);
       const hadFocus = list.contains(document.activeElement);
+      const scroll = list.scrollTop;
       list.replaceChildren();
       let any = false;
       for (const s of sections) {
@@ -203,7 +208,24 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
       // Foco itinerante: sem seleção, o primeiro cartão é o focável.
       const all = cards();
       if (!all.some((c) => c.tabIndex === 0) && all[0]) all[0].tabIndex = 0;
-      if (hadFocus) focusCard(all.find((c) => c.tabIndex === 0));
+      list.scrollTop = scroll;
+      const fa = st.focusAfter;
+      const target = fa ? list.querySelectorAll<HTMLElement>(`[data-section="${fa.section}"] .neumas-card`)[fa.index] : undefined;
+      if (target) {
+        for (const x of all) x.tabIndex = x === target ? 0 : -1;
+        target.focus({ preventScroll: true });
+      } else if (hadFocus) focusCard(all.find((c) => c.tabIndex === 0));
+      list.scrollTop = scroll;
+    },
+    updateCard(e) {
+      const old = cards().find((x) => x.dataset.id === e.id);
+      if (!old) return false;
+      const fresh = cardEl(e, old.getAttribute("aria-selected") === "true");
+      fresh.tabIndex = old.tabIndex;
+      const had = document.activeElement === old;
+      old.replaceWith(fresh);
+      if (had) fresh.focus({ preventScroll: true });
+      return true;
     },
     focusSearch() { search.focus(); search.select(); },
     markSelected(id) {

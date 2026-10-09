@@ -21,12 +21,14 @@ export interface BenchStatus {
   composing: boolean;
   saveState: "" | "salvando…" | "salvo ✓" | "erro ao salvar";
 }
+export type NameCommit = "enter" | "blur" | "flush";
 export interface BenchCallbacks {
   onChainInput(nabc: string): void;
   /** Enter (`how: "enter"`) ou saída (`"blur"`) do campo nabc. */
   onChainCommit(nabc: string, how: "enter" | "blur"): void;
   /** `false` (ou promessa de `false`) = não gravou: o texto digitado fica no campo. */
-  onAddName(name: string): boolean | void | Promise<boolean | void>;
+  /** `how`: "enter" (explícito) ou "blur"/"flush" (o usuário só saiu do campo: não roubar o foco). */
+  onAddName(name: string, how: NameCommit): boolean | void | Promise<boolean | void>;
   onRemoveName(name: string): void;
   onPromoteName(name: string): void;
   onNote(note: string): void;
@@ -104,12 +106,14 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     if (t && t.value !== savedNote) { savedNote = t.value; cb.onNote(t.value); }
   };
   let drawToken = 0;
-  let commitNameRef: (() => void) | null = null;
+  let commitNameRef: ((how: NameCommit) => void) | null = null;
   /** Campo "Novo nome…" do item na tela (null enquanto o DOM é refeito): um blur causado pela
    *  remoção do campo antigo nunca grava o texto no item novo. */
   let liveName: HTMLInputElement | null = null;
   /** Texto cuja gravação ainda não terminou (Enter seguido de blur não grava duas vezes). */
   let nameInflight: string | null = null;
+  /** Último texto recusado (repetido etc.): sair do campo de novo não repete o aviso; Enter sim. */
+  let nameRefused: string | null = null;
 
   const redraw = debounce((family: Family, nabc: string) => {
     const token = ++drawToken;
@@ -129,6 +133,7 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
   function build(item: BenchItem, st: BenchStatus): void {
     liveName = null;
     nameInflight = null;
+    nameRefused = null;
     card.replaceChildren();
     const entry = item.kind === "entry" ? item.entry : null;
     const family = item.kind === "entry" ? item.entry.family : item.family;
@@ -202,29 +207,35 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     newName.placeholder = "Novo nome…";
     newName.setAttribute("aria-label", "Novo nome");
     /** Enter e saída do campo seguem o mesmo caminho. `false` = não gravou: o texto fica. */
-    const commitName = (): void => {
+    const commitName = (how: NameCommit): void => {
       if (newName !== liveName) return;
       const n = newName.value.trim();
       if (!n || nameInflight === n) return;
-      nameInflight = n; // antes de chamar: a gravação devolve o foco à grade e o blur voltaria aqui
+      if (how !== "enter" && nameRefused === n) return;
+      nameRefused = null;
+      nameInflight = n; // antes de chamar: a gravação pode mexer no foco e o blur voltaria aqui
       let r: boolean | void | Promise<boolean | void>;
-      try { r = cb.onAddName(n); } catch (err) { nameInflight = null; throw err; }
+      try { r = cb.onAddName(n, how); } catch (err) { nameInflight = null; throw err; }
       if (r && typeof (r as Promise<unknown>).then === "function") {
         void (r as Promise<boolean | void>).then(
-          (ok) => { if (nameInflight === n) nameInflight = null; if (ok !== false && newName.value.trim() === n) newName.value = ""; },
+          (ok) => {
+            if (nameInflight === n) nameInflight = null;
+            if (ok === false) nameRefused = n;
+            else if (newName.value.trim() === n) newName.value = "";
+          },
           () => { if (nameInflight === n) nameInflight = null; },
         );
         return;
       }
       nameInflight = null;
-      if (r !== false) newName.value = "";
+      if (r === false) nameRefused = n; else newName.value = "";
     };
     commitNameRef = commitName;
-    fieldKeys(newName, commitName, () => {
+    fieldKeys(newName, () => commitName("enter"), () => {
       newName.value = ""; // Esc cancela o que foi digitado (o blur seguinte não grava)
       cb.onFieldEscape();
     });
-    newName.addEventListener("blur", commitName);
+    newName.addEventListener("blur", () => commitName("blur"));
     liveName = newName;
     namesBlock.append(names, newName);
 
@@ -351,7 +362,7 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     },
     focusName() { if (!refs) return false; refs.newName.focus(); return true; },
     flushNote() { writeNote(); },
-    flushName() { commitNameRef?.(); },
+    flushName() { commitNameRef?.("flush"); },
     focusChain() { if (!refs) return; refs.chain.focus(); refs.chain.setSelectionRange(refs.chain.value.length, refs.chain.value.length); },
   };
 }
