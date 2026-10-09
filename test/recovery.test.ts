@@ -47,6 +47,14 @@ describe("retrato", () => {
     expect(parseSnapshot(JSON.stringify({ ...JSON.parse(good), bundle: { project_json: "{}", files: { a: 1 } } }))).toBeNull();
     expect(parseSnapshot("[]")).toBeNull();
   });
+  it("bundle interno corrompido: parseSnapshot aceita, projectFromSnapshot lança", () => {
+    const snap = parseSnapshot(JSON.stringify({
+      schema: 1, kind: "notker-recovery", title: "X", savedAt: "",
+      bundle: { project_json: "{", files: {} },
+    }))!;
+    expect(snap).not.toBeNull();
+    expect(() => projectFromSnapshot(snap)).toThrow();
+  });
   it("bundle de uma versão mais nova: projectFromSnapshot lança a mensagem clara", () => {
     const snap = parseSnapshot(JSON.stringify({
       schema: 1, kind: "notker-recovery", title: "X", savedAt: "",
@@ -89,8 +97,18 @@ describe("createRecoveryWriter", () => {
     expect(onWrite).toHaveBeenCalledTimes(1);
     await w.clear();
     expect(slot.remove).toHaveBeenCalledTimes(1);
+    cur = updateChant(cur, cur.activeId, { content: getActiveChant(cur).content + "novo" });
     await w.tick();
     expect(slot.write).toHaveBeenCalledTimes(2);
+  });
+  it("clear + tick com o MESMO estado (projeto descartado ainda aberto) não regrava", async () => {
+    const w = writer();
+    cur = proj();
+    await w.tick();
+    await w.clear();
+    await w.tick();
+    expect(slot.write).toHaveBeenCalledTimes(1);
+    expect(slot.text).toBeNull();
   });
   it("clear sem ter gravado NÃO apaga o retrato de uma sessão que caiu; adopt faz apagar", async () => {
     slot = memSlot("retrato antigo");
@@ -118,7 +136,7 @@ describe("createRecoveryWriter", () => {
     cur = proj();
     const t = w.tick();
     const c = w.clear();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(slot.write).toHaveBeenCalled());
     release();
     await Promise.all([t, c]);
     expect(slot.text).toBeNull();

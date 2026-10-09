@@ -77,11 +77,14 @@ export function createRecoveryWriter(opts: {
   // Tudo em fila: um clear() nunca corre no meio de uma gravação (senão o retrato voltaria).
   const queue = (job: () => Promise<void>): Promise<void> => (chain = chain.then(job, job));
 
+  const keyOf = (p: NotkerProject | null): string | null =>
+    p ? `${projectFingerprint(p)}\u0000${p.path ?? ""}` : null;
+
   async function write(): Promise<void> {
     try {
       const p = opts.current();
       if (!p) return;
-      const key = `${projectFingerprint(p)}\u0000${p.path ?? ""}`;
+      const key = keyOf(p);
       if (key === last) return;
       await opts.slot.write(JSON.stringify(makeSnapshot(p, now())));
       last = key;
@@ -92,7 +95,8 @@ export function createRecoveryWriter(opts: {
     }
   }
   async function erase(): Promise<void> {
-    last = null;
+    // O estado atual (se houver) foi descartado: só uma edição nova volta a gravar.
+    try { last = keyOf(opts.current()); } catch { last = null; }
     if (!owned) return;
     owned = false;
     try { await opts.slot.remove(); } catch (e) { console.warn("[notker] recuperação: não foi possível apagar o retrato:", e); }
