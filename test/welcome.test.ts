@@ -22,7 +22,7 @@ const texts = (sel: string) => [...host.querySelectorAll(sel)].map((e) => e.text
 
 describe("tela inicial sem recentes", () => {
   it("marca centralizada e 3 escolhas; Novo projeto com anel rubrica", () => {
-    mount().render({ recents: [], recovery: null, now: NOW });
+    mount().render({ recents: [], recoveries: [], now: NOW });
     expect(host.querySelector(".notker-start .notker-wordmark")!.textContent).toBe("Notker");
     expect(texts(".notker-choice")).toEqual(["Novo projeto", "Abrir…", "Projeto de exemplo"]);
     const choices = host.querySelectorAll<HTMLButtonElement>(".notker-choice");
@@ -36,7 +36,7 @@ describe("tela inicial sem recentes", () => {
   });
   it("focus() vai para Novo projeto", () => {
     const w = mount();
-    w.render({ recents: [], recovery: null });
+    w.render({ recents: [], recoveries: [] });
     w.focus();
     expect(document.activeElement?.textContent).toBe("Novo projeto");
   });
@@ -44,7 +44,7 @@ describe("tela inicial sem recentes", () => {
 
 describe("tela inicial com recentes", () => {
   it("cabeçalho: marca + Abrir… e Novo projeto elevados com ícone", () => {
-    mount().render({ recents: [entry(1)], recovery: null, now: NOW });
+    mount().render({ recents: [entry(1)], recoveries: [], now: NOW });
     expect(host.querySelector(".notker-welcome__head .notker-wordmark")!.textContent).toBe("Notker");
     const btns = [...host.querySelectorAll<HTMLButtonElement>(".notker-welcome__head button")];
     expect(btns.map((b) => b.textContent)).toEqual(["Abrir…", "Novo projeto"]);
@@ -55,7 +55,7 @@ describe("tela inicial com recentes", () => {
   });
   it("herói do mais recente: título, data, primeiros cantos e Continuar (única ação preenchida)", () => {
     const w = mount();
-    w.render({ recents: [entry(1, { chants: ["Puer natus est", "Viderunt omnes"], thumb: JPG }), entry(2)], recovery: null, now: NOW });
+    w.render({ recents: [entry(1, { chants: ["Puer natus est", "Viderunt omnes"], thumb: JPG }), entry(2)], recoveries: [], now: NOW });
     const hero = host.querySelector(".notker-hero")!;
     expect(hero.getAttribute("aria-label")).toBe("Projeto 1");
     expect(hero.querySelector(".notker-hero__title")!.textContent).toBe("Projeto 1");
@@ -69,7 +69,7 @@ describe("tela inicial com recentes", () => {
     expect(document.activeElement?.textContent).toBe("Continuar");
   });
   it("até 3 cartões com os seguintes; clique abre; sem miniatura = retângulo vazio", () => {
-    mount().render({ recents: [1, 2, 3, 4, 5].map((n) => entry(n)), recovery: null, now: NOW });
+    mount().render({ recents: [1, 2, 3, 4, 5].map((n) => entry(n)), recoveries: [], now: NOW });
     const cards = host.querySelectorAll<HTMLButtonElement>(".notker-recent");
     expect([...cards].map((c) => c.querySelector(".notker-recent__title")!.textContent)).toEqual(["Projeto 2", "Projeto 3", "Projeto 4"]);
     expect(cards[0].querySelector(".notker-caption")!.textContent).toBe("22 de abril");
@@ -78,15 +78,15 @@ describe("tela inicial com recentes", () => {
     expect(h.onOpenRecent).toHaveBeenCalledWith("/m/p4.notker");
   });
   it("um só recente: sem fileira de cartões; sem meta: nome do arquivo e sem data", () => {
-    mount().render({ recents: [{ path: "/x/Vésperas.notker" }], recovery: null, now: NOW });
+    mount().render({ recents: [{ path: "/x/Vésperas.notker" }], recoveries: [], now: NOW });
     expect(host.querySelector(".notker-recents")).toBeNull();
     expect(host.querySelector(".notker-hero__title")!.textContent).toBe("Vésperas");
     expect(host.querySelector(".notker-hero .notker-caption")).toBeNull();
   });
   it("renderizar de novo substitui (sem duplicar)", () => {
     const w = mount();
-    w.render({ recents: [entry(1)], recovery: null, now: NOW });
-    w.render({ recents: [entry(1)], recovery: null, now: NOW });
+    w.render({ recents: [entry(1)], recoveries: [], now: NOW });
+    w.render({ recents: [entry(1)], recoveries: [], now: NOW });
     expect(host.querySelectorAll(".notker-hero")).toHaveLength(1);
   });
 });
@@ -95,7 +95,7 @@ describe("aviso de recuperação e segurança do texto", () => {
   it("aparece nas duas telas, com Descartar e Recuperar", () => {
     const w = mount();
     for (const recents of [[], [entry(1)]]) {
-      w.render({ recents, recovery: { title: "Missa de Natal" }, now: NOW });
+      w.render({ recents, recoveries: [{ id: "current", title: "Missa de Natal" }], now: NOW });
       const n = host.querySelector(".sc-note.notker-recovery")!;
       expect(n.querySelector(".notker-recovery__text")!.textContent).toBe("“Missa de Natal” não foi salvo na última sessão.");
       const [d, r] = [...n.querySelectorAll<HTMLButtonElement>("button")];
@@ -104,10 +104,40 @@ describe("aviso de recuperação e segurança do texto", () => {
     }
     expect(h.onDiscardRecovery).toHaveBeenCalledTimes(2);
     expect(h.onRecover).toHaveBeenCalledTimes(2);
+    expect(h.onRecover).toHaveBeenCalledWith("current");
+  });
+  it("dois avisos (sessão atual e anterior): um por retrato, cada um com o seu id", () => {
+    mount().render({ recents: [entry(1)], recoveries: [{ id: "current", title: "Natal" }, { id: "prev", title: "Páscoa" }], now: NOW });
+    const notes = [...host.querySelectorAll(".sc-note.notker-recovery")];
+    expect(notes.map((n) => n.querySelector(".notker-recovery__text")!.textContent)).toEqual([
+      "“Natal” não foi salvo na última sessão.", "“Páscoa” não foi salvo na última sessão.",
+    ]);
+    const btn = (n: Element, t: string) => [...n.querySelectorAll("button")].find((b) => b.textContent === t)!.click();
+    btn(notes[1], "Recuperar");
+    btn(notes[1], "Descartar");
+    btn(notes[0], "Descartar");
+    expect(h.onRecover).toHaveBeenCalledWith("prev");
+    expect(h.onDiscardRecovery.mock.calls.map((c) => c[0])).toEqual(["prev", "current"]);
+  });
+  it("renderizar de novo com o foco dentro da tela devolve o foco à ação principal", () => {
+    const w = mount();
+    w.render({ recents: [entry(1)], recoveries: [{ id: "current", title: "N" }], now: NOW });
+    host.querySelector<HTMLButtonElement>(".notker-recovery button")!.focus();
+    w.render({ recents: [entry(1)], recoveries: [], now: NOW });
+    expect(document.activeElement).toBe(host.querySelector(".notker-hero button"));
+  });
+  it("renderizar com o foco FORA da tela não rouba o foco", () => {
+    const w = mount();
+    w.render({ recents: [entry(1)], recoveries: [], now: NOW });
+    const other = document.createElement("button");
+    document.body.appendChild(other);
+    other.focus();
+    w.render({ recents: [entry(1)], recoveries: [], now: NOW });
+    expect(document.activeElement).toBe(other);
   });
   it("títulos com marcação aparecem literais (nada de HTML do usuário)", () => {
     const evil = '<img src=x onerror="alert(1)">';
-    mount().render({ recents: [entry(1, { title: evil, chants: [evil] }), entry(2, { title: evil })], recovery: { title: evil }, now: NOW });
+    mount().render({ recents: [entry(1, { title: evil, chants: [evil] }), entry(2, { title: evil })], recoveries: [{ id: "current", title: evil }], now: NOW });
     expect(host.querySelector(".notker-hero__title")!.textContent).toBe(evil);
     expect(host.querySelector(".notker-hero__chants li")!.textContent).toBe(evil);
     expect(host.querySelector(".notker-recent__title")!.textContent).toBe(evil);

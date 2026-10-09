@@ -155,4 +155,53 @@ describe("createRecoveryWriter", () => {
     await vi.advanceTimersByTimeAsync(RECOVERY_INTERVAL_MS * 3);
     expect(slot.write).toHaveBeenCalledTimes(1);
   });
+
+  describe("vaga única: rotação do retrato de outra sessão", () => {
+    it("1ª gravação com retrato pendente de outra sessão: rotaciona ANTES de gravar; só uma vez", async () => {
+      const order: string[] = [];
+      let pending = true;
+      slot.write.mockImplementation(async (t: string) => { order.push("write"); slot.text = t; });
+      const w = createRecoveryWriter({
+        slot, current: () => cur, now: () => NOW,
+        foreign: { has: () => pending, rotate: async () => { order.push("rotate"); pending = false; } },
+      });
+      cur = proj();
+      await w.tick();
+      cur = updateChant(cur, cur.activeId, { content: "y" });
+      await w.tick();
+      expect(order).toEqual(["rotate", "write", "write"]);
+      expect(w.owns()).toBe(true);
+    });
+    it("sem retrato pendente: não rotaciona", async () => {
+      const rotate = vi.fn(async () => {});
+      const w = createRecoveryWriter({ slot, current: () => cur, now: () => NOW, foreign: { has: () => false, rotate } });
+      cur = proj();
+      await w.tick();
+      expect(rotate).not.toHaveBeenCalled();
+      expect(slot.write).toHaveBeenCalledTimes(1);
+    });
+    it("rotação que falha: NÃO grava por cima (o retrato alheio é preservado) e tenta de novo", async () => {
+      let n = 0;
+      const rotate = vi.fn(async () => { if (n++ === 0) throw new Error("rename"); });
+      let pending = true;
+      const w = createRecoveryWriter({
+        slot, current: () => cur, now: () => NOW,
+        foreign: { has: () => pending, rotate: async () => { await rotate(); pending = false; } },
+      });
+      cur = proj();
+      await w.tick();
+      expect(slot.write).not.toHaveBeenCalled();
+      expect(w.owns()).toBe(false);
+      await w.tick();
+      expect(slot.write).toHaveBeenCalledTimes(1);
+    });
+    it("sessão que já é dona do arquivo (adopt) não rotaciona", async () => {
+      const rotate = vi.fn(async () => {});
+      const w = createRecoveryWriter({ slot, current: () => cur, now: () => NOW, foreign: { has: () => true, rotate } });
+      w.adopt();
+      cur = proj();
+      await w.tick();
+      expect(rotate).not.toHaveBeenCalled();
+    });
+  });
 });

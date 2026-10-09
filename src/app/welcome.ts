@@ -14,10 +14,12 @@ export interface WelcomeHandlers {
   onOpen(): void;
   onOpenRecent(path: string): void;
   onOpenExample(): void;
-  onRecover(): void;
-  onDiscardRecovery(): void;
+  onRecover(id: string): void;
+  onDiscardRecovery(id: string): void;
 }
-export interface WelcomeState { recents: RecentEntry[]; recovery: { title: string } | null; now?: Date }
+/** Um retrato de sessão que caiu; `id` volta nos handlers (o mais recente primeiro). */
+export interface RecoveryNotice { id: string; title: string }
+export interface WelcomeState { recents: RecentEntry[]; recoveries: RecoveryNotice[]; now?: Date }
 export interface WelcomeHandle {
   render(s: WelcomeState): void;
   /** Foca a ação principal (Continuar, ou Novo projeto sem recentes). */
@@ -56,20 +58,20 @@ function thumb(e: RecentEntry): HTMLElement {
 export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHandle {
   let primary: HTMLElement | null = null;
 
-  function note(r: { title: string }): HTMLElement {
+  function note(r: RecoveryNotice): HTMLElement {
     const p = el("p", "sc-note notker-recovery");
     p.setAttribute("role", "status");
     p.append(
       el("span", "notker-recovery__text", `“${r.title}” não foi salvo na última sessão.`),
-      button("Descartar", "sc-btn", h.onDiscardRecovery),
-      button("Recuperar", "sc-btn notker-recovery__recover", h.onRecover),
+      button("Descartar", "sc-btn", () => h.onDiscardRecovery(r.id)),
+      button("Recuperar", "sc-btn notker-recovery__recover", () => h.onRecover(r.id)),
     );
     return p;
   }
 
   function startChoices(s: WelcomeState): HTMLElement {
     const start = el("div", "notker-start");
-    if (s.recovery) start.appendChild(note(s.recovery));
+    for (const r of s.recoveries) start.appendChild(note(r));
     start.appendChild(el("h1", "notker-wordmark", "Notker"));
     const choices = el("div", "notker-choices");
     const main = button("Novo projeto", "notker-choice notker-choice--main", h.onNew, "plus");
@@ -121,8 +123,10 @@ export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHan
   function render(s: WelcomeState): void {
     const now = s.now ?? new Date();
     const [latest, ...older] = s.recents;
+    // O DOM é refeito: se o foco estava aqui dentro, ele volta à ação principal (senão cairia no body).
+    const hadFocus = host.contains(document.activeElement);
     host.replaceChildren();
-    if (!latest) { host.appendChild(startChoices(s)); return; }
+    if (!latest) { host.appendChild(startChoices(s)); if (hadFocus) primary?.focus(); return; }
     const wrap = el("div", "notker-welcome__wrap");
     const head = el("div", "notker-welcome__head");
     head.append(
@@ -131,7 +135,7 @@ export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHan
       button("Novo projeto", "sc-btn sc-btn--elevated", h.onNew, "plus"),
     );
     wrap.appendChild(head);
-    if (s.recovery) wrap.appendChild(note(s.recovery));
+    for (const r of s.recoveries) wrap.appendChild(note(r));
     wrap.appendChild(hero(latest, now));
     if (older.length) {
       const grid = el("div", "notker-recents");
@@ -139,6 +143,7 @@ export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHan
       wrap.appendChild(grid);
     }
     host.appendChild(wrap);
+    if (hadFocus) primary?.focus();
   }
 
   return { render, focus: () => primary?.focus() };

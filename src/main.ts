@@ -54,13 +54,15 @@ import { openDialog } from "./ui/pd/dialog";
 import { askSaveChanges, resolveUnsaved, type UnsavedGuard } from "./app/session";
 import { setScreen, type Screen } from "./app/screen";
 import { createWelcome } from "./app/welcome";
-import { mountNewProjectGuide, projectFromDraft, type GuideHandle } from "./app/new-project-guide";
+import { mountNewProjectGuide, projectFromDraft, hasDraft, type GuideHandle } from "./app/new-project-guide";
+import { runCloseSequence } from "./app/close-sequence";
+import { createThumbTracker } from "./app/thumb-tracker";
 import { loadExampleProject } from "./project/example";
 import {
   createRecentStore, pushRecent, setRecentThumb, removeRecent, buildRecentMeta, recentTitle, parentFolder,
   type RecentEntry,
 } from "./app/recent";
-import { appDataSlot, existingPaths, RECENT_FILE, RECOVERY_FILE } from "./app/appdata-io";
+import { appDataSlot, existingPaths, rotateSlot, RECENT_FILE, RECOVERY_FILE, RECOVERY_PREV_FILE } from "./app/appdata-io";
 import { createRecoveryWriter, parseSnapshot, projectFromSnapshot, type RecoverySnapshot } from "./app/recovery";
 import { scoreThumbnail } from "./app/thumbnail";
 import { NabcLibEngine } from "./preview/nabc-lib";
@@ -648,7 +650,7 @@ async function boot() {
       updateTitle();
       toaster.show("Projeto salvo.");
       void recovery.clear();              // salvo: o retrato desta sessão não serve mais
-      void rememberRecent(project, true); // entra/sobe nos recentes, com miniatura nova
+      void rememberRecent(project, "save"); // entra/sobe nos recentes, com miniatura nova
       return true;
     })();
     saving = run;
@@ -735,9 +737,14 @@ async function boot() {
   // ── Recentes e recuperação de sessão (spec §4.6) ───────────────────────────
   const recentStore = createRecentStore(appDataSlot(RECENT_FILE), existingPaths);
   const recoverySlot = appDataSlot(RECOVERY_FILE);
+  const recoveryPrevSlot = appDataSlot(RECOVERY_PREV_FILE);
   let recents: RecentEntry[] = [];
   /** Retrato de uma sessão anterior que não foi salva (aviso na tela inicial). */
   let pendingRecovery: RecoverySnapshot | null = null;
+  /** Um segundo retrato mais antigo (empurrado para `session.prev.json` quando esta sessão
+   *  gravou o primeiro dela sem que o anterior tivesse sido resolvido). */
+  let pendingPrev: RecoverySnapshot | null = null;
+  const thumbs = createThumbTracker();
   const recovery = createRecoveryWriter({
     slot: recoverySlot,
     current: () => {
@@ -745,10 +752,21 @@ async function boot() {
       captureEditorIntoProject();
       return dirty.isDirty(project) ? project : null;
     },
-    onWrite: () => { pendingRecovery = null; }, // a vaga agora guarda ESTA sessão
+    // Vaga única: o retrato pendente de outra sessão vai para `.prev` antes do 1º desta.
+    foreign: {
+      has: () => pendingRecovery !== null,
+      rotate: async () => {
+        await rotateSlot(RECOVERY_FILE, RECOVERY_PREV_FILE);
+        pendingPrev = pendingRecovery; // só depois de renomear: falha = nada muda
+        pendingRecovery = null;
+      },
+    },
   });
   function renderWelcome(): void {
-    welcome.render({ recents, recovery: pendingRecovery ? { title: pendingRecovery.title } : null });
+    const recoveries: { id: string; title: string }[] = [];
+    if (pendingRecovery) recoveries.push({ id: "current", title: pendingRecovery.title });
+    if (pendingPrev) recoveries.push({ id: "prev", title: pendingPrev.title });
+    welcome.render({ recents, recoveries });
   }
   async function setRecents(list: RecentEntry[]): Promise<void> {
     recents = list;
@@ -759,23 +777,28 @@ async function boot() {
     !!path && !!recents.find((e) => e.path === path)?.meta?.thumb;
   /** Entra (ou sobe) nos recentes — só .notker com caminho. Miniatura do 1º canto: ao
    *  salvar, ou ao abrir quando ainda não há. Falha na miniatura = cartão sem imagem. */
-  async function rememberRecent(p: NotkerProject, withThumb: boolean): Promise<void> {
+  async function rememberRecent(p: NotkerProject, when: "open" | "save"): Promise<void> {
     const path = p.path;
     if (!path) return;
     await setRecents(pushRecent(recents, { path, meta: buildRecentMeta(p, new Date()) }));
-    if (!withThumb) return;
     const first = flattenChants(p)[0];
     if (!first) return;
+    // Abrir: só se ainda não há miniatura. Salvar: só se o 1º canto mudou desde a última.
+    const content = first.content;
+    if (hasThumb(path) && (when === "open" || !thumbs.changed(path, content))) return;
     // Nunca prende quem chamou: img.decode pode ficar pendente para sempre (timeout de 8 s).
     let timer: ReturnType<typeof setTimeout> | undefined;
     let thumb: string | undefined;
     try {
       thumb = await Promise.race([
-        scoreThumbnail(first.content).catch(() => undefined),
+        scoreThumbnail(content).catch(() => undefined),
         new Promise<undefined>((r) => { timer = setTimeout(() => r(undefined), 8000); }),
       ]);
     } finally { clearTimeout(timer); }
-    if (thumb) await setRecents(setRecentThumb(recents, path, thumb));
+    if (thumb) {
+      thumbs.remember(path, content);
+      await setRecents(setRecentThumb(recents, path, thumb));
+    }
   }
   /** Sair do projeto atual (abrir/criar/fechar): pergunta se há alterações; seguindo, o
    *  retrato de recuperação desta sessão deixa de valer. */
@@ -794,7 +817,7 @@ async function boot() {
       // Sumiu? Avisa e tira só este recente, sem perguntar "Salvar alterações?".
       if (await isGone()) { await dropGone(); return; }
       if (!(await leaveProject())) return;
-      if (enterProject(await openProjectAt(path))) void rememberRecent(project, !hasThumb(path));
+      if (enterProject(await openProjectAt(path))) void rememberRecent(project, "open");
     } catch (err) {
       if (await isGone()) await dropGone();
       else {
@@ -803,21 +826,49 @@ async function boot() {
       }
     }
   }
-  async function recoverSession(): Promise<void> {
-    const snap = pendingRecovery;
+  async function recoverSession(id: string): Promise<void> {
+    const fromPrev = id === "prev";
+    const snap = fromPrev ? pendingPrev : pendingRecovery;
     if (!snap || !(await resolveUnsaved(unsaved))) return;
     let p: NotkerProject;
     try { p = projectFromSnapshot(snap); }
     catch (err) { toaster.show("Não foi possível recuperar. " + String(err), { kind: "error" }); return; }
     if (!enterProject(p)) return;
-    pendingRecovery = null;
     dirty.markDirty();   // abre como projeto editado (spec §4.6)
-    recovery.adopt();    // salvar/descartar/fechar agora apagam este retrato
     updateTitle();
+    if (!fromPrev) {
+      pendingRecovery = null;
+      recovery.adopt();  // salvar/descartar/fechar agora apagam este retrato
+      return;
+    }
+    // Do `.prev`: o trabalho passa para a vaga atual (gravado já, não daqui a 30 s) e só
+    // então o arquivo `.prev` sai — a menos que a gravação tenha empurrado outro retrato para ele.
+    pendingPrev = null;
+    await recovery.tick();
+    if (recovery.owns() && pendingPrev === null) {
+      try { await recoveryPrevSlot.remove(); } catch (e) { console.warn("[notker] recuperação:", e); }
+    } else if (!recovery.owns()) {
+      pendingPrev = snap; // não gravou: o retrato continua valendo
+    }
   }
-  async function discardRecovery(): Promise<void> {
-    pendingRecovery = null;
-    try { await recoverySlot.remove(); } catch (e) { console.warn("[notker] recuperação:", e); }
+  async function discardRecovery(id: string): Promise<void> {
+    const fromPrev = id === "prev";
+    const snap = fromPrev ? pendingPrev : pendingRecovery;
+    if (!snap) return;
+    const r = await openDialog(dialogHost, {
+      title: `Descartar o trabalho não salvo de “${snap.title}”?`,
+      body: "Não dá para desfazer.",
+      actions: [
+        { id: "discard", label: "Descartar", kind: "danger" },
+        { id: "keep", label: "Manter", kind: "filled" },
+      ],
+      defaultAction: "keep",
+    });
+    if (r.action !== "discard") return;
+    if ((fromPrev ? pendingPrev : pendingRecovery) !== snap) return; // mudou durante a pergunta
+    try { await (fromPrev ? recoveryPrevSlot : recoverySlot).remove(); }
+    catch (e) { console.warn("[notker] recuperação:", e); toaster.show("Não foi possível descartar. " + String(e), { kind: "error" }); return; }
+    if (fromPrev) pendingPrev = null; else pendingRecovery = null;
     renderWelcome();
   }
   /** Itens de Arquivo ▸ Abrir recente (montados a cada abertura do menu). */
@@ -834,6 +885,14 @@ async function boot() {
     showScreen("welcome");
     welcome.focus();
   }
+  const confirmDiscardGuide = async (): Promise<boolean> => (await openDialog(dialogHost, {
+    title: "Descartar o novo projeto?",
+    body: "O que foi preenchido no guia será perdido.",
+    actions: [
+      { id: "discard", label: "Descartar", kind: "danger" },
+      { id: "keep", label: "Continuar editando", kind: "filled" },
+    ],
+  })).action === "discard";
   /** Guia de novo projeto. Cancelar volta para onde estava (projeto intacto ou tela inicial). */
   function openGuide(): void {
     const back: Screen = screen === "guide" ? (projectOpen ? "project" : "welcome") : screen;
@@ -843,20 +902,19 @@ async function boot() {
         try { return await pickGabcFile(); }
         catch (e) { toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" }); return null; }
       },
-      confirmDiscard: async () => (await openDialog(dialogHost, {
-        title: "Descartar o novo projeto?",
-        body: "O que foi preenchido no guia será perdido.",
-        actions: [
-          { id: "discard", label: "Descartar", kind: "danger" },
-          { id: "keep", label: "Continuar editando", kind: "filled" },
-        ],
-      })).action === "discard",
+      confirmDiscard: confirmDiscardGuide,
       onCancel: () => {
         closeGuide();
         if (back === "project" && projectOpen) { showScreen("project"); focusDesk(); }
         else showWelcome();
       },
-      onCreate: (draft) => enterProject(projectFromDraft(draft)),
+      onCreate: (draft) => {
+        if (!enterProject(projectFromDraft(draft))) return;
+        // Projeto novo, sem caminho e com conteúdo: NÃO está salvo (aparece "— Editado",
+        // fechar pergunta e o retrato de recuperação passa a ser gravado).
+        dirty.markDirty();
+        updateTitle();
+      },
     });
     showScreen("guide");
     guide.focus();
@@ -885,7 +943,7 @@ async function boot() {
         if (!(await leaveProject())) return;
         const p = await openProject();
         if (!p) return;
-        if (enterProject(p)) void rememberRecent(project, !hasThumb(project.path));
+        if (enterProject(p)) void rememberRecent(project, "open");
       } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     openExample: async () => {
@@ -1141,8 +1199,8 @@ async function boot() {
     onOpen: () => { void commands.run("file.open"); },
     onOpenExample: () => { void commands.run("file.openExample"); },
     onOpenRecent: (path) => { void openRecent(path); },
-    onRecover: () => { void recoverSession(); },
-    onDiscardRecovery: () => { void discardRecovery(); },
+    onRecover: (id) => { void recoverSession(id); },
+    onDiscardRecovery: (id) => { void discardRecovery(id); },
   });
 
   // ── Menubar: menus montados a partir do registro único de comandos ──
@@ -1255,6 +1313,7 @@ async function boot() {
   // Recentes (some o que não existe mais) e o retrato de uma sessão que caiu.
   try { recents = await recentStore.load(); } catch { recents = []; }
   try { pendingRecovery = parseSnapshot(await recoverySlot.read()); } catch { pendingRecovery = null; }
+  try { pendingPrev = parseSnapshot(await recoveryPrevSlot.read()); } catch { pendingPrev = null; }
   showWelcome(); // sem projeto aberto: tela inicial
   recovery.start();
 
@@ -1263,16 +1322,21 @@ async function boot() {
   // se o preventDefault não foi chamado.
   try {
     void getCurrentWindow().onCloseRequested(async (ev) => {
-      let proceed = true;
-      let decided = false; // false = a guarda falhou: o retrato de recuperação fica (única rede)
-      // Gravação em andamento: espera terminar (ok ou erro) antes de decidir; nunca prende a janela.
-      if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } }
-      try { proceed = await resolveUnsaved(unsaved); decided = true; } catch (e) { console.error("[notker] fechar:", e); }
-      if (!proceed) { ev.preventDefault(); return; }
-      neumasView?.flush(); // nota em debounce / nome digitado na vista Neumas entram no autosave
-      try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
-      recovery.stop();
-      if (decided) await recovery.clear(); // salvou ou descartou: nada a recuperar (nunca lança)
+      // Nunca rejeita (o wrapper do Tauri só fecha se o handler não lançar): cada passo
+      // da sequência tem o seu try/catch e, no pior caso, a janela fecha.
+      try {
+        const { prevent } = await runCloseSequence({
+          awaitSaving: async () => { if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } } },
+          // Guia com algo digitado: pergunta antes de fechar (o rascunho não tem outra rede).
+          confirmGuide: screen === "guide" && guide && hasDraft(guide.draft()) ? confirmDiscardGuide : undefined,
+          resolveUnsaved: () => resolveUnsaved(unsaved),
+          flushView: () => neumasView?.flush(), // nota em debounce / nome digitado entram no autosave
+          flushNames: () => overlayAutosave.flush(), // erro: o autosave já o mostrou
+          stopRecovery: () => recovery.stop(),
+          clearRecovery: () => recovery.clear(),
+        });
+        if (prevent) ev.preventDefault();
+      } catch (e) { console.error("[notker] fechar:", e); }
     }).catch(() => { /* sem permissão/evento: segue sem guarda */ });
   } catch { /* fora do Tauri (testes/probe) */ }
 }

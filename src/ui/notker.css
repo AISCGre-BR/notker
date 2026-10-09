@@ -455,9 +455,11 @@ body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none;
 /* ── Tela inicial (1b-2) ─────────────────────────────────────────────────── */
 .notker-welcome { flex-direction: column; }
 .notker-welcome__wrap {
-  width: 100%; max-width: 1080px; margin: 0 auto; padding: 56px 32px 64px;
-  display: flex; flex-direction: column; gap: 32px; min-height: 0;
+  width: 100%; max-width: 1080px; margin: 0 auto; padding: 40px 32px 40px;
+  display: flex; flex-direction: column; gap: 24px; min-height: min-content;
 }
+/* Com avisos extras a tela rola em vez de espremer o herói (cantos cortados no meio). */
+.notker-welcome__wrap > * { flex-shrink: 0; }
 .notker-welcome__head { display: flex; align-items: center; gap: 10px; }
 .notker-wordmark { margin: 0; flex: 1; font: 600 40px/1.15 var(--font-serif); color: var(--ink); letter-spacing: 0.005em; }
 .notker-caption { margin: 0; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
@@ -500,6 +502,7 @@ body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none;
 .notker-recent:focus-visible, .notker-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .notker-recovery { width: 100%; max-width: 760px; align-self: center; }
 .notker-welcome__wrap .notker-recovery { max-width: none; }
+.notker-welcome__wrap .notker-recovery + .notker-recovery { margin-top: -12px; }
 .notker-recovery__text { flex: 1; min-width: 0; }
 /* rubrica sobre surface (o tonal do Parchment fica < 4,5:1 no Vigília) */
 .notker-recovery__recover { color: var(--rubric); font-weight: 600; }

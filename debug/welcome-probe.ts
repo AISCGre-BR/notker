@@ -63,7 +63,7 @@ async function main(): Promise<void> {
     menubar.setTitle("Notker");
     createWelcome(document.querySelector<HTMLElement>("#welcome-host")!, {
       onNew: noop, onOpen: noop, onOpenRecent: noop, onOpenExample: noop, onRecover: noop, onDiscardRecovery: noop,
-    }).render({ recents, recovery: qs.get("recovery") ? { title: "Missa de Natal" } : null });
+    }).render({ recents, recoveries: qs.get("recovery") === "2" ? [{ id: "current", title: "Missa de Natal" }, { id: "prev", title: "Vésperas de Páscoa" }] : qs.get("recovery") ? [{ id: "current", title: "Missa de Natal" }] : [] });
   }
   if (qs.get("menu")) {
     document.querySelector<HTMLElement>(".sc-menubar__top")!.click();

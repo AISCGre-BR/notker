@@ -3,7 +3,7 @@
  *  cada 30 s (e só se mudou) grava um retrato do projeto — o MESMO bundle do .notker — em
  *  AppData `recovery/session.json`. Salvar/descartar/fechar apaga. Na abertura do app, um
  *  retrato presente vira o aviso "Recuperar" na tela inicial.
- *  Uma vaga só. `clear()` apaga só o que ESTA sessão gravou (ou adotou ao recuperar): o
+ *  Uma vaga só (mais a "prev": o retrato de sessão anterior que um novo retrato empurra). `clear()` apaga só o que ESTA sessão gravou (ou adotou ao recuperar): o
  *  retrato de uma sessão que caiu fica até Recuperar/Descartar, ou até outra sessão com
  *  alterações gravar o seu por cima. */
 import type { NotkerProject } from "../project/tree";
@@ -57,6 +57,8 @@ export interface RecoveryWriter {
   clear(): Promise<void>;
   /** O retrato na vaga passa a ser desta sessão (projeto recuperado). */
   adopt(): void;
+  /** Esta sessão gravou (ou adotou) o retrato que está na vaga. */
+  owns(): boolean;
   start(): void;
   stop(): void;
 }
@@ -68,6 +70,10 @@ export function createRecoveryWriter(opts: {
   intervalMs?: number;
   now?: () => Date;
   onWrite?: () => void;
+  /** Retrato de OUTRA sessão ainda não resolvido na vaga: antes do 1º retrato desta sessão,
+   *  `rotate` o tira do caminho (session.json → session.prev.json). Se rotacionar falha,
+   *  não grava (o alheio nunca é sobrescrito) e tenta de novo no próximo tick. */
+  foreign?: { has(): boolean; rotate(): Promise<void> };
 }): RecoveryWriter {
   const now = opts.now ?? (() => new Date());
   let last: string | null = null;
@@ -86,6 +92,7 @@ export function createRecoveryWriter(opts: {
       if (!p) return;
       const key = keyOf(p);
       if (key === last) return;
+      if (!owned && opts.foreign?.has()) await opts.foreign.rotate();
       await opts.slot.write(JSON.stringify(makeSnapshot(p, now())));
       last = key;
       owned = true;
@@ -105,6 +112,7 @@ export function createRecoveryWriter(opts: {
     tick: () => queue(write),
     clear: () => queue(erase),
     adopt() { owned = true; },
+    owns: () => owned,
     start() {
       if (!timer) timer = setInterval(() => { void queue(write); }, opts.intervalMs ?? RECOVERY_INTERVAL_MS);
     },

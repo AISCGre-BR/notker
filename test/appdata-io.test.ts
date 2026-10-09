@@ -118,3 +118,18 @@ describe("existingPaths", () => {
     expect(invoke).toHaveBeenCalledWith("existing_paths", { paths: ["/a.notker", "/b.notker"] });
   });
 });
+
+describe("rotateSlot (vaga única de recuperação)", () => {
+  it("renomeia session.json por cima de session.prev.json, pela fila dos dois arquivos", async () => {
+    const { rotateSlot, RECOVERY_PREV_FILE } = await import("../src/app/appdata-io");
+    expect(RECOVERY_PREV_FILE).toBe("recovery/session.prev.json");
+    await rotateSlot(RECOVERY_FILE, RECOVERY_PREV_FILE);
+    expect(fs.rename).toHaveBeenCalledWith("recovery/session.json", "recovery/session.prev.json", { oldPathBaseDir: 14, newPathBaseDir: 14 });
+  });
+  it("origem inexistente: nada a fazer, sem erro", async () => {
+    const { rotateSlot, RECOVERY_PREV_FILE } = await import("../src/app/appdata-io");
+    fs.exists.mockResolvedValueOnce(false);
+    await rotateSlot(RECOVERY_FILE, RECOVERY_PREV_FILE);
+    expect(fs.rename).not.toHaveBeenCalled();
+  });
+});

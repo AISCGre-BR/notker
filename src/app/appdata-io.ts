@@ -12,6 +12,8 @@ import type { TextSlot } from "./text-slot";
 
 export const RECENT_FILE = "recent.json";
 export const RECOVERY_FILE = "recovery/session.json";
+/** Vaga extra: o retrato de uma sessão anterior ainda não resolvida (Recuperar/Descartar). */
+export const RECOVERY_PREV_FILE = "recovery/session.prev.json";
 
 const opts = { baseDir: BaseDirectory.AppData };
 
@@ -45,6 +47,20 @@ export function appDataSlot(name: string): TextSlot {
       });
     },
   };
+}
+
+/** Renomeia `from` por cima de `to` (substitui), entrando na fila de gravações dos DOIS
+ *  arquivos. Sem `from`, nada a fazer. */
+export async function rotateSlot(from: string, to: string): Promise<void> {
+  const tail = Promise.all([chains.get(from), chains.get(to)]);
+  const r = tail.then(async () => {
+    if (!(await exists(from, opts))) return;
+    await rename(from, to, { oldPathBaseDir: BaseDirectory.AppData, newPathBaseDir: BaseDirectory.AppData });
+  });
+  const safe = r.catch(() => {});
+  chains.set(from, safe);
+  chains.set(to, safe);
+  return r;
 }
 
 /** Para cada caminho, se ainda é um arquivo (comando Rust; não lê conteúdo). */
