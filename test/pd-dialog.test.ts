@@ -105,4 +105,31 @@ describe("diálogo Parchment", () => {
       expect(leaked).toBe(0);
     });
   });
+
+  describe("reabertura e detalhes", () => {
+    it("segundo openDialog no mesmo host resolve o primeiro com null e preserva o foco original", async () => {
+      const btn = document.createElement("button");
+      document.body.appendChild(btn);
+      btn.focus();
+      const p1 = openDialog(host, spec);
+      const p2 = openDialog(host, spec);
+      await expect(p1).resolves.toMatchObject({ action: null });
+      expect(host.querySelectorAll(".sc-dialog").length).toBe(1);
+      host.querySelector("input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await p2;
+      expect(document.activeElement).toBe(btn);
+    });
+    it("ids de título são únicos entre diálogos", () => {
+      void openDialog(host, spec);
+      const a = host.querySelector("h2")!.id;
+      void openDialog(host, spec);
+      expect(host.querySelector("h2")!.id).not.toBe(a);
+    });
+    it("Enter durante composição (IME) não confirma", () => {
+      void openDialog(host, spec);
+      const ev = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true });
+      host.querySelector("input")!.dispatchEvent(ev);
+      expect(host.querySelector(".sc-dialog")).not.toBeNull();
+    });
+  });
 });

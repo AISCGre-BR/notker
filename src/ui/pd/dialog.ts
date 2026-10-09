@@ -13,7 +13,12 @@ export interface DialogResult { action: string | null; values: Record<string, st
 
 const ORDER = { danger: 0, text: 1, elevated: 2, filled: 3 } as const;
 
+const open = new WeakMap<HTMLElement, (action: string | null) => void>();
+let seq = 0;
+
 export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogResult> {
+  // Reabertura no mesmo host: encerra o anterior (devolvendo o foco original) antes.
+  open.get(host)?.(null);
   return new Promise((resolve) => {
     const values: Record<string, string> = {};
     const prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -24,7 +29,7 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
     const h = document.createElement("h2");
     h.className = "sc-dialog__title";
     h.textContent = spec.title;
-    h.id = "sc-dialog-title";
+    h.id = `sc-dialog-title-${++seq}`;
     box.setAttribute("aria-labelledby", h.id);
     box.appendChild(h);
     if (spec.body) {
@@ -91,6 +96,7 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
     function finish(action: string | null): void {
       for (const inp of inputs) values[inp.dataset.key!] = inp.value.trim();
       box.removeEventListener("keydown", onKey);
+      if (open.get(host) === finish) open.delete(host);
       host.innerHTML = "";
       host.style.display = "none";
       if (prevFocus && prevFocus.isConnected) prevFocus.focus();
@@ -108,9 +114,10 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
         return;
       }
       if (e.key === "Escape") { e.preventDefault(); finish(null); }
-      else if (e.key === "Enter" && def && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); finish(def); }
+      else if (e.key === "Enter" && !e.isComposing && def && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); finish(def); }
     }
     box.addEventListener("keydown", onKey);
+    open.set(host, finish);
     host.innerHTML = "";
     host.appendChild(box);
     host.style.display = "block";
