@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createMenubar, type MenuSpec } from "../src/ui/menubar";
+import { createMenubar, type MenuSpec, type SubmenuEntry } from "../src/ui/menubar";
 import type { Commands } from "../src/app/commands";
 
 function fakeCommands() {
@@ -305,3 +305,88 @@ describe("menubar — blur e Esc no botão de topo", () => {
   });
 });
 
+
+describe("submenu (Abrir recente ▸)", () => {
+  const SUB = (run: () => void) => [{
+    label: "Arquivo",
+    items: [
+      { cmd: "openFile", label: "Abrir…" },
+      {
+        label: "Abrir recente",
+        submenu: (): (SubmenuEntry | "---")[] => [
+          { label: "Missa <b>Natal</b>", caption: "Missas", run },
+          { label: "Desligado", run, enabled: false },
+          { label: "Vésperas", run },
+          "---",
+          { label: "Limpar recentes", run },
+        ],
+      },
+      { cmd: "saveFile", label: "Salvar" },
+    ],
+  }] as MenuSpec[];
+  const down = (k: string) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+  function openFile(run = vi.fn()) {
+    const m = mount(SUB(run));
+    m.host.querySelector<HTMLButtonElement>(".sc-menubar__top")!.click();
+    const parent = [...m.host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")][1];
+    return { ...m, parent, sub: () => m.host.querySelector<HTMLElement>(".notker-submenu"), run };
+  }
+
+  it("item pai com ▸; clique abre o submenu com itens, legenda e separador (texto literal)", () => {
+    const { parent, sub } = openFile();
+    expect(parent.getAttribute("aria-haspopup")).toBe("menu");
+    expect(parent.querySelector(".sc-menu__kbd")!.textContent).toBe("▸");
+    parent.click();
+    expect(parent.getAttribute("aria-expanded")).toBe("true");
+    const items = [...sub()!.querySelectorAll<HTMLButtonElement>(".sc-menu__item")];
+    expect(items.map((b) => b.children[1].textContent)).toEqual(["Missa <b>Natal</b>", "Desligado", "Vésperas", "Limpar recentes"]);
+    expect(items[0].querySelector("b")).toBeNull();
+    expect(items[0].querySelector(".sc-menu__kbd")!.textContent).toBe("Missas");
+    expect(items[1].disabled).toBe(true);
+    expect(sub()!.querySelector(".sc-menu__sep")).not.toBeNull();
+    expect(document.activeElement).toBe(items[0]);
+  });
+  it("escolher um item roda e fecha tudo; item desligado não roda", () => {
+    const { parent, sub, run, host } = openFile();
+    parent.click();
+    sub()!.querySelectorAll<HTMLButtonElement>(".sc-menu__item")[1].click();
+    expect(run).not.toHaveBeenCalled();
+    sub()!.querySelectorAll<HTMLButtonElement>(".sc-menu__item")[2].click();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(host.querySelector(".sc-menu")).toBeNull();
+  });
+  it("teclado: → abre e foca o 1º; ↓ percorre só o submenu (pula desligado); ← volta ao pai", () => {
+    const { parent, sub } = openFile();
+    parent.focus();
+    down("ArrowRight");
+    const items = [...sub()!.querySelectorAll<HTMLButtonElement>(".sc-menu__item")];
+    expect(document.activeElement).toBe(items[0]);
+    down("ArrowDown");
+    expect(document.activeElement).toBe(items[2]);
+    down("ArrowDown");
+    expect(document.activeElement).toBe(items[3]);
+    down("ArrowDown");
+    expect(document.activeElement).toBe(items[0]);
+    down("ArrowLeft");
+    expect(sub()).toBeNull();
+    expect(document.activeElement).toBe(parent);
+    expect(parent.getAttribute("aria-expanded")).toBe("false");
+  });
+  it("Esc no submenu fecha só ele; o 2º Esc fecha o menu", () => {
+    const { parent, sub, host } = openFile();
+    parent.click();
+    down("Escape");
+    expect(sub()).toBeNull();
+    expect(host.querySelector(".sc-menu")).not.toBeNull();
+    down("Escape");
+    expect(host.querySelector(".sc-menu")).toBeNull();
+  });
+  it("passar o mouse no pai abre (sem roubar o foco); noutro item fecha", () => {
+    const { parent, sub, host } = openFile();
+    parent.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(sub()).not.toBeNull();
+    const salvar = [...host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")].find((b) => b.textContent?.includes("Salvar"))!;
+    salvar.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(sub()).toBeNull();
+  });
+});

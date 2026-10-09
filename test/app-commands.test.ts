@@ -1,6 +1,6 @@
 // test/app-commands.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { createRegistry, keyOf, displayKey } from "../src/app/commands";
+import { createRegistry, keyOf, displayKey, gateCommands } from "../src/app/commands";
 
 const key = (k: string, mods: Partial<KeyboardEventInit> = {}, target?: EventTarget) => {
   const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...mods });
@@ -121,5 +121,29 @@ describe("registro", () => {
     off();
     await r.run("a");
     expect(seen).toHaveLength(2);
+  });
+});
+
+describe("gateCommands", () => {
+  it("fora da condição o comando não roda (teclado nem run); o enabled original continua valendo", async () => {
+    const reg = createRegistry();
+    const run = vi.fn();
+    let open = false;
+    let inner = true;
+    reg.register([{ id: "file.save", label: "Salvar", run, keys: ["Ctrl+S"], enabled: () => inner }]);
+    gateCommands(reg, ["file.save"], () => open);
+    expect(reg.get("file.save")!.enabled!()).toBe(false);
+    expect(reg.handleKey(key("s", { ctrlKey: true }))).toBe(false);
+    await reg.run("file.save");
+    expect(run).not.toHaveBeenCalled();
+    open = true;
+    expect(reg.handleKey(key("s", { ctrlKey: true }))).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    inner = false;
+    expect(reg.get("file.save")!.enabled!()).toBe(false);
+    expect(reg.shortcut("file.save")).toBe("Ctrl+S");
+  });
+  it("id desconhecido lança (erro de costura aparece no boot)", () => {
+    expect(() => gateCommands(createRegistry(), ["nada"], () => true)).toThrow("comando desconhecido: nada");
   });
 });
