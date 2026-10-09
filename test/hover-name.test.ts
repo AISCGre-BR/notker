@@ -1,7 +1,8 @@
 // test/hover-name.test.ts
 import { readFileSync } from "node:fs";
 import { describe, it, expect, vi } from "vitest";
-import { buildEntryRow, buildPartLabel, buildUnknownInfo, ofFamily } from "../src/neume/hover-nabc";
+import { buildEntryRow, buildPartLabel, buildUnknownInfo, ofFamily, familyLookup } from "../src/neume/hover-nabc";
+import { nameNeume } from "../src/neume/naming";
 import type { EffectiveEntry } from "../src/neume/types";
 
 const e: EffectiveEntry = {
@@ -139,5 +140,12 @@ describe("hover — só a família do canto", () => {
     expect(ofFamily([lao, e], "stgall").map((x) => x.id)).toEqual(["stgall:cl"]);
     expect(ofFamily([lao, e], "laon").map((x) => x.id)).toEqual(["laon:cl"]);
     expect(ofFamily([lao], "stgall")).toEqual([]);
+  });
+  it("token que só existe na outra família: lookup vazio (cai no ramo 'fora do catálogo') e nome sistemático da família ativa", () => {
+    const all = (n: string) => (n === "cl" ? [lao] : []);
+    const stg = familyLookup(all, "stgall");
+    expect(stg("cl")).toEqual([]);
+    expect(familyLookup(all, "laon")("cl").map((x) => x.id)).toEqual(["laon:cl"]);
+    expect(nameNeume("cl", "stgall").systematic).toBeTruthy();
   });
 });

@@ -16,6 +16,11 @@ export function ofFamily(list: EffectiveEntry[], family: Family): EffectiveEntry
   return list.filter((e) => e.family === family);
 }
 
+/** Lookup restrito à família dada (vazio = o hover cai no ramo "fora do catálogo"). */
+export function familyLookup(lookupAll: (nabc: string) => EffectiveEntry[], family: Family): (nabc: string) => EffectiveEntry[] {
+  return (nabc) => ofFamily(lookupAll(nabc), family);
+}
+
 /** "Abrir na tela de nomes": `id` quando o item existe; senão a cadeia nova. */
 export type OpenNames = (t: { id?: string; family: Family; nabc: string }) => void;
 
@@ -147,7 +152,7 @@ export function nabcHover(
   return hoverTooltip((view, pos) => {
     // Família do canto lida AGORA; todas as buscas abaixo só enxergam essa família.
     const af = activeFamily();
-    const lookupByNabc = (nabc: string): EffectiveEntry[] => ofFamily(lookupAll(nabc), af);
+    const lookupByNabc = familyLookup(lookupAll, af);
     const tree = getTree();
     if (!tree) return null;
     const doc = view.state.doc.toString();
@@ -177,8 +182,6 @@ export function nabcHover(
     // Partes elementares do neuma externo.
     const rawParts = nabcPartsAt(tree as any, doc, pos);
 
-    const sorted = composite;
-
     return {
       pos: ctx.tokenFrom, end: ctx.tokenTo, above: true,
       create(_view: EditorView) {
@@ -186,7 +189,7 @@ export function nabcHover(
         dom.className = "neume-tooltip";
 
         // ── Cabeçalho: neuma composto inteiro ──────────────────────────────
-        if (sorted.length === 0) {
+        if (composite.length === 0) {
           // Token composto fora do catálogo: decodifica base + letras significativas
           // e mostra ao menos o neuma-base (com imagem, se o base existir no catálogo).
           // F4: fora do catálogo → motor de nomes (canônico(s) da sinopse +
@@ -209,7 +212,7 @@ export function nabcHover(
           dom.appendChild(row);
           if (onOpen) dom.appendChild(openNamesButton(() => onOpen({ family: af, nabc: token })));
         } else {
-          for (const entry of sorted) dom.appendChild(buildEntryRow(entry, entry.family === af, onName, onOpen));
+          for (const entry of composite) dom.appendChild(buildEntryRow(entry, entry.family === af, onName, onOpen));
         }
 
         // ── Partes individuais (apenas para neumas genuinamente compostos) ──
