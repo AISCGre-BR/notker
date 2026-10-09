@@ -124,6 +124,11 @@ describe("withEmbeddedFonts", () => {
 });
 
 describe("scoreThumbnail", () => {
+  it("repassa a família do canto ao motor (Laon não sai em St. Gall)", async () => {
+    const engine: PreviewEngine = { id: "fake", render: vi.fn(async () => ({ svg: SVG(640, 200), sourceMap: [] })) };
+    await scoreThumbnail("(c4) a(f)", { engine, family: "laon", fonts: async () => ({}), deps: deps(fakeCanvas().canvas).deps });
+    expect(engine.render).toHaveBeenCalledWith("(c4) a(f)", { widthPx: 640, family: "laon" });
+  });
   it("desenha o gabc a 640 px, embute as fontes e rasteriza (largura relativa do nabc-lib)", async () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="200"><text font-family="greciliae">x</text></svg>';
     const engine: PreviewEngine = { id: "fake", render: vi.fn(async () => ({ svg, sourceMap: [] })) };

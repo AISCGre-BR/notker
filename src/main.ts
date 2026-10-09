@@ -87,6 +87,8 @@ import {
   findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode, flattenChants,
 } from "./project/tree";
 import { createTreePanel } from "./project/tree-panel";
+import { hasMusic, exportableGroup, selectPieces, scopeTitle } from "./pdf/scope";
+import { exportPdfDialog, type PdfOptions } from "./pdf/export-dialog";
 // PLAYBACK-OFF (2026-10-09): faixas da onda.
 // import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
 import type { WaveOverlay } from "./tuotilo/wave";
@@ -786,18 +788,19 @@ async function boot() {
     if (!first) return;
     // Abrir: só se ainda não há miniatura. Salvar: só se o 1º canto mudou desde a última.
     const content = first.content;
-    if (hasThumb(path) && (when === "open" || !thumbs.changed(path, content))) return;
+    const family = effectiveFamily(p, first.id);
+    if (hasThumb(path) && (when === "open" || !thumbs.changed(path, content, family))) return;
     // Nunca prende quem chamou: img.decode pode ficar pendente para sempre (timeout de 8 s).
     let timer: ReturnType<typeof setTimeout> | undefined;
     let thumb: string | undefined;
     try {
       thumb = await Promise.race([
-        scoreThumbnail(content).catch(() => undefined),
+        scoreThumbnail(content, { family }).catch(() => undefined),
         new Promise<undefined>((r) => { timer = setTimeout(() => r(undefined), 8000); }),
       ]);
     } finally { clearTimeout(timer); }
     if (thumb) {
-      thumbs.remember(path, content);
+      thumbs.remember(path, content, family);
       await setRecents(setRecentThumb(recents, path, thumb));
     }
   }
@@ -933,6 +936,12 @@ async function boot() {
   }
 
   const commands = createRegistry();
+  /** Exportar PDF: uma exportação por vez; as escolhas do diálogo valem até fechar o app. */
+  let exportingPdf = false;
+  let lastPdfOptions: PdfOptions | undefined;
+  /** Algum canto com notas (o do editor lido do editor, ainda não capturado). */
+  const canExportPdf = (): boolean =>
+    flattenChants(project).some((c) => hasMusic(c.id === shownId ? view.state.doc.toString() : c.content));
   const h = {
     // Novo projeto: primeiro decide as alterações do atual; depois o guia em passos
     // (adendo §11). Já no guia, só devolve o foco a ele.
@@ -966,6 +975,35 @@ async function boot() {
         const n = await exportAllGabc(project);
         if (n) toaster.show(n === 1 ? "1 canto exportado." : `${n} cantos exportados.`);
       } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
+    },
+    // Arquivo ▸ Exportar PDF… (sub-projeto 3): diálogo → salvar como → desenhar → gravar.
+    exportPdf: async () => {
+      if (exportingPdf) return;
+      captureEditorIntoProject();
+      const group = exportableGroup(project, treePanel.focusedId());
+      const opts = await exportPdfDialog(dialogHost, {
+        chantHasMusic: hasMusic(getActiveChant(project).content), group, last: lastPdfOptions,
+      });
+      if (!opts) return;
+      lastPdfOptions = opts;
+      captureEditorIntoProject();
+      const groupId = group?.id ?? null;
+      const pieces = selectPieces(project, opts.scope, groupId);
+      exportingPdf = true;
+      try {
+        const [{ exportPdf }, { pdfBrowserDeps }] = await Promise.all([import("./pdf/export-pdf"), import("./pdf/browser")]);
+        const deps = pdfBrowserDeps(document.querySelector<HTMLElement>("#measure-host")!, () => toaster.show("Gerando o PDF…"));
+        const r = await exportPdf(deps, pieces, scopeTitle(project, opts.scope, groupId), opts);
+        if (!r) return;
+        const file = r.path.split(/[\\/]/).pop() ?? r.path;
+        if (r.failed.length) toaster.show(`PDF exportado: ${file}. Não desenhados: ${r.failed.join(", ")}.`, { kind: "warn" });
+        else toaster.show(`PDF exportado: ${file}.`);
+      } catch (err) {
+        toaster.show("Exportar PDF falhou: " + (err instanceof Error ? err.message : String(err)), { kind: "error" });
+        console.error(err);
+      } finally {
+        exportingPdf = false;
+      }
     },
     format: async () => {
       try {
@@ -1132,6 +1170,7 @@ async function boot() {
     { id: "project.importGabc", label: "Importar .gabc…", run: importGabcAsChant },
     { id: "file.exportGabc", label: "Exportar .gabc do canto…", run: h.exportGabc },
     { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: h.exportAllGabcCmd },
+    { id: "file.exportPdf", label: "Exportar PDF…", run: h.exportPdf, keys: ["Ctrl+P"], enabled: canExportPdf },
     { id: "names.export", label: "Exportar nomes…", run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
     { id: "names.import", label: "Importar nomes…", run: h.importOverlay, keys: ["Ctrl+Alt+I"] },
     // Comandos que agem no editor ficam desligados na vista Neumas (o editor está escondido).
@@ -1191,7 +1230,7 @@ async function boot() {
   // gateCommands lança para id desconhecido.)
   gateCommands(commands, [
     "file.save", "file.saveAs", "file.close", "project.newChant", "project.newGroup", "project.importGabc",
-    "file.exportGabc", "file.exportAllGabc", "edit.undo", "edit.redo", "edit.format",
+    "file.exportGabc", "file.exportAllGabc", "file.exportPdf", "edit.undo", "edit.redo", "edit.format",
     "neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset",
     "neume.palette", "neume.name", "neumas.search", "view.edicao", "view.neumas",
     "doc.toggleFamily", "view.preview", "view.split", "view.legend",
@@ -1227,7 +1266,7 @@ async function boot() {
         "---",
         menuItem("project.newChant"), menuItem("project.newGroup"), menuItem("project.importGabc"),
         "---",
-        menuItem("file.exportGabc"), menuItem("file.exportAllGabc"),
+        menuItem("file.exportGabc"), menuItem("file.exportAllGabc"), menuItem("file.exportPdf"),
         "---",
         menuItem("names.import"), menuItem("names.export"),
         "---",

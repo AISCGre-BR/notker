@@ -7,6 +7,7 @@
  *  undefined: a tela inicial mostra o retângulo `parchment-deep`. NUNCA lança. */
 import { NabcLibEngine } from "../preview/nabc-lib";
 import type { PreviewEngine } from "../preview/engine";
+import type { Family } from "../neume/types";
 
 export const THUMB_MAX_SIDE = 480;
 /** Largura de linha do render da miniatura (px): ~3 sistemas legíveis em 480 px. */
@@ -153,15 +154,15 @@ export async function rasterizeSvg(
   }
 }
 
-/** Miniatura do gabc (desenhado pelo nabc-lib a 640 px de largura, com as fontes de canto
+/** Miniatura do gabc na família do canto (desenhado pelo nabc-lib a 640 px de largura, com as fontes de canto
  *  embutidas). Nunca lança. */
 export async function scoreThumbnail(
   gabc: string,
-  opts: { engine?: PreviewEngine; fonts?: () => Promise<Readonly<Record<string, string>>>; deps?: RasterDeps } = {},
+  opts: { engine?: PreviewEngine; family?: Family; fonts?: () => Promise<Readonly<Record<string, string>>>; deps?: RasterDeps } = {},
 ): Promise<string | undefined> {
   try {
     const engine = opts.engine ?? new NabcLibEngine();
-    const r = await engine.render(gabc, { widthPx: THUMB_RENDER_WIDTH });
+    const r = await engine.render(gabc, { widthPx: THUMB_RENDER_WIDTH, family: opts.family });
     const fonts = await (opts.fonts ?? chantFontData)();
     return await rasterizeSvg(withEmbeddedFonts(r.svg, fonts), { widthPx: THUMB_RENDER_WIDTH, deps: opts.deps });
   } catch (e) {
