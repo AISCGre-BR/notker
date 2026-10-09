@@ -53,7 +53,7 @@ import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 import { openProject, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveDoc, effectiveFamily,
-  withActiveContent, setActive, setDocFamily, addDoc, removeDoc, moveDoc, gabcName,
+  withActiveContent, setActive, setDocFamily, addDoc, removeDoc, insertDocAt, moveDoc, gabcName,
 } from "./project/model";
 import { createDocList } from "./project/doc-list";
 import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
@@ -370,13 +370,21 @@ async function boot() {
     onImport: () => void importGabcAsDoc(),
     onRemove: (id) => {
       captureEditorIntoProject();
-      const snapshot = project;
+      const removed = project.docs.find((d) => d.id === id);
+      const index = project.docs.findIndex((d) => d.id === id);
+      const wasActive = project.activeId === id;
       const next = removeDoc(project, id);
-      if (next === project) return; // último canto: não remove
+      if (next === project || !removed) return; // último canto: não remove
       project = next;
       syncFromProject();
       toaster.show("Canto excluído.", {
-        action: { label: "Desfazer", run: () => { project = snapshot; syncFromProject(); docList.render(project); } },
+        action: { label: "Desfazer", run: () => {
+          captureEditorIntoProject();
+          project = insertDocAt(project, removed, index);
+          if (wasActive) project = setActive(project, removed.id);
+          syncFromProject();
+          docList.render(project);
+        } },
       });
     },
     onSetFamily: (id, f) => {

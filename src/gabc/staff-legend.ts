@@ -1,4 +1,4 @@
-import { showPanel, keymap, type Panel, type EditorView } from "@codemirror/view";
+import { showPanel, type Panel, type EditorView } from "@codemirror/view";
 import { StateField, StateEffect } from "@codemirror/state";
 import type { Tree } from "web-tree-sitter";
 import { activeClefAt } from "../editor/context";
@@ -33,8 +33,4 @@ function legendPanel(view: EditorView): Panel {
   };
   draw();
   return { dom, update: () => draw() };
-}
-
-export function legendKeymap() {
-  return keymap.of([{ key: "Ctrl-Alt-l", run: (v) => { v.dispatch({ effects: toggleLegend.of(!v.state.field(legendVisible)) }); return true; } }]);
 }
