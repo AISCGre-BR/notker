@@ -53,6 +53,8 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): { render(p:
       row.addEventListener("click", () => opts.onSelect(d.id));
       row.addEventListener("contextmenu", (e) => { e.preventDefault(); rowMenu(row, d.id, e.clientX, e.clientY); });
       row.addEventListener("keydown", (e) => {
+        // Alt+←/→/↑/↓ pertence ao editor (mover neuma): aqui é consumido sem efeito.
+        if (e.altKey && e.key.startsWith("Arrow")) { e.preventDefault(); return; }
         if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
           e.preventDefault();
           const n = e.key === "Home" ? 0 : e.key === "End" ? rows.length - 1

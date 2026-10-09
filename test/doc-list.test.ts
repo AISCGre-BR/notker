@@ -111,3 +111,16 @@ describe("barra lateral de cantos", () => {
     expect(top).toBeLessThan(300);
   });
 });
+
+describe("barra lateral — Alt+setas", () => {
+  it("Alt+↓ numa linha é consumido (preventDefault) e não move o foco", () => {
+    createDocList(host, opts()).render(proj());
+    const rows = host.querySelectorAll<HTMLElement>(".notker-row");
+    rows[0].focus();
+    const ev = new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true, cancelable: true });
+    rows[0].dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(rows[0]);
+  });
+});
+
