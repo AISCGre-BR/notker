@@ -35,6 +35,7 @@ import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
 import { createMenubar, type MenuItem } from "./ui/menubar";
 import { createDirtyTracker } from "./app/dirty";
+import { createViews } from "./app/views";
 import { chantCapture } from "./app/chant-capture";
 import { debounce } from "./preview/debounce";
 // PLAYBACK-OFF (2026-10-09): barra da onda.
@@ -608,6 +609,13 @@ async function boot() {
     ask: (title, error) => askSaveChanges(dialogHost, title, error),
   };
 
+  // Vistas (spec nomes-neumas §2.1): body[data-view] alterna hosts pré-existentes.
+  const views = createViews(document.body, () => { toolbarHandle?.refresh(); });
+  const inEdit = (): boolean => views.current() === "edicao";
+  /** Volta à Edição com o cursor e a seleção do editor intactos (o EditorState não muda). */
+  function backToEdit(): void { views.set("edicao"); view.focus(); }
+  function openNeumas(): void { views.set("neumas"); }
+
   const commands = createRegistry();
   const h = {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
@@ -828,16 +836,19 @@ async function boot() {
     { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: h.exportAllGabcCmd },
     { id: "names.export", label: "Exportar nomes…", run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
     { id: "names.import", label: "Importar nomes…", run: h.importOverlay, keys: ["Ctrl+Alt+I"] },
-    { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); } },
-    { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); } },
-    { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"] },
-    { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true },
-    { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true },
-    { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true },
-    { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true },
-    { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"] },
+    // Comandos que agem no editor ficam desligados na vista Neumas (o editor está escondido).
+    { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); }, enabled: inEdit },
+    { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); }, enabled: inEdit },
+    { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"], enabled: inEdit },
+    { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"], enabled: inEdit },
     { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
-    { id: "names.panel", label: "Nomes dos neumas…", icon: "tag", run: h.openOverlayPanel, keys: ["Ctrl+Alt+N"] },
+    // O painel lateral "Nomes" não é mais aberto pela UI: Ctrl+Alt+N abre a vista Neumas.
+    { id: "view.edicao", label: "Edição", run: backToEdit, keys: ["Ctrl+Digit1"], checked: () => views.current() === "edicao" },
+    { id: "view.neumas", label: "Neumas", run: () => openNeumas(), keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => views.current() === "neumas" },
     { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
@@ -912,9 +923,11 @@ async function boot() {
     {
       label: "Exibir",
       items: [
+        menuItem("view.edicao"), menuItem("view.neumas"),
+        "---",
         menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"),
         "---",
-        menuItem("names.panel"), menuItem("doc.toggleFamily"),
+        menuItem("doc.toggleFamily"),
         "---",
         menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark"),
       ],
@@ -933,10 +946,11 @@ async function boot() {
   menubar.setTitle(project.title);
 
   toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { group: ["edit.undo", "edit.redo"] },
-    { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"] },
-    { group: ["edit.format", "neume.palette", "names.panel"] },
-    { group: ["view.split", "view.legend"] },
+    { tabs: ["view.edicao", "view.neumas"], label: "Vistas" },
+    { group: ["edit.undo", "edit.redo"], view: "edicao" },
+    { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"], view: "edicao" },
+    { group: ["edit.format", "neume.palette"], view: "edicao" },
+    { group: ["view.split", "view.legend"], view: "edicao" },
     "spacer",
     // PLAYBACK-OFF (2026-10-09): modo, onda e Tocar na toolbar.
     // { group: ["play.mode", "wave.toggle", "wave.reset"] },

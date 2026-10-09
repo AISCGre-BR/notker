@@ -378,3 +378,11 @@ body.notker-dragging, body.notker-dragging * { cursor: grabbing !important; }
 #measure-host { position: fixed; left: -10000px; top: 0; visibility: hidden; pointer-events: none; }
 .neume-drawing-wrap { display: inline-flex; align-items: center; gap: 2px; }
 .neume-drawing-wrap--code { font: 16px/1 var(--font-mono); color: var(--ink-soft); }
+
+/* ── Vistas (body[data-view]) — hosts pré-existentes alternando display (WebKitGTK) ── */
+/* !important: o split (ui/split.ts) põe display:flex inline no #workspace. */
+body[data-view="neumas"] #workspace { display: none !important; }
+body:not([data-view="neumas"]) #neumas-view { display: none; }
+body[data-view="neumas"] .sc-toolbar [data-view="edicao"],
+body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none; }
+#neumas-view { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; gap: var(--space-3); padding: var(--space-3); }
