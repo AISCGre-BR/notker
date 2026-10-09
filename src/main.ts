@@ -164,6 +164,7 @@ async function boot() {
   function toggleFamily(): void {
     const f: Family = currentFamily() === "stgall" ? "laon" : "stgall";
     project = setDocFamily(project, project.activeId, f);
+    docList.render(project);
     reindex();
     toaster.show("Família do canto: " + familyLabel(f) + ".");
   }
@@ -201,7 +202,7 @@ async function boot() {
         const r = addNameToEntries(overlay, targets, n);
         overlay = r.overlay;
         const changed = r.changed;
-        if (!changed) return;
+        if (!changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
         reindex();
         overlayPanel?.refresh();
         try { await overlayAutosave.schedule(); toaster.show(`Nome “${n}” cadastrado.`); }
@@ -367,7 +368,17 @@ async function boot() {
     onSelect: (id) => switchToDoc(id),
     onAdd: () => void addNewDoc(),
     onImport: () => void importGabcAsDoc(),
-    onRemove: (id) => { captureEditorIntoProject(); project = removeDoc(project, id); syncFromProject(); },
+    onRemove: (id) => {
+      captureEditorIntoProject();
+      const snapshot = project;
+      const next = removeDoc(project, id);
+      if (next === project) return; // último canto: não remove
+      project = next;
+      syncFromProject();
+      toaster.show("Canto excluído.", {
+        action: { label: "Desfazer", run: () => { project = snapshot; syncFromProject(); docList.render(project); } },
+      });
+    },
     onSetFamily: (id, f) => {
       captureEditorIntoProject();
       project = setDocFamily(project, id, f);
@@ -404,6 +415,7 @@ async function boot() {
     project = { ...project, docs };
   }
   function switchToDoc(id: string): void {
+    if (id === project.activeId) return;
     captureEditorIntoProject();
     project = setActive(project, id);
     syncFromProject();
@@ -547,7 +559,7 @@ async function boot() {
           const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
           await exportOverlay(overlay);
           if (n) toaster.show(`${n} nomes exportados.`);
-        else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
+          else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
         },
         onImport: async () => {
           await commands.run("names.import"); // flush + merge + refresh do painel lá dentro
