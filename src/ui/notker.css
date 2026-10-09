@@ -448,4 +448,7 @@ body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none;
 .neumas-ref__sys, .neumas-ref__src, .neumas-names__none { font-size: 12px; color: var(--ink-muted); }
 .neumas-note__input.sc-textarea { min-height: 56px; font-size: 14px; line-height: 20px; }
 .neumas-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.neumas-savestate { font-size: 12px; color: var(--ink-muted); min-height: 16px; }
+.neumas-names__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.neumas-savestate { font: 12px/16px var(--font-sans); color: var(--ink-muted); min-height: 16px; margin-bottom: 6px; }
+.neumas-savestate[data-state="salvo ✓"] { color: var(--success); }
+.neumas-savestate[data-state="erro ao salvar"] { color: var(--danger); }

@@ -90,6 +90,9 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     onFieldEscape: () => { if (!catalog.focusGrid()) catalog.focusSearch(); },
   }, deps.draw);
 
+  /** Grava o que estiver pendente na bancada: nota (debounce) e nome digitado sem Enter. */
+  function flushPending(): void {  bench.flushNote(); bench.flushName(); }
+
   // ── estado derivado ──
   const entryById = (id: string | null): EffectiveEntry | undefined =>
     (id ? deps.entries().find((e) => e.id === id) : undefined);
@@ -119,7 +122,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   }
   /** Troca de família: nota gravada, seleção e rascunho não atravessam. */
   function resetForFamily(f: Family): void {
-    bench.flushNote();
+    flushPending();
     discardDraft();
     family = f; selectedId = null; caps = {};
   }
@@ -165,7 +168,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
 
   // ── ações ──
   function select(id: string): void {
-    bench.flushNote();
+    flushPending();
     const wasComposing = composing || !!draft;
     discardDraft();
     selectedId = id;
@@ -175,7 +178,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     catalog.reveal(id);
   }
   function newSequence(prefill: string): void {
-    bench.flushNote();
+    flushPending();
     discardDraft();
     selectedId = null; editChain = null;
     draft = { nabc: normalizeNabc(prefill) };
@@ -301,7 +304,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
 
   /** Saída da vista: grava a nota, descarta o rascunho (avisando) e para de devolver foco. */
   function leave(): void {
-    bench.flushNote();
+    flushPending();
     discardDraft();
     opened = false;
   }

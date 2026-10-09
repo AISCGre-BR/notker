@@ -452,3 +452,63 @@ describe("paginação incremental da grade", () => {
     expect((document.activeElement as HTMLElement).dataset.id).toBe(end.dataset.id);
   });
 });
+
+describe("nome digitado e não confirmado com Enter", () => {
+  it("sair do campo (blur) grava o nome e mostra 'salvo ✓'", async () => {
+    const { view, ov } = setup();
+    view.open({ family: "stgall", select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    q(".neumas-newname").dispatchEvent(new FocusEvent("blur"));
+    await flush();
+    expect(ov().entries["stgall:pe"].names).toEqual(["podatus"]);
+    expect(q(".neumas-savestate").textContent).toBe("salvo ✓");
+  });
+  it("trocar de item com nome pendente grava no item ANTIGO (sem blur)", async () => {
+    const { view, ov } = setup();
+    view.open({ family: "stgall", select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    card("stgall:vi").click();
+    await flush();
+    expect(ov().entries["stgall:pe"].names).toEqual(["podatus"]);
+    expect(ov().entries["stgall:vi"]).toBeUndefined();
+  });
+  it("sair da vista (flush) e trocar de família gravam o nome pendente", async () => {
+    const a = setup();
+    a.view.open({ family: "stgall", select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    a.view.flush();
+    await flush();
+    expect(a.ov().entries["stgall:pe"].names).toEqual(["podatus"]);
+    expect(a.deps.commit).toHaveBeenCalledTimes(1); // o foco devolvido à grade não regrava (blur reentrante)
+    const b = setup();
+    b.view.open({ family: "stgall", select: "stgall:vi", focus: "name" });
+    type(q(".neumas-newname"), "virga alta");
+    q<HTMLButtonElement>('[data-family="laon"]').click();
+    await flush();
+    expect(b.ov().entries["stgall:vi"].names).toEqual(["virga alta"]);
+  });
+  it("Enter e depois sair do campo: uma só gravação", async () => {
+    const { view, deps } = setup();
+    view.open({ family: "stgall", select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    key(q(".neumas-newname"), "Enter");
+    q(".neumas-newname").dispatchEvent(new FocusEvent("blur"));
+    await flush();
+    expect(deps.commit).toHaveBeenCalledTimes(1);
+  });
+  it("rascunho válido: sair do campo de nome cria a sequência com o nome; inválido mantém o texto", async () => {
+    const a = setup();
+    a.view.open({ family: "stgall", newChain: "pe!vi" });
+    type(q(".neumas-newname"), "pes com virga");
+    q(".neumas-newname").dispatchEvent(new FocusEvent("blur"));
+    await flush();
+    expect(Object.values(a.ov().sequences ?? {}).length).toBe(1);
+    const b = setup();
+    b.view.open({ family: "stgall", newChain: "xx" });
+    type(q(".neumas-newname"), "nada");
+    q(".neumas-newname").dispatchEvent(new FocusEvent("blur"));
+    await flush();
+    expect(q<HTMLInputElement>(".neumas-newname").value).toBe("nada");
+    expect(b.deps.commit).not.toHaveBeenCalled();
+  });
+});

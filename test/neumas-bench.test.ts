@@ -220,3 +220,77 @@ describe("onda final: bancada", () => {
     expect(q(".neumas-delete").className).toMatch(/sc-btn--(elevated|tonal)/);
   });
 });
+
+describe("bancada: Novo nome grava ao sair do campo", () => {
+  const blur = (t: HTMLElement) => t.dispatchEvent(new FocusEvent("blur"));
+  it("digitar e sair (blur) chama onAddName uma vez; vazio não chama", () => {
+    const cb = cbs();
+    const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    const n = q<HTMLInputElement>(".neumas-newname");
+    blur(n);
+    expect(cb.onAddName).not.toHaveBeenCalled();
+    n.value = "  ";
+    blur(n);
+    expect(cb.onAddName).not.toHaveBeenCalled();
+    n.value = " pes alto ";
+    blur(n);
+    expect(cb.onAddName).toHaveBeenCalledTimes(1);
+    expect(cb.onAddName).toHaveBeenCalledWith("pes alto");
+    expect(n.value).toBe("");
+  });
+  it("Enter e depois blur: uma só gravação", () => {
+    const cb = cbs();
+    const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    const n = q<HTMLInputElement>(".neumas-newname");
+    n.value = "pes alto";
+    key(n, "Enter");
+    blur(n);
+    expect(cb.onAddName).toHaveBeenCalledTimes(1);
+  });
+  it("Enter com gravação ainda pendente (promessa) e blur: não duplica; falha mantém o texto", async () => {
+    let done!: (v: boolean) => void;
+    const cb = cbs();
+    cb.onAddName = vi.fn(() => new Promise<boolean>((r) => { done = r; }));
+    const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    const n = q<HTMLInputElement>(".neumas-newname");
+    n.value = "pes alto";
+    key(n, "Enter");
+    blur(n);
+    expect(cb.onAddName).toHaveBeenCalledTimes(1);
+    done(false);
+    await Promise.resolve(); await Promise.resolve();
+    expect(n.value).toBe("pes alto");
+  });
+  it("Esc no campo cancela o texto (não grava ao devolver o foco)", () => {
+    const cb = cbs();
+    cb.onFieldEscape = vi.fn(() => blur(q(".neumas-newname")));
+    const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    const n = q<HTMLInputElement>(".neumas-newname");
+    n.value = "desisti";
+    key(n, "Escape");
+    expect(cb.onAddName).not.toHaveBeenCalled();
+    expect(n.value).toBe("");
+  });
+  it("flushName grava o nome pendente já", () => {
+    const cb = cbs();
+    const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    q<HTMLInputElement>(".neumas-newname").value = "pendente";
+    b.flushName();
+    expect(cb.onAddName).toHaveBeenCalledWith("pendente");
+    b.flushName();
+    expect(cb.onAddName).toHaveBeenCalledTimes(1);
+  });
+  it("o indicador de gravação fica junto de 'Seus nomes' e mostra o estado", () => {
+    const b = createBench(host, cbs(), drawFn());
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "salvo ✓" }));
+    const names = q(".neumas-names");
+    expect(names.querySelector(".neumas-savestate")!.textContent).toBe("salvo ✓");
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "erro ao salvar" }));
+    expect(names.querySelector(".neumas-savestate")!.getAttribute("data-state")).toBe("erro ao salvar");
+  });
+});

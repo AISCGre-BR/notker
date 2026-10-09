@@ -48,6 +48,8 @@ export interface Bench {
   focusChain(): void;
   /** Grava já a nota pendente (debounce), se houver. */
   flushNote(): void;
+  /** Grava já o nome digitado em "Novo nome…" e ainda não confirmado, se houver. */
+  flushName(): void;
 }
 
 export type DrawFn = (family: Family, nabc: string) => Promise<Element>;
@@ -102,6 +104,12 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     if (t && t.value !== savedNote) { savedNote = t.value; cb.onNote(t.value); }
   };
   let drawToken = 0;
+  let commitNameRef: (() => void) | null = null;
+  /** Campo "Novo nome…" do item na tela (null enquanto o DOM é refeito): um blur causado pela
+   *  remoção do campo antigo nunca grava o texto no item novo. */
+  let liveName: HTMLInputElement | null = null;
+  /** Texto cuja gravação ainda não terminou (Enter seguido de blur não grava duas vezes). */
+  let nameInflight: string | null = null;
 
   const redraw = debounce((family: Family, nabc: string) => {
     const token = ++drawToken;
@@ -119,6 +127,8 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
   };
 
   function build(item: BenchItem, st: BenchStatus): void {
+    liveName = null;
+    nameInflight = null;
     card.replaceChildren();
     const entry = item.kind === "entry" ? item.entry : null;
     const family = item.kind === "entry" ? item.entry.family : item.family;
@@ -181,22 +191,41 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
 
     // ── nomes do usuário ──
     const namesBlock = el("div", "neumas-names");
-    namesBlock.appendChild(el("span", "neumas-label", "Seus nomes"));
+    const namesHead = el("div", "neumas-names__head");
+    namesHead.appendChild(el("span", "neumas-label", "Seus nomes"));
+    const save = el("span", "neumas-savestate");
+    save.setAttribute("aria-live", "polite");
+    namesHead.appendChild(save);
+    namesBlock.appendChild(namesHead);
     const names = el("div", "neumas-names__chips");
     const newName = el("input", "sc-input neumas-newname");
     newName.placeholder = "Novo nome…";
     newName.setAttribute("aria-label", "Novo nome");
-    fieldKeys(newName, () => {
+    /** Enter e saída do campo seguem o mesmo caminho. `false` = não gravou: o texto fica. */
+    const commitName = (): void => {
+      if (newName !== liveName) return;
       const n = newName.value.trim();
-      if (!n) return;
-      const r = cb.onAddName(n);
-      if (r === false) return;
+      if (!n || nameInflight === n) return;
+      nameInflight = n; // antes de chamar: a gravação devolve o foco à grade e o blur voltaria aqui
+      let r: boolean | void | Promise<boolean | void>;
+      try { r = cb.onAddName(n); } catch (err) { nameInflight = null; throw err; }
       if (r && typeof (r as Promise<unknown>).then === "function") {
-        void (r as Promise<boolean | void>).then((ok) => { if (ok !== false && newName.value.trim() === n) newName.value = ""; }, () => {});
+        void (r as Promise<boolean | void>).then(
+          (ok) => { if (nameInflight === n) nameInflight = null; if (ok !== false && newName.value.trim() === n) newName.value = ""; },
+          () => { if (nameInflight === n) nameInflight = null; },
+        );
         return;
       }
-      newName.value = "";
-    }, () => cb.onFieldEscape());
+      nameInflight = null;
+      if (r !== false) newName.value = "";
+    };
+    commitNameRef = commitName;
+    fieldKeys(newName, commitName, () => {
+      newName.value = ""; // Esc cancela o que foi digitado (o blur seguinte não grava)
+      cb.onFieldEscape();
+    });
+    newName.addEventListener("blur", commitName);
+    liveName = newName;
     namesBlock.append(names, newName);
 
     // ── referência ──
@@ -241,13 +270,11 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
       actions.appendChild(hide);
     }
     if (entry?.userSequence) actions.appendChild(button("Excluir sequência", "sc-btn--elevated sc-btn--danger neumas-delete", () => cb.onDelete()));
-    const save = el("span", "neumas-savestate");
-    save.setAttribute("aria-live", "polite");
 
     if (composeHelp) chainActions.appendChild(composeHelp);
     body.append(figure, chainField, dup, chainActions, namesBlock, ref);
     if (entry) body.appendChild(noteField);
-    body.append(actions, save);
+    body.append(actions);
     card.append(head, body);
     refs = {
       figure, chain, validity, dup, names, newName, note, hide, save, compose, family, editable,
@@ -307,6 +334,7 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     }
     if (r.hide && entry) r.hide.textContent = entry.hidden ? "Mostrar na busca" : "Ocultar da busca";
     r.save.textContent = st.saveState;
+    r.save.dataset.state = st.saveState;
     ensureDrawing(r.family, st.chain, item.kind === "entry" && !entry?.userSequence);
   }
 
@@ -314,7 +342,7 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     render(item, st) {
       const k = !item ? "" : item.kind === "draft" ? `draft:${item.family}` : `entry:${item.entry.id}`;
       if (!item) {
-        key = ""; refs = null; redraw.cancel();
+        key = ""; refs = null; liveName = null; redraw.cancel();
         card.replaceChildren(el("div", "sc-empty", "Escolha um neuma na grade, ou tecle S para criar uma sequência."));
         return;
       }
@@ -323,6 +351,7 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     },
     focusName() { if (!refs) return false; refs.newName.focus(); return true; },
     flushNote() { writeNote(); },
+    flushName() { commitNameRef?.(); },
     focusChain() { if (!refs) return; refs.chain.focus(); refs.chain.setSelectionRange(refs.chain.value.length, refs.chain.value.length); },
   };
 }
