@@ -84,6 +84,33 @@ describe("appDataSlot", () => {
   });
 });
 
+describe("remove na mesma cadeia das gravações", () => {
+  it("write pendente + remove: o arquivo termina removido e o .tmp não é apagado no meio do write", async () => {
+    let release!: () => void;
+    fs.rename.mockImplementationOnce(() => new Promise<void>((r) => { release = r; }));
+    fs.exists.mockResolvedValue(true);
+    const slot = appDataSlot(RECOVERY_FILE);
+    const w = slot.write("A");
+    const r = slot.remove();
+    await new Promise((x) => setTimeout(x, 10));
+    expect(fs.remove).not.toHaveBeenCalled(); // espera o write terminar
+    release();
+    await Promise.all([w, r]);
+    expect(fs.rename.mock.invocationCallOrder[0]).toBeLessThan(fs.remove.mock.invocationCallOrder[0]);
+    expect(fs.remove).toHaveBeenCalledWith("recovery/session.json", AD);
+  });
+  it("write depois de remove só começa após o remove; falha do remove não trava a cadeia", async () => {
+    fs.exists.mockResolvedValue(true);
+    fs.remove.mockRejectedValueOnce(new Error("perm"));
+    const slot = appDataSlot(RECENT_FILE);
+    const r = slot.remove();
+    const w = slot.write("B");
+    await expect(r).rejects.toThrow("perm");
+    await expect(w).resolves.toBeUndefined();
+    expect(fs.writeTextFile).toHaveBeenCalledWith("recent.json.tmp", "B", AD);
+  });
+});
+
 describe("existingPaths", () => {
   it("pergunta ao comando Rust existing_paths", async () => {
     invoke.mockResolvedValueOnce([true, false]);

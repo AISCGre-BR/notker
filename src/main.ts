@@ -42,7 +42,7 @@ import { createRegistry, gateCommands } from "./app/commands";
 import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
-import { createMenubar, type MenuItem } from "./ui/menubar";
+import { createMenubar, type MenuItem, type SubmenuEntry } from "./ui/menubar";
 import { createDirtyTracker } from "./app/dirty";
 import { createViews } from "./app/views";
 import { chantCapture } from "./app/chant-capture";
@@ -56,6 +56,13 @@ import { setScreen, type Screen } from "./app/screen";
 import { createWelcome } from "./app/welcome";
 import { mountNewProjectGuide, projectFromDraft, type GuideHandle } from "./app/new-project-guide";
 import { loadExampleProject } from "./project/example";
+import {
+  createRecentStore, pushRecent, setRecentThumb, removeRecent, buildRecentMeta, recentTitle, parentFolder,
+  type RecentEntry,
+} from "./app/recent";
+import { appDataSlot, existingPaths, RECENT_FILE, RECOVERY_FILE } from "./app/appdata-io";
+import { createRecoveryWriter, parseSnapshot, projectFromSnapshot, type RecoverySnapshot } from "./app/recovery";
+import { scoreThumbnail } from "./app/thumbnail";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
@@ -71,11 +78,11 @@ import { installSync, syncFromCursor } from "./preview/sync";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
-import { openProject, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
+import { openProject, openProjectAt, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveChant, effectiveFamily, updateChant, setActive,
   setChantFamily, insertNode, removeNode, restoreRemoved, moveSibling, newChant, gabcName, gabcSkeleton,
-  findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode,
+  findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode, flattenChants,
 } from "./project/tree";
 import { createTreePanel } from "./project/tree-panel";
 // PLAYBACK-OFF (2026-10-09): faixas da onda.
@@ -640,6 +647,8 @@ async function boot() {
       project = { ...project, path };
       updateTitle();
       toaster.show("Projeto salvo.");
+      void recovery.clear();              // salvo: o retrato desta sessão não serve mais
+      void rememberRecent(project, true); // entra/sobe nos recentes, com miniatura nova
       return true;
     })();
     saving = run;
@@ -723,9 +732,94 @@ async function boot() {
     view.focus();
     return true;
   }
+  // ── Recentes e recuperação de sessão (spec §4.6) ───────────────────────────
+  const recentStore = createRecentStore(appDataSlot(RECENT_FILE), existingPaths);
+  const recoverySlot = appDataSlot(RECOVERY_FILE);
+  let recents: RecentEntry[] = [];
+  /** Retrato de uma sessão anterior que não foi salva (aviso na tela inicial). */
+  let pendingRecovery: RecoverySnapshot | null = null;
+  const recovery = createRecoveryWriter({
+    slot: recoverySlot,
+    current: () => {
+      if (!projectOpen) return null;
+      captureEditorIntoProject();
+      return dirty.isDirty(project) ? project : null;
+    },
+    onWrite: () => { pendingRecovery = null; }, // a vaga agora guarda ESTA sessão
+  });
   function renderWelcome(): void {
-    welcome.render({ recents: [], recovery: null });
+    welcome.render({ recents, recovery: pendingRecovery ? { title: pendingRecovery.title } : null });
   }
+  async function setRecents(list: RecentEntry[]): Promise<void> {
+    recents = list;
+    try { await recentStore.save(list); } catch (e) { console.warn("[notker] recentes não gravados:", e); }
+    if (screen === "welcome") renderWelcome();
+  }
+  const hasThumb = (path: string | undefined): boolean =>
+    !!path && !!recents.find((e) => e.path === path)?.meta?.thumb;
+  /** Entra (ou sobe) nos recentes — só .notker com caminho. Miniatura do 1º canto: ao
+   *  salvar, ou ao abrir quando ainda não há. Falha na miniatura = cartão sem imagem. */
+  async function rememberRecent(p: NotkerProject, withThumb: boolean): Promise<void> {
+    const path = p.path;
+    if (!path) return;
+    await setRecents(pushRecent(recents, { path, meta: buildRecentMeta(p, new Date()) }));
+    if (!withThumb) return;
+    const first = flattenChants(p)[0];
+    if (!first) return;
+    // Nunca prende quem chamou: img.decode pode ficar pendente para sempre (timeout de 8 s).
+    const thumb = await Promise.race([
+      scoreThumbnail(first.content).catch(() => undefined),
+      new Promise<undefined>((r) => setTimeout(() => r(undefined), 8000)),
+    ]);
+    if (thumb) await setRecents(setRecentThumb(recents, path, thumb));
+  }
+  /** Sair do projeto atual (abrir/criar/fechar): pergunta se há alterações; seguindo, o
+   *  retrato de recuperação desta sessão deixa de valer. */
+  async function leaveProject(): Promise<boolean> {
+    if (!(await resolveUnsaved(unsaved))) return false;
+    await recovery.clear();
+    return true;
+  }
+  async function openRecent(path: string): Promise<void> {
+    try {
+      if (!(await leaveProject())) return;
+      if (enterProject(await openProjectAt(path))) void rememberRecent(project, !hasThumb(path));
+    } catch (err) {
+      const gone = await existingPaths([path]).then((r) => r[0] === false).catch(() => false);
+      if (gone) {
+        await setRecents(removeRecent(recents, path));
+        toaster.show("O arquivo não existe mais e saiu dos recentes.", { kind: "warn" });
+      } else {
+        toaster.show("Abrir falhou. " + String(err), { kind: "error" });
+        console.error(err);
+      }
+    }
+  }
+  async function recoverSession(): Promise<void> {
+    const snap = pendingRecovery;
+    if (!snap || !(await resolveUnsaved(unsaved))) return;
+    let p: NotkerProject;
+    try { p = projectFromSnapshot(snap); }
+    catch (err) { toaster.show("Não foi possível recuperar. " + String(err), { kind: "error" }); return; }
+    if (!enterProject(p)) return;
+    pendingRecovery = null;
+    dirty.markDirty();   // abre como projeto editado (spec §4.6)
+    recovery.adopt();    // salvar/descartar/fechar agora apagam este retrato
+    updateTitle();
+  }
+  async function discardRecovery(): Promise<void> {
+    pendingRecovery = null;
+    try { await recoverySlot.remove(); } catch (e) { console.warn("[notker] recuperação:", e); }
+    renderWelcome();
+  }
+  /** Itens de Arquivo ▸ Abrir recente (montados a cada abertura do menu). */
+  const recentMenu = (): (SubmenuEntry | "---")[] => (recents.length === 0
+    ? [{ label: "Nenhum recente", run: () => {}, enabled: false }]
+    : [
+      ...recents.map((e): SubmenuEntry => ({ label: recentTitle(e), caption: parentFolder(e.path), run: () => { void openRecent(e.path); } })),
+      "---",
+      { label: "Limpar recentes", run: () => { void commands.run("file.clearRecents"); } },
+    ]);
   function showWelcome(): void {
     closeGuide();
     renderWelcome();
@@ -762,9 +856,9 @@ async function boot() {
   /** Arquivo ▸ Fechar projeto: pergunta se há alterações e volta à tela inicial. */
   async function closeProjectCmd(): Promise<void> {
     if (!projectOpen) return;
-    if (!(await resolveUnsaved(unsaved))) return;
+    if (!(await leaveProject())) return;
     toEditView(); // nota pendente da vista Neumas gravada; a mesa volta (depois) na Edição
-    loadProject(newProject({ family: "stgall", name: "Novo" })); // solta o projeto (e o histórico) da memória
+    if (!loadProject(newProject({ family: "stgall", name: "Novo" }))) return; // solta o projeto da memória; falhou = continua com o atual
     projectOpen = false;
     showWelcome();
   }
@@ -775,19 +869,19 @@ async function boot() {
     // (adendo §11). Já no guia, só devolve o foco a ele.
     newProjectCmd: async () => {
       if (screen === "guide") { guide?.focus(); return; }
-      if (!(await resolveUnsaved(unsaved))) return;
+      if (!(await leaveProject())) return;
       openGuide();
     },
     openFile: async () => {
       try {
-        if (!(await resolveUnsaved(unsaved))) return;
+        if (!(await leaveProject())) return;
         const p = await openProject();
         if (!p) return;
-        enterProject(p);
+        if (enterProject(p)) void rememberRecent(project, !hasThumb(project.path));
       } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     openExample: async () => {
-      if (!(await resolveUnsaved(unsaved))) return;
+      if (!(await leaveProject())) return;
       enterProject(loadExampleProject());
     },
     exportGabc: async () => {
@@ -962,6 +1056,7 @@ async function boot() {
     { id: "file.save", label: "Salvar", run: saveCmd(false), keys: ["Ctrl+S"] },
     { id: "file.saveAs", label: "Salvar como…", run: saveCmd(true), keys: ["Ctrl+Shift+S"] },
     { id: "file.openExample", label: "Abrir projeto de exemplo", run: h.openExample },
+    { id: "file.clearRecents", label: "Limpar recentes", run: () => setRecents([]) },
     { id: "file.close", label: "Fechar projeto", run: closeProjectCmd, keys: ["Ctrl+W"] },
     { id: "project.newChant", label: "Novo canto…", run: () => newChantAt(null, Infinity) },
     { id: "project.newGroup", label: "Novo grupo", run: () => newGroupAt(null, Infinity) },
@@ -1037,9 +1132,9 @@ async function boot() {
     onNew: () => { void commands.run("file.newProject"); },
     onOpen: () => { void commands.run("file.open"); },
     onOpenExample: () => { void commands.run("file.openExample"); },
-    onOpenRecent: () => {},      // ligado na Task 10 (recentes)
-    onRecover: () => {},         // ligado na Task 10 (recuperação)
-    onDiscardRecovery: () => {}, // ligado na Task 10 (recuperação)
+    onOpenRecent: (path) => { void openRecent(path); },
+    onRecover: () => { void recoverSession(); },
+    onDiscardRecovery: () => { void discardRecovery(); },
   });
 
   // ── Menubar: menus montados a partir do registro único de comandos ──
@@ -1057,7 +1152,9 @@ async function boot() {
     {
       label: "Arquivo",
       items: [
-        menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"), menuItem("file.saveAs"),
+        menuItem("file.newProject"), menuItem("file.open"),
+        { label: "Abrir recente", submenu: recentMenu },
+        menuItem("file.save"), menuItem("file.saveAs"),
         "---",
         menuItem("project.newChant"), menuItem("project.newGroup"), menuItem("project.importGabc"),
         "---",
@@ -1147,7 +1244,11 @@ async function boot() {
   booted = true;
   captureEditorIntoProject();
   dirty.markSaved(project);
+  // Recentes (some o que não existe mais) e o retrato de uma sessão que caiu.
+  try { recents = await recentStore.load(); } catch { recents = []; }
+  try { pendingRecovery = parseSnapshot(await recoverySlot.read()); } catch { pendingRecovery = null; }
   showWelcome(); // sem projeto aberto: tela inicial
+  recovery.start();
 
   // Fechar a janela: com alterações, pergunta; grava os nomes pendentes; NUNCA prende a
   // janela (falha inesperada na guarda → fecha). O wrapper do Tauri só chama destroy()
@@ -1159,6 +1260,8 @@ async function boot() {
       if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } }
       try { proceed = await resolveUnsaved(unsaved); } catch (e) { console.error("[notker] fechar:", e); }
       if (!proceed) { ev.preventDefault(); return; }
+      recovery.stop();
+      await recovery.clear(); // fechou salvando ou descartando: nada a recuperar (nunca lança)
       neumasView?.flush(); // nota em debounce / nome digitado na vista Neumas entram no autosave
       try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
     }).catch(() => { /* sem permissão/evento: segue sem guarda */ });

@@ -3,7 +3,7 @@
  *  JÁ concede (`fs:allow-appdata-*-recursive`). Gravação atômica: escreve `<nome>.tmp` e
  *  renomeia por cima (um crash do processo não deixa JSON pela metade). Limite: contra falta
  *  de energia a durabilidade depende do sistema de arquivos (o plugin-fs não faz fsync).
- *  Gravações no MESMO arquivo são serializadas (mesmo `.tmp`), mesmo entre instâncias do slot.
+ *  Gravações e remoções no MESMO arquivo são serializadas (mesmo `.tmp`), mesmo entre instâncias do slot.
  *  A existência de caminhos ARBITRÁRIOS (recentes) é checada pelo comando Rust
  *  `existing_paths` — sem abrir o escopo do fs para a pasta pessoal inteira. */
 import { invoke } from "@tauri-apps/api/core";
@@ -25,18 +25,24 @@ export function appDataSlot(name: string): TextSlot {
     await writeTextFile(tmp, text, opts);
     await rename(tmp, name, { oldPathBaseDir: BaseDirectory.AppData, newPathBaseDir: BaseDirectory.AppData });
   }
+  /** Entra na cadeia por arquivo (write e remove nunca correm juntos); a cadeia segue após falha. */
+  function enqueue<T>(job: () => Promise<T>): Promise<T> {
+    const r = (chains.get(name) ?? Promise.resolve()).then(job);
+    chains.set(name, r.catch(() => {}));
+    return r;
+  }
   return {
     async read() {
       return (await exists(name, opts)) ? await readTextFile(name, opts) : null;
     },
     write(text) {
-      const r = (chains.get(name) ?? Promise.resolve()).then(() => doWrite(text));
-      chains.set(name, r.catch(() => {}));
-      return r;
+      return enqueue(() => doWrite(text));
     },
-    async remove() {
-      if (await exists(name, opts)) await remove(name, opts);
-      if (await exists(tmp, opts)) await remove(tmp, opts);
+    remove() {
+      return enqueue(async () => {
+        if (await exists(name, opts)) await remove(name, opts);
+        if (await exists(tmp, opts)) await remove(tmp, opts);
+      });
     },
   };
 }

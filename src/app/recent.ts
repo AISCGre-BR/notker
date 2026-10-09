@@ -105,16 +105,22 @@ export function formatRecentDate(iso: string, now: Date = new Date()): string {
 export interface RecentStore { load(): Promise<RecentEntry[]>; save(list: RecentEntry[]): Promise<void> }
 
 /** `load` tira (e regrava sem) os caminhos que não existem mais; falha na checagem
- *  mantém a lista (melhor um recente morto que perder todos); falha na leitura = vazio. */
+ *  mantém a lista (melhor um recente morto que perder todos); falha na leitura = vazio e `save` recusa até ler de novo. */
 export function createRecentStore(
   slot: TextSlot, existing: (paths: string[]) => Promise<boolean[]>,
 ): RecentStore {
-  const save = (list: RecentEntry[]): Promise<void> => slot.write(serializeRecent(list));
+  /** Arquivo que existe mas não pôde ser LIDO: não o sobrescrevemos com lista vazia
+   *  até uma leitura dar certo (mesma ideia da guarda dos nomes). */
+  let unreadable = false;
+  const save = (list: RecentEntry[]): Promise<void> => {
+    if (unreadable) return Promise.reject(new Error("recent.json não pôde ser lido; não será sobrescrito"));
+    return slot.write(serializeRecent(list));
+  };
   return {
     save,
     async load() {
       let list: RecentEntry[];
-      try { list = parseRecent(await slot.read()); } catch { return []; }
+      try { list = parseRecent(await slot.read()); unreadable = false; } catch { unreadable = true; return []; }
       if (list.length === 0) return list;
       let ok: boolean[];
       try { ok = await existing(list.map((e) => e.path)); } catch { return list; }

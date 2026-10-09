@@ -110,6 +110,17 @@ describe("createRecentStore", () => {
     bad.read.mockRejectedValueOnce(new Error("permissão"));
     expect(await createRecentStore(bad, async () => []).load()).toEqual([]);
   });
+  it("recent.json ilegível: um save posterior NÃO o sobrescreve (vale até a leitura dar certo)", async () => {
+    const bad = memSlot(serializeRecent([e("/a.notker")]));
+    bad.read.mockRejectedValueOnce(new Error("permissão"));
+    const store = createRecentStore(bad, async (p) => p.map(() => true));
+    expect(await store.load()).toEqual([]);
+    await expect(store.save([e("/novo.notker")])).rejects.toThrow();
+    expect(bad.write).not.toHaveBeenCalled();
+    expect((await store.load()).map((x) => x.path)).toEqual(["/a.notker"]); // leitura voltou
+    await store.save([e("/novo.notker")]);
+    expect(bad.write).toHaveBeenCalledTimes(1);
+  });
   it("save grava o JSON", async () => {
     const slot = memSlot();
     await createRecentStore(slot, async () => []).save([e("/a.notker")]);
