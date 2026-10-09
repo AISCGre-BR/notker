@@ -167,7 +167,7 @@ async function boot() {
   let overlay: Overlay = emptyOverlay();
   /** O arquivo de nomes existe mas não pôde ser lido (corrompido, versão mais nova, sem
    *  permissão): NADA é gravado nesta sessão, para não sobrescrevê-lo com um overlay vazio. */
-  let overlayBlocked: string | null = null;
+  let overlayBlocked: string | null = "os nomes ainda não foram carregados"; // guarda começa FECHADA
   async function writeOverlay(): Promise<void> {
     if (overlayBlocked) throw new Error("os nomes salvos não puderam ser lidos (" + overlayBlocked + "); nada foi gravado");
     await saveUserOverlay(overlay);
@@ -205,7 +205,7 @@ async function boot() {
     const db = await loadNeumeDb();
     // Overlay é OPCIONAL: uma falha (ex.: permissão de fs ausente) não pode
     // impedir a injeção das extensões F2 (paleta/hover/completion/régua).
-    try { overlay = await loadUserOverlay(); }
+    try { overlay = await loadUserOverlay(); overlayBlocked = null; }
     catch (e) {
       console.warn("[notker] overlay de nomes indisponível (usando vazio):", e);
       overlayBlocked = e instanceof Error ? e.message : String(e);
