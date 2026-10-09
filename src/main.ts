@@ -767,10 +767,14 @@ async function boot() {
     const first = flattenChants(p)[0];
     if (!first) return;
     // Nunca prende quem chamou: img.decode pode ficar pendente para sempre (timeout de 8 s).
-    const thumb = await Promise.race([
-      scoreThumbnail(first.content).catch(() => undefined),
-      new Promise<undefined>((r) => setTimeout(() => r(undefined), 8000)),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let thumb: string | undefined;
+    try {
+      thumb = await Promise.race([
+        scoreThumbnail(first.content).catch(() => undefined),
+        new Promise<undefined>((r) => { timer = setTimeout(() => r(undefined), 8000); }),
+      ]);
+    } finally { clearTimeout(timer); }
     if (thumb) await setRecents(setRecentThumb(recents, path, thumb));
   }
   /** Sair do projeto atual (abrir/criar/fechar): pergunta se há alterações; seguindo, o
@@ -781,15 +785,19 @@ async function boot() {
     return true;
   }
   async function openRecent(path: string): Promise<void> {
+    const isGone = (): Promise<boolean> => existingPaths([path]).then((r) => r[0] === false).catch(() => false);
+    const dropGone = async (): Promise<void> => {
+      await setRecents(removeRecent(recents, path));
+      toaster.show("O arquivo não existe mais e saiu dos recentes.", { kind: "warn" });
+    };
     try {
+      // Sumiu? Avisa e tira só este recente, sem perguntar "Salvar alterações?".
+      if (await isGone()) { await dropGone(); return; }
       if (!(await leaveProject())) return;
       if (enterProject(await openProjectAt(path))) void rememberRecent(project, !hasThumb(path));
     } catch (err) {
-      const gone = await existingPaths([path]).then((r) => r[0] === false).catch(() => false);
-      if (gone) {
-        await setRecents(removeRecent(recents, path));
-        toaster.show("O arquivo não existe mais e saiu dos recentes.", { kind: "warn" });
-      } else {
+      if (await isGone()) await dropGone();
+      else {
         toaster.show("Abrir falhou. " + String(err), { kind: "error" });
         console.error(err);
       }
@@ -1256,14 +1264,15 @@ async function boot() {
   try {
     void getCurrentWindow().onCloseRequested(async (ev) => {
       let proceed = true;
+      let decided = false; // false = a guarda falhou: o retrato de recuperação fica (única rede)
       // Gravação em andamento: espera terminar (ok ou erro) antes de decidir; nunca prende a janela.
       if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } }
-      try { proceed = await resolveUnsaved(unsaved); } catch (e) { console.error("[notker] fechar:", e); }
+      try { proceed = await resolveUnsaved(unsaved); decided = true; } catch (e) { console.error("[notker] fechar:", e); }
       if (!proceed) { ev.preventDefault(); return; }
-      recovery.stop();
-      await recovery.clear(); // fechou salvando ou descartando: nada a recuperar (nunca lança)
       neumasView?.flush(); // nota em debounce / nome digitado na vista Neumas entram no autosave
       try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
+      recovery.stop();
+      if (decided) await recovery.clear(); // salvou ou descartou: nada a recuperar (nunca lança)
     }).catch(() => { /* sem permissão/evento: segue sem guarda */ });
   } catch { /* fora do Tauri (testes/probe) */ }
 }
