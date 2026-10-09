@@ -20,7 +20,7 @@ import { createToolbar } from "../src/ui/toolbar";
 import { installTooltips } from "../src/ui/pd/tooltip";
 import { createToaster } from "../src/ui/pd/toast";
 import { createDocList } from "../src/project/doc-list";
-import { newProject, addDoc, setDocFamily, setActive } from "../src/project/model";
+import { newProject, newChant, insertNode, setActive, flattenChants } from "../src/project/tree";
 import { NabcLibEngine } from "../src/preview/nabc-lib";
 import { loadNeumeDb } from "../src/neume/db-load";
 import { NeumeSearch } from "../src/neume/search";
@@ -94,10 +94,9 @@ installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
 const toaster = createToaster(document.querySelector<HTMLElement>("#toast-host")!);
 
 let project = newProject({ family: "stgall", name: "Kyrie" });
-project = addDoc(project, { title: "Factus est", content: "name: Factus est;\n%%\n(c4) Fac(f)tus(g) est(h)(::)" });
-project = addDoc(project, { title: "Dies sanctificatus (Laon)", content: "name: Dies;\n%%\n(c4) Di(f)es(g)(::)", family: "laon" });
-project = setDocFamily(project, project.docs[2].id, "laon");
-project = setActive(project, project.docs[0].id);
+project = insertNode(project, null, Infinity, newChant({ title: "Factus est", content: "name: Factus est;\n%%\n(c4) Fac(f)tus(g) est(h)(::)" }));
+project = insertNode(project, null, Infinity, newChant({ title: "Dies sanctificatus (Laon)", content: "name: Dies;\n%%\n(c4) Di(f)es(g)(::)", family: "laon" }));
+project = setActive(project, flattenChants(project)[0].id);
 const docList = createDocList(document.querySelector<HTMLElement>("#doc-list")!, {
   onSelect: noop, onAdd: noop, onImport: noop, onRemove: noop, onSetFamily: noop, onMove: noop,
 });

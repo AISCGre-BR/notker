@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createDocList, type DocListOpts } from "../src/project/doc-list";
-import type { NotkerProject } from "../src/project/model";
+import type { NotkerProject } from "../src/project/tree";
 
 const proj = (over: Partial<NotkerProject> = {}): NotkerProject => ({
-  schema: 1, kind: "notker-project", title: "P", family: "stgall", activeId: "a",
-  docs: [
-    { id: "a", title: "Puer natus", content: "" },
-    { id: "b", title: "Viderunt", content: "", family: "laon" },
-    { id: "c", title: "Dies", content: "" },
+  schema: 2, kind: "notker-project", title: "P", family: "stgall", activeId: "a",
+  root: [
+    { kind: "chant", id: "a", title: "Puer natus", content: "" },
+    { kind: "chant", id: "b", title: "Viderunt", content: "", family: "laon" },
+    { kind: "chant", id: "c", title: "Dies", content: "" },
   ], ...over,
 });
 const opts = (): DocListOpts => ({ onSelect: vi.fn(), onAdd: vi.fn(), onImport: vi.fn(), onRemove: vi.fn(), onSetFamily: vi.fn(), onMove: vi.fn() });
@@ -51,7 +51,7 @@ describe("barra lateral de cantos", () => {
     expect(o.onRemove).toHaveBeenCalledWith("c");
   });
   it("com um só canto não há Excluir no menu", () => {
-    createDocList(host, opts()).render(proj({ docs: [{ id: "a", title: "Só", content: "" }] }));
+    createDocList(host, opts()).render(proj({ root: [{ kind: "chant", id: "a", title: "Só", content: "" }] }));
     host.querySelector<HTMLElement>(".notker-row")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
     expect([...host.querySelectorAll(".sc-menu__item")].some((b) => b.textContent!.includes("Excluir"))).toBe(false);
   });
@@ -79,9 +79,9 @@ describe("barra lateral de cantos", () => {
   });
   it("após Mover (re-render) o foco fica na linha do mesmo canto", () => {
     const dl = createDocList(host, { ...opts(), onMove: (id, d) => {
-      const p = proj(); const docs = [...p.docs]; const i = docs.findIndex((x) => x.id === id);
+      const p = proj(); const docs = [...p.root]; const i = docs.findIndex((x) => x.id === id);
       [docs[i], docs[i + d]] = [docs[i + d], docs[i]];
-      dl.render({ ...p, docs });
+      dl.render({ ...p, root: docs });
     } });
     dl.render(proj());
     const row = host.querySelectorAll<HTMLElement>(".notker-row")[2];

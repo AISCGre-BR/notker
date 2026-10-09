@@ -1,9 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import {
-  type NotkerProject, getActiveDoc, ephemeralFromGabc, fromBundle, toBundle,
-} from "../project/model";
+import { mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { type NotkerProject, getActiveChant, ephemeralFromGabc } from "../project/tree";
+import { fromBundle, toBundle, gabcExportPlan } from "../project/format";
 
 const NOTKER_FILTER = { name: "Projeto Notker", extensions: ["notker"] };
 const GABC_FILTER = { name: "Gregorio", extensions: ["gabc"] };
@@ -50,20 +49,18 @@ export async function saveProject(p: NotkerProject): Promise<string | null> {
 export async function exportCurrentGabc(p: NotkerProject): Promise<string | null> {
   const path = await save({ filters: [GABC_FILTER] });
   if (!path) return null;
-  await writeTextFile(path, getActiveDoc(p).content);
+  await writeTextFile(path, getActiveChant(p).content);
   return path;
 }
 
-/** Exporta TODOS os cantos como `.gabc` numa pasta escolhida (um arquivo por doc). */
+/** Exporta TODOS os cantos numa pasta escolhida espelhando a árvore: cada grupo vira
+ *  subpasta e cada item leva prefixo de ordem (spec §4.2). `recursive: true` põe as
+ *  subpastas no escopo do plugin-fs. */
 export async function exportAllGabc(p: NotkerProject): Promise<number> {
-  const dir = await open({ directory: true });
+  const dir = await open({ directory: true, recursive: true });
   if (typeof dir !== "string") return 0;
-  let n = 0;
-  for (let i = 0; i < p.docs.length; i++) {
-    const d = p.docs[i];
-    const safe = (d.title || "canto").replace(/[^A-Za-z0-9_-]+/g, "-");
-    await writeTextFile(`${dir}/${String(i + 1).padStart(3, "0")}-${safe}.gabc`, d.content);
-    n++;
-  }
-  return n;
+  const plan = gabcExportPlan(p);
+  for (const d of plan.dirs) await mkdir(`${dir}/${d}`, { recursive: true });
+  for (const f of plan.files) await writeTextFile(`${dir}/${f.path}`, f.content);
+  return plan.files.length;
 }

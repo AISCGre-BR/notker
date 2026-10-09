@@ -1,4 +1,4 @@
-import type { NotkerProject } from "./model";
+import { type NotkerProject, flattenChants } from "./tree";
 import type { Family } from "../neume/types";
 import { icon } from "../ui/pd/icons";
 import { openContextMenu, closeContextMenu, type CtxEntry } from "../ui/pd/context-menu";
@@ -14,17 +14,18 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): { render(p:
 
   function rowMenu(row: HTMLElement, id: string, x: number, y: number): void {
     const p = project!;
-    const d = p.docs.find((x) => x.id === id)!;
+    const docs = flattenChants(p);
+    const d = docs.find((x) => x.id === id)!;
     const fam = d.family ?? p.family;
-    const idx = p.docs.findIndex((x) => x.id === id);
+    const idx = docs.findIndex((x) => x.id === id);
     const items: CtxEntry[] = [
       { label: "Família: St. Gall", checked: fam === "stgall", run: () => opts.onSetFamily(id, "stgall") },
       { label: "Família: Laon", checked: fam === "laon", run: () => opts.onSetFamily(id, "laon") },
       "---",
       ...(idx > 0 ? [{ label: "Mover para cima", run: () => opts.onMove(id, -1) }] : []),
-      ...(idx < p.docs.length - 1 ? [{ label: "Mover para baixo", run: () => opts.onMove(id, 1) }] : []),
+      ...(idx < docs.length - 1 ? [{ label: "Mover para baixo", run: () => opts.onMove(id, 1) }] : []),
     ];
-    if (p.docs.length > 1) items.push("---", { label: "Excluir canto", danger: true, run: () => opts.onRemove(id) });
+    if (docs.length > 1) items.push("---", { label: "Excluir canto", danger: true, run: () => opts.onRemove(id) });
     openContextMenu(host, x, y, items, row);
   }
 
@@ -39,7 +40,7 @@ export function createDocList(host: HTMLElement, opts: DocListOpts): { render(p:
     list.setAttribute("role", "listbox");
     list.setAttribute("aria-label", "Cantos do projeto");
     const rows: HTMLElement[] = [];
-    p.docs.forEach((d, i) => {
+    flattenChants(p).forEach((d, i) => {
       const row = document.createElement("div");
       row.className = "notker-row";
       row.setAttribute("role", "option");

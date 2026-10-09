@@ -50,11 +50,11 @@ describe("achados da revisão final (beta 1a)", () => {
     expect(gabcIndex).not.toContain("legendKeymap");
   });
   it("toggleFamily re-renderiza a lista de cantos", () => {
-    expect(main).toMatch(/function toggleFamily\(\): void \{[^}]*docList\.render\(project\)/);
+    expect(main).toMatch(/function toggleFamily\(\): void \{[^}]*applyTree\(/);
   });
   it("Excluir canto oferece Desfazer; clicar no canto ativo é no-op", () => {
     expect(main).toMatch(/onRemove:[\s\S]*?"Desfazer"/);
-    expect(main).toMatch(/function switchToDoc\(id: string\): void \{\s*if \(id === project\.activeId\) return;/);
+    expect(main).toMatch(/function switchToChant\(id: string\): void \{\s*if \(id === project\.activeId\) return;/);
   });
   it("nome duplicado avisa em vez de sucesso", () => {
     expect(main).toContain("Esse nome já existe.");

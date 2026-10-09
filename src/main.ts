@@ -52,9 +52,9 @@ import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
 import { openProject, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
-  type NotkerProject, newProject, getActiveDoc, effectiveFamily,
-  withActiveContent, setActive, setDocFamily, addDoc, removeDoc, insertDocAt, moveDoc, gabcName,
-} from "./project/model";
+  type NotkerProject, newProject, getActiveChant, effectiveFamily, updateChant, setActive,
+  setChantFamily, insertNode, removeNode, restoreRemoved, moveSibling, newChant, gabcName, gabcSkeleton,
+} from "./project/tree";
 import { createDocList } from "./project/doc-list";
 import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
 import type { WaveOverlay } from "./tuotilo/wave";
@@ -106,7 +106,7 @@ async function boot() {
   extraExtensions.push(neumeCompartment.of([]));
 
   let project: NotkerProject = newProject({ family: "stgall", name: "Novo" });
-  const view = createEditor(app, getActiveDoc(project).content, extraExtensions);
+  const view = createEditor(app, getActiveChant(project).content, extraExtensions);
 
   const client = new LspClient(new SidecarTransport());
   client.onNotification("textDocument/publishDiagnostics", (p: { uri: string; diagnostics: LspDiagnosticParam[] }) => {
@@ -163,8 +163,7 @@ async function boot() {
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
   function toggleFamily(): void {
     const f: Family = currentFamily() === "stgall" ? "laon" : "stgall";
-    project = setDocFamily(project, project.activeId, f);
-    docList.render(project);
+    applyTree((p) => setChantFamily(p, p.activeId, f));
     reindex();
     toaster.show("Família do canto: " + familyLabel(f) + ".");
   }
@@ -365,78 +364,64 @@ async function boot() {
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
   const dialogHost = document.querySelector<HTMLElement>("#dialog-host")!;
   const docList = createDocList(docListHost, {
-    onSelect: (id) => switchToDoc(id),
+    onSelect: (id) => switchToChant(id),
     onAdd: () => void addNewDoc(),
     onImport: () => void importGabcAsDoc(),
     onRemove: (id) => {
       captureEditorIntoProject();
-      const removed = project.docs.find((d) => d.id === id);
-      const index = project.docs.findIndex((d) => d.id === id);
-      const wasActive = project.activeId === id;
-      const next = removeDoc(project, id);
-      if (next === project || !removed) return; // último canto: não remove
-      project = next;
-      syncFromProject();
+      const r = removeNode(project, id);
+      if (!r) return;
+      applyTree(() => r.project);
       toaster.show("Canto excluído.", {
-        action: { label: "Desfazer", run: () => {
-          captureEditorIntoProject();
-          project = insertDocAt(project, removed, index);
-          if (wasActive) project = setActive(project, removed.id);
-          syncFromProject();
-          docList.render(project);
-        } },
+        action: { label: "Desfazer", run: () => applyTree((p) => restoreRemoved(p, r)) },
       });
     },
     onSetFamily: (id, f) => {
-      captureEditorIntoProject();
-      project = setDocFamily(project, id, f);
-      docList.render(project);
+      applyTree((p) => setChantFamily(p, id, f));
       if (id === project.activeId) reindex();
       toaster.show("Família do canto: " + familyLabel(f) + ".");
     },
-    onMove: (id, delta) => {
-      captureEditorIntoProject();
-      project = moveDoc(project, id, delta);
-      docList.render(project);
-    },
+    onMove: (id, delta) => applyTree((p) => moveSibling(p, id, delta)),
   });
 
   let menubar: ReturnType<typeof createMenubar> | undefined;
-  /** Reflete o doc ativo do projeto no editor + indicadores. */
+  function renderTree(): void { docList.render(project); }
+  /** Reflete o canto ativo do projeto no editor + indicadores. */
   function syncFromProject(): void {
     menubar?.setTitle(project.title);
     if (player.playing) stopPlayback();
-    replaceDoc(getActiveDoc(project).content);
-    docList.render(project);
+    const chant = getActiveChant(project);
+    replaceDoc(chant.content);
+    renderTree();
     reindex();
     // Onda: restaura a interpretação persistida, ou cria vazia para o novo canto
-    wave = getActiveDoc(project).interpretation ?? emptyWave(gabcBodyHash(getActiveDoc(project).content));
+    wave = chant.interpretation ?? emptyWave(gabcBodyHash(chant.content));
     if (waveLanes.enabled()) syncWaveWithDoc();
   }
   function captureEditorIntoProject(): void {
-    project = withActiveContent(project, view.state.doc.toString());
-    const docs = project.docs.map((d) =>
-      d.id === project.activeId
-        ? { ...d, interpretation: Object.keys(wave.factors).length > 0 ? wave : undefined }
-        : d,
-    );
-    project = { ...project, docs };
+    project = updateChant(project, project.activeId, {
+      content: view.state.doc.toString(),
+      interpretation: Object.keys(wave.factors).length > 0 ? wave : undefined,
+    });
   }
-  function switchToDoc(id: string): void {
-    if (id === project.activeId) return;
+  /** Aplica uma mudança no projeto. O editor é capturado ANTES (o canto exibido leva o
+   *  texto atual); se o ativo mudou, o editor passa a mostrar o novo ativo. */
+  function applyTree(fn: (p: NotkerProject) => NotkerProject): void {
     captureEditorIntoProject();
-    project = setActive(project, id);
-    syncFromProject();
+    const before = project.activeId;
+    project = fn(project);
+    if (project.activeId !== before) syncFromProject(); else renderTree();
+  }
+  function switchToChant(id: string): void {
+    if (id === project.activeId) return;
+    applyTree((p) => setActive(p, id));
   }
   // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
   async function addNewDoc(): Promise<void> {
     const r = await newDocumentDialog(dialogHost, { title: "Novo canto", family: effectiveFamily(project, project.activeId) });
     if (!r) return;
-    captureEditorIntoProject();
-    const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
-    project = addDoc(project, { title: r.name ?? "Novo", content, family: r.family });
-    project = setActive(project, project.docs[project.docs.length - 1].id);
-    syncFromProject();
+    const chant = newChant({ title: r.name ?? "Novo", content: gabcSkeleton(r.name, r.office), family: r.family });
+    applyTree((p) => setActive(insertNode(p, null, Infinity, chant), chant.id));
     view.focus();
   }
   // Importa um .gabc solto como novo canto do projeto e o ativa.
@@ -444,16 +429,14 @@ async function boot() {
     try {
       const f = await pickGabcFile();
       if (!f) return;
-      captureEditorIntoProject();
-      project = addDoc(project, { title: gabcName(f.content, f.name), content: f.content });
-      project = setActive(project, project.docs[project.docs.length - 1].id);
-      syncFromProject();
+      const chant = newChant({ title: gabcName(f.content, f.name), content: f.content });
+      applyTree((p) => setActive(insertNode(p, null, Infinity, chant), chant.id));
       view.focus();
     } catch (e) {
       toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" });
     }
   }
-  docList.render(project);
+  renderTree();
 
   const commands = createRegistry();
   const h = {
