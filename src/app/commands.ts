@@ -22,6 +22,8 @@ export interface CommandRegistry extends Commands {
   shortcut(id: string): string | undefined;
   tooltip(id: string): string;
   handleKey(e: KeyboardEvent): boolean;
+  /** Notifica após cada run() bem-sucedido (clique, menu ou teclado). Devolve o cancelamento. */
+  onDidRun(listener: (id: string) => void): () => void;
 }
 
 export function keyOf(e: KeyboardEvent): string {
@@ -51,6 +53,7 @@ function isTextField(t: EventTarget | null): boolean {
 export function createRegistry(): CommandRegistry {
   const defs = new Map<string, CommandDef>();
   const byKey = new Map<string, string>();
+  const listeners = new Set<(id: string) => void>();
 
   const get = (id: string) => defs.get(id);
   const label = (id: string): string => {
@@ -68,6 +71,7 @@ export function createRegistry(): CommandRegistry {
     if (!d) throw new Error("comando desconhecido: " + id);
     if (d.enabled && !d.enabled()) return;
     await d.run();
+    listeners.forEach((l) => l(id));
   }
 
   return {
@@ -80,6 +84,7 @@ export function createRegistry(): CommandRegistry {
       }
     },
     get, label, shortcut, run,
+    onDidRun(l) { listeners.add(l); return () => { listeners.delete(l); }; },
     ids: () => [...defs.keys()],
     tooltip(id) {
       const s = shortcut(id);

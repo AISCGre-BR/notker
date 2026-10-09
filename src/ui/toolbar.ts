@@ -13,7 +13,9 @@ export function createToolbar(host: HTMLElement, commands: CommandRegistry, item
   bar.setAttribute("role", "toolbar");
   const updaters: (() => void)[] = [];
   const handle: ToolbarHandle = { refresh: () => updaters.forEach((u) => u()) };
-  const click = (id: string) => () => { void commands.run(id).then(() => handle.refresh()); };
+  // O estado é reavaliado a cada comando executado, venha do clique, do menu ou do teclado.
+  commands.onDidRun(() => handle.refresh());
+  const click = (id: string) => () => { void commands.run(id).catch((err) => console.error(`[notker] comando ${id}:`, err)); };
 
   for (const it of items) {
     if (it === "spacer") { bar.appendChild(Object.assign(document.createElement("span"), { className: "sc-toolbar__spacer" })); continue; }
@@ -24,11 +26,12 @@ export function createToolbar(host: HTMLElement, commands: CommandRegistry, item
       for (const id of it.group) {
         const def = commands.get(id);
         if (!def) continue;
+        if (!def.icon) { console.warn(`[notker] toolbar: comando ${id} sem ícone; ignorado`); continue; }
         const b = document.createElement("button");
         b.type = "button";
         b.className = "is-icon";
         b.dataset.cmd = id;
-        if (def.icon) b.appendChild(icon(def.icon));
+        b.appendChild(icon(def.icon));
         b.addEventListener("click", click(id));
         seg.appendChild(b);
         updaters.push(() => {

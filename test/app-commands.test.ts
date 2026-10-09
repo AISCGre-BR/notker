@@ -108,4 +108,18 @@ describe("registro", () => {
     expect(r.ids()).toEqual(["x"]);
     expect(r.label("x")).toBe("2");
   });
+  it("onDidRun dispara após run() e após handleKey; unsubscribe funciona", async () => {
+    const r = createRegistry();
+    r.register([{ id: "a", label: "A", run: () => {}, keys: ["Ctrl+K"] }, { id: "off", label: "O", run: () => {}, enabled: () => false }]);
+    const seen: string[] = [];
+    const off = r.onDidRun((id) => seen.push(id));
+    await r.run("a");
+    r.handleKey(key("k", { ctrlKey: true }));
+    await new Promise((res) => setTimeout(res, 0));
+    await r.run("off"); // desabilitado: não executa, não notifica
+    expect(seen).toEqual(["a", "a"]);
+    off();
+    await r.run("a");
+    expect(seen).toHaveLength(2);
+  });
 });

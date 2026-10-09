@@ -61,4 +61,28 @@ describe("toolbar Parchment", () => {
     h.refresh();
     expect(p.textContent).toBe("Parar");
   });
+  it("run() fora do clique (menu/teclado) também atualiza a toolbar", async () => {
+    const r = createRegistry();
+    let on = false, playing = false;
+    r.register([
+      { id: "v.t", label: "Alternar", icon: "columns-2", run: () => { on = !on; }, checked: () => on },
+      { id: "p.t", label: () => (playing ? "Parar" : "Tocar"), run: () => { playing = !playing; } },
+    ]);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    createToolbar(host, r, [{ group: ["v.t"] }, { primary: "p.t" }]);
+    await r.run("v.t");
+    await r.run("p.t");
+    expect(host.querySelector('[data-cmd="v.t"]')!.getAttribute("aria-pressed")).toBe("true");
+    expect(host.querySelector('[data-cmd="p.t"]')!.textContent).toBe("Parar");
+  });
+  it("comando de grupo sem ícone não gera botão vazio", () => {
+    const r = createRegistry();
+    r.register([{ id: "x", label: "X", run: () => {} }]);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    createToolbar(host, r, [{ group: ["x"] }]);
+    expect(host.querySelector("button")).toBeNull();
+  });
 });

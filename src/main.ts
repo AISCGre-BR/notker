@@ -593,6 +593,7 @@ async function boot() {
         },
         () => { stopPlayback(); },
       );
+      toolbarHandle?.refresh(); // agora player.playing já é true
     },
     toggleWave: () => {
       const on = !waveLanes.enabled();

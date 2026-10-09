@@ -30,8 +30,9 @@ export function installTooltips(host: HTMLElement, root: Document | HTMLElement 
     host.style.display = "block";
     const r = el.getBoundingClientRect();
     const h = host.offsetHeight || 24;
+    const w = host.offsetWidth || 120;
     const below = r.bottom + 6 + h <= window.innerHeight;
-    host.style.left = `${Math.max(4, Math.min(window.innerWidth - (host.offsetWidth || 120) - 4, r.left + r.width / 2 - (host.offsetWidth || 0) / 2))}px`;
+    host.style.left = `${Math.max(4, Math.min(window.innerWidth - w - 4, r.left + r.width / 2 - w / 2))}px`;
     host.style.top = `${below ? r.bottom + 6 : r.top - h - 6}px`;
   };
   const target = (e: Event) => (e.target instanceof Element ? e.target.closest<HTMLElement>("[data-tip]") : null);

@@ -42,4 +42,23 @@ describe("tooltip", () => {
     vi.advanceTimersByTime(500);
     expect(host.textContent).toBe("Parar");
   });
+  it("Escape esconde", () => {
+    btn.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    vi.advanceTimersByTime(500);
+    expect(host.style.display).toBe("block");
+    btn.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(host.style.display).toBe("none");
+  });
+  it("focusin com :focus-visible mostra na hora", () => {
+    // jsdom pode não casar :focus-visible; força o casamento só neste teste.
+    const spy = vi.spyOn(btn, "matches").mockImplementation((s: string) => s === ":focus-visible");
+    btn.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(host.style.display).toBe("block");
+    spy.mockRestore();
+  });
+  it("focusin sem :focus-visible (foco por mouse) não mostra", () => {
+    vi.spyOn(btn, "matches").mockReturnValue(false);
+    btn.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(host.style.display).toBe("none");
+  });
 });
