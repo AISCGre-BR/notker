@@ -19,8 +19,8 @@ import { createMenubar, type MenuItem } from "../src/ui/menubar";
 import { createToolbar } from "../src/ui/toolbar";
 import { installTooltips } from "../src/ui/pd/tooltip";
 import { createToaster } from "../src/ui/pd/toast";
-import { createDocList } from "../src/project/doc-list";
-import { newProject, newChant, insertNode, setActive, flattenChants } from "../src/project/tree";
+import { createTreePanel } from "../src/project/tree-panel";
+import { newProject, newChant, insertNode, setActive, flattenChants, newGroup } from "../src/project/tree";
 import { NabcLibEngine } from "../src/preview/nabc-lib";
 import { loadNeumeDb } from "../src/neume/db-load";
 import { NeumeSearch } from "../src/neume/search";
@@ -94,13 +94,19 @@ installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
 const toaster = createToaster(document.querySelector<HTMLElement>("#toast-host")!);
 
 let project = newProject({ family: "stgall", name: "Kyrie" });
-project = insertNode(project, null, Infinity, newChant({ title: "Factus est", content: "name: Factus est;\n%%\n(c4) Fac(f)tus(g) est(h)(::)" }));
-project = insertNode(project, null, Infinity, newChant({ title: "Dies sanctificatus (Laon)", content: "name: Dies;\n%%\n(c4) Di(f)es(g)(::)", family: "laon" }));
+const natal = newGroup("Natal");
+project = insertNode(project, null, Infinity, natal);
+project = insertNode(project, natal.id, Infinity, newChant({ title: "Puer natus", content: "name: Puer natus;\n%%\n(c4) Pu(g)er(h)(::)" }));
+project = insertNode(project, natal.id, Infinity, newChant({ title: "Dies sanctificatus (Laon)", content: "name: Dies;\n%%\n(c4) Di(f)es(g)(::)", family: "laon" }));
+const oitava = newGroup("Oitava");
+project = insertNode(project, natal.id, Infinity, oitava);
+project = insertNode(project, oitava.id, 0, newChant({ title: "Factus est", content: "name: Factus est;\n%%\n(c4) Fac(f)tus(g) est(h)(::)" }));
 project = setActive(project, flattenChants(project)[0].id);
-const docList = createDocList(document.querySelector<HTMLElement>("#doc-list")!, {
-  onSelect: noop, onAdd: noop, onImport: noop, onRemove: noop, onSetFamily: noop, onMove: noop,
+const treePanel = createTreePanel(document.querySelector<HTMLElement>("#doc-list")!, {
+  onSelect: noop, onToggle: noop, onRename: noop, onMoveBy: noop, onMove: noop, onDuplicate: noop,
+  onRemove: noop, onSetFamily: noop, onNewChant: noop, onNewGroup: noop, onImport: noop,
 });
-docList.render(project);
+treePanel.render(project);
 
 const hex = (n: number) => n.toString(16).padStart(2, "0");
 async function main(): Promise<void> {

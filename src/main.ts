@@ -55,8 +55,9 @@ import { openProject, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFil
 import {
   type NotkerProject, newProject, getActiveChant, effectiveFamily, updateChant, setActive,
   setChantFamily, insertNode, removeNode, restoreRemoved, moveSibling, newChant, gabcName, gabcSkeleton,
+  findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode,
 } from "./project/tree";
-import { createDocList } from "./project/doc-list";
+import { createTreePanel } from "./project/tree-panel";
 import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
 import type { WaveOverlay } from "./tuotilo/wave";
 import { emptyWave, setWaveFactor, applyWave, gabcBodyHash, waveKey } from "./tuotilo/wave";
@@ -376,30 +377,36 @@ async function boot() {
 
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
   const dialogHost = document.querySelector<HTMLElement>("#dialog-host")!;
-  const docList = createDocList(docListHost, {
+  const treePanel = createTreePanel(docListHost, {
     onSelect: (id) => switchToChant(id),
-    onAdd: () => void addNewDoc(),
-    onImport: () => void importGabcAsDoc(),
-    onRemove: (id) => {
-      captureEditorIntoProject();
-      const r = removeNode(project, id);
-      if (!r) return;
-      const epoch = projectEpoch;
-      applyTree(() => r.project);
-      toaster.show("Canto excluído.", {
-        action: { label: "Desfazer", run: () => { if (epoch === projectEpoch) applyTree((p) => restoreRemoved(p, r)); } },
+    onToggle: (id, collapsed) => applyTree((p) => setCollapsed(p, id, collapsed)),
+    onRename: (id, title) => applyTree((p) => renameNode(p, id, title)),
+    onMoveBy: (id, delta) => { applyTree((p) => moveSibling(p, id, delta)); treePanel.focusNode(id); },
+    onMove: (id, parentId, index) => {
+      applyTree((p) => {
+        const moved = moveNode(p, id, parentId, index);
+        return parentId && moved !== p ? setCollapsed(moved, parentId, false) : moved;
       });
+      treePanel.focusNode(id);
     },
+    onDuplicate: (id) => {
+      let copyId = "";
+      applyTree((p) => { const r = duplicateNode(p, id); if (!r) return p; copyId = r.id; return r.project; });
+      if (copyId) treePanel.focusNode(copyId);
+    },
+    onRemove: (id) => void removeWithUndo(id),
     onSetFamily: (id, f) => {
       applyTree((p) => setChantFamily(p, id, f));
       if (id === project.activeId) reindex();
       toaster.show("Família do canto: " + familyLabel(f) + ".");
     },
-    onMove: (id, delta) => applyTree((p) => moveSibling(p, id, delta)),
+    onNewChant: (parentId, index) => void newChantAt(parentId, index),
+    onNewGroup: (parentId, index) => newGroupAt(parentId, index),
+    onImport: () => void importGabcAsChant(),
   });
 
   let menubar: ReturnType<typeof createMenubar> | undefined;
-  function renderTree(): void { docList.render(project); }
+  function renderTree(): void { treePanel.render(project); }
   /** Mostra no editor o canto ativo, com o EditorState DELE. Guarda antes o estado do
    *  canto que sai (inclusive se ele acabou de ser excluído: o Desfazer o devolve com
    *  histórico). O LSP recebe didChange completo; partitura e onda refazem. */
@@ -411,9 +418,11 @@ async function boot() {
     const legend = view.state.field(legendVisible, false) ?? false;
     diagnostics = []; // eram do texto anterior; o LSP republica após o didChange
     view.setState(chantStates.get(chant.id, chant.content));
+    forceLinting(view); // some com as marcas do texto anterior já
     shownId = chant.id;
     const snap = chantStates.scrollOf(chant.id);
     if (snap) view.dispatch({ effects: snap });
+    else view.scrollDOM.scrollTop = 0; // primeira visita: não herda a rolagem do canto anterior
     // A régua da pauta é preferência de vista: atravessa a troca de canto.
     if ((view.state.field(legendVisible, false) ?? false) !== legend) view.dispatch({ effects: toggleLegend.of(legend) });
     wave = chant.interpretation ?? emptyWave(gabcBodyHash(chant.content));
@@ -448,16 +457,28 @@ async function boot() {
     project = p;
     syncFromProject();
   }
-  // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
-  async function addNewDoc(): Promise<void> {
+  /** Pai ainda válido depois de um diálogo assíncrono; senão a raiz. */
+  const liveParent = (parentId: string | null): string | null =>
+    (parentId && findNode(project, parentId)?.kind === "group" ? parentId : null);
+  // Novo canto (diálogo com nome/ofício/família) no lugar pedido; vira o ativo.
+  // revealNode expande um grupo recolhido que seja o destino.
+  async function newChantAt(parentId: string | null, index: number): Promise<void> {
     const r = await newDocumentDialog(dialogHost, { title: "Novo canto", family: effectiveFamily(project, project.activeId) });
     if (!r) return;
     const chant = newChant({ title: r.name ?? "Novo", content: gabcSkeleton(r.name, r.office), family: r.family });
-    applyTree((p) => setActive(insertNode(p, null, Infinity, chant), chant.id));
+    const target = liveParent(parentId);
+    applyTree((p) => setActive(revealNode(insertNode(p, target, index, chant), chant.id), chant.id));
     view.focus();
   }
-  // Importa um .gabc solto como novo canto do projeto e o ativa.
-  async function importGabcAsDoc(): Promise<void> {
+  // Novo grupo "Novo grupo" já em renomeação inline (spec §4.4); expande o destino recolhido.
+  function newGroupAt(parentId: string | null, index: number): void {
+    const grp = newGroup();
+    const target = liveParent(parentId);
+    applyTree((p) => revealNode(insertNode(p, target, index, grp), grp.id));
+    treePanel.startRename(grp.id);
+  }
+  // Importa um .gabc solto como novo canto no fim da raiz e o ativa.
+  async function importGabcAsChant(): Promise<void> {
     try {
       const f = await pickGabcFile();
       if (!f) return;
@@ -467,6 +488,40 @@ async function boot() {
     } catch (e) {
       toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" });
     }
+  }
+  /** Excluir: grupo com cantos pede confirmação (perigo à esquerda, Enter = Cancelar);
+   *  todo excluir oferece Desfazer no toast (que não age se outro projeto foi aberto). */
+  async function removeWithUndo(id: string): Promise<void> {
+    const node = findNode(project, id);
+    if (!node) return;
+    if (node.kind === "group") {
+      const n = countChants(node);
+      if (n > 0) {
+        const r = await openDialog(dialogHost, {
+          title: n === 1
+            ? `Excluir “${node.title}” e o canto dentro dele?`
+            : `Excluir “${node.title}” e os ${n} cantos dentro dele?`,
+          actions: [
+            { id: "delete", label: "Excluir", kind: "danger" },
+            { id: "cancel", label: "Cancelar", kind: "elevated" },
+          ],
+          defaultAction: "cancel",
+        });
+        if (r.action !== "delete") return;
+      }
+    }
+    // O diálogo foi assíncrono: captura o editor agora para que removeNode veja o texto
+    // atual (applyTree captura de novo, mas depois de removeNode ter calculado o resultado).
+    captureEditorIntoProject();
+    // removeNode só devolve null para id desconhecido (o último canto vira um
+    // placeholder); não é "último canto".
+    const r = removeNode(project, id);
+    if (!r) return;
+    const epoch = projectEpoch;
+    applyTree(() => r.project);
+    toaster.show(node.kind === "group" ? "Grupo excluído." : "Canto excluído.", {
+      action: { label: "Desfazer", run: () => { if (epoch === projectEpoch) applyTree((p) => restoreRemoved(p, r)); } },
+    });
   }
   renderTree();
 
@@ -517,8 +572,10 @@ async function boot() {
     },
     format: async () => {
       try {
+        const id = shownId;
         const f = await formatDocument(client, URI, view.state.doc);
-        if (f != null) replaceDoc(f);
+        // O canto pode ter mudado durante o await: não escreve texto de um no outro.
+        if (f != null && shownId === id) replaceDoc(f);
       } catch (err) {
         toaster.show("Formatar falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao formatar:", err);
@@ -688,6 +745,9 @@ async function boot() {
     { id: "file.newProject", label: "Novo projeto…", run: h.newProjectCmd },
     { id: "file.open", label: "Abrir…", run: h.openFile, keys: ["Ctrl+O"] },
     { id: "file.save", label: "Salvar", run: h.saveFile, keys: ["Ctrl+S"] },
+    { id: "project.newChant", label: "Novo canto…", run: () => newChantAt(null, Infinity) },
+    { id: "project.newGroup", label: "Novo grupo", run: () => newGroupAt(null, Infinity) },
+    { id: "project.importGabc", label: "Importar .gabc…", run: importGabcAsChant },
     { id: "file.exportGabc", label: "Exportar .gabc do canto…", run: h.exportGabc },
     { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: h.exportAllGabcCmd },
     { id: "names.export", label: "Exportar nomes…", run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
@@ -752,6 +812,8 @@ async function boot() {
       label: "Arquivo",
       items: [
         menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"),
+        "---",
+        menuItem("project.newChant"), menuItem("project.newGroup"), menuItem("project.importGabc"),
         "---",
         menuItem("file.exportGabc"), menuItem("file.exportAllGabc"),
         "---",

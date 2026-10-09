@@ -36,6 +36,8 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
   let rows: VisibleRow[] = [];
   let els: HTMLElement[] = [];
   let focusKey: string | null = null;
+  /** Encerra (sem gravar) o renomear inline aberto, se houver. */
+  let cancelRename: (() => void) | null = null;
 
   const list = document.createElement("div");
   list.className = "notker-sidebar__list notker-tree";
@@ -95,6 +97,9 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
   }
 
   function render(p: NotkerProject): void {
+    // Encerra o renomear aberto ANTES de remover o campo: o blur disparado pela remoção
+    // não pode chamar onRename no meio do render.
+    cancelRename?.();
     project = p;
     // Lê o foco ANTES de fechar o menu: fechar devolve o foco à linha que o abriu.
     const ae = document.activeElement;
@@ -171,6 +176,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
   }
 
   function startRename(id: string): void {
+    cancelRename?.();
     const row = rowById(id);
     const n = project ? findNode(project, id) : undefined;
     const name = row?.querySelector<HTMLElement>(".notker-row__name");
@@ -184,12 +190,14 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     const finish = (commit: boolean): void => {
       if (done) return;
       done = true;
+      cancelRename = null;
       const v = input.value.trim();
       const hadFocus = document.activeElement === input;
       input.replaceWith(name);
       if (hadFocus) row.focus();
       if (commit && v && v !== n.title) opts.onRename(id, v);
     };
+    cancelRename = () => finish(false);
     input.addEventListener("keydown", (e) => {
       e.stopPropagation(); // o campo é dono das suas teclas (nada vaza para a árvore/janela)
       if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); finish(true); }

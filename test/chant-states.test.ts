@@ -72,13 +72,21 @@ describe("estado de editor por canto", () => {
     expect(states.size()).toBe(0);
     expect(states.scrollOf("a")).toBeUndefined();
   });
-  it("mapAll reescreve os estados guardados (compartment que carrega depois)", () => {
-    const { states, view, show } = setup();
+  it("mapAll reconfigura um Compartment real e preserva texto, seleção e histórico", () => {
+    document.body.innerHTML = "";
     const comp = new Compartment();
-    const ext = EditorState.tabSize.of(7);
-    show("a", "b", "BBB");           // "a" guardado; "b" em exibição
-    states.mapAll((s) => s.update({ effects: StateEffect.appendConfig.of(comp.of(ext)) }).state);
-    view.setState(states.get("a", "AAA"));
+    const states = createChantStates((doc) => createEditorState(doc, [comp.of([])]));
+    const view = new EditorView({ parent: document.body, state: states.get("a", "AAA") });
+    current = view;
+    view.dispatch({ changes: { from: 3, insert: "1" }, userEvent: "input.type", selection: EditorSelection.cursor(2) });
+    states.remember("a", view.state);
+    view.setState(states.get("b", "BBB"));          // "a" guardado; "b" em exibição
+    states.mapAll((s) => s.update({ effects: comp.reconfigure(EditorState.tabSize.of(7)) }).state);
+    view.setState(states.get("a", "AAA1"));
     expect(view.state.tabSize).toBe(7);
+    expect(view.state.doc.toString()).toBe("AAA1");
+    expect(view.state.selection.main.head).toBe(2);
+    expect(undo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("AAA");
   });
 });

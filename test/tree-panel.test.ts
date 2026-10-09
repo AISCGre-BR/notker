@@ -263,4 +263,19 @@ describe("árvore: menu de contexto e rodapé", () => {
     panel.focusNode("a");
     expect(document.activeElement).toBe(row("a"));
   });
+  it("render com renomear aberto encerra o campo sem chamar onRename", () => {
+    const o = opts();
+    const panel = createTreePanel(host, o);
+    panel.render(proj());
+    panel.startRename("a");
+    const input = row("a").querySelector<HTMLInputElement>("input")!;
+    input.value = "Mudado";
+    // Navegadores reais disparam blur ao remover o elemento focado (jsdom não): simula.
+    const list = host.querySelector<HTMLElement>('[role="tree"]')!;
+    const orig = list.replaceChildren.bind(list);
+    list.replaceChildren = (...n: (Node | string)[]) => { input.dispatchEvent(new Event("blur")); orig(...n); };
+    panel.render(proj());
+    expect(host.querySelector("input.notker-tree__rename")).toBeNull();
+    expect(o.onRename).not.toHaveBeenCalled();
+  });
 });
