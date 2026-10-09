@@ -1,0 +1,70 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const fs = {
+  exists: vi.fn(async (_p: string, _o?: unknown) => true),
+  mkdir: vi.fn(async (_p: string, _o?: unknown) => {}),
+  readTextFile: vi.fn(async (_p: string, _o?: unknown) => "conteúdo"),
+  writeTextFile: vi.fn(async (_p: string, _t: string, _o?: unknown) => {}),
+  rename: vi.fn(async (_a: string, _b: string, _o?: unknown) => {}),
+  remove: vi.fn(async (_p: string, _o?: unknown) => {}),
+};
+const invoke = vi.fn();
+vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  BaseDirectory: { AppData: 14 },
+  exists: (p: string, o?: unknown) => fs.exists(p, o),
+  mkdir: (p: string, o?: unknown) => fs.mkdir(p, o),
+  readTextFile: (p: string, o?: unknown) => fs.readTextFile(p, o),
+  writeTextFile: (p: string, t: string, o?: unknown) => fs.writeTextFile(p, t, o),
+  rename: (a: string, b: string, o?: unknown) => fs.rename(a, b, o),
+  remove: (p: string, o?: unknown) => fs.remove(p, o),
+}));
+
+import { appDataSlot, existingPaths, RECENT_FILE, RECOVERY_FILE } from "../src/app/appdata-io";
+
+const AD = { baseDir: 14 };
+beforeEach(() => { vi.clearAllMocks(); });
+
+describe("appDataSlot", () => {
+  it("read: null se não existe; o texto se existe — sempre em AppData", async () => {
+    fs.exists.mockResolvedValueOnce(false);
+    expect(await appDataSlot(RECENT_FILE).read()).toBeNull();
+    expect(fs.readTextFile).not.toHaveBeenCalled();
+    expect(await appDataSlot(RECENT_FILE).read()).toBe("conteúdo");
+    expect(fs.readTextFile).toHaveBeenCalledWith("recent.json", AD);
+  });
+  it("write: cria a pasta, grava .tmp e renomeia por cima (atômico)", async () => {
+    await appDataSlot(RECOVERY_FILE).write("{}");
+    expect(fs.mkdir).toHaveBeenCalledWith("recovery", { ...AD, recursive: true });
+    expect(fs.writeTextFile).toHaveBeenCalledWith("recovery/session.json.tmp", "{}", AD);
+    expect(fs.rename).toHaveBeenCalledWith("recovery/session.json.tmp", "recovery/session.json", { oldPathBaseDir: 14, newPathBaseDir: 14 });
+    const order = [fs.mkdir, fs.writeTextFile, fs.rename].map((m) => m.mock.invocationCallOrder[0]);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+  it("write na raiz de AppData; falha do mkdir (pasta já existe) não impede gravar", async () => {
+    fs.mkdir.mockRejectedValueOnce(new Error("existe"));
+    await appDataSlot(RECENT_FILE).write("[]");
+    expect(fs.mkdir).toHaveBeenCalledWith("", { ...AD, recursive: true });
+    expect(fs.rename).toHaveBeenCalledWith("recent.json.tmp", "recent.json", { oldPathBaseDir: 14, newPathBaseDir: 14 });
+  });
+  it("erro de gravação propaga (quem chama decide)", async () => {
+    fs.writeTextFile.mockRejectedValueOnce(new Error("disco cheio"));
+    await expect(appDataSlot(RECENT_FILE).write("x")).rejects.toThrow("disco cheio");
+    expect(fs.rename).not.toHaveBeenCalled();
+  });
+  it("remove: só se existe", async () => {
+    fs.exists.mockResolvedValueOnce(false);
+    await appDataSlot(RECOVERY_FILE).remove();
+    expect(fs.remove).not.toHaveBeenCalled();
+    await appDataSlot(RECOVERY_FILE).remove();
+    expect(fs.remove).toHaveBeenCalledWith("recovery/session.json", AD);
+  });
+});
+
+describe("existingPaths", () => {
+  it("pergunta ao comando Rust existing_paths", async () => {
+    invoke.mockResolvedValueOnce([true, false]);
+    expect(await existingPaths(["/a.notker", "/b.notker"])).toEqual([true, false]);
+    expect(invoke).toHaveBeenCalledWith("existing_paths", { paths: ["/a.notker", "/b.notker"] });
+  });
+});

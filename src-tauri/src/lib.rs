@@ -35,7 +35,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             project::read_project,
-            project::write_project
+            project::write_project,
+            project::existing_paths
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Notker");
