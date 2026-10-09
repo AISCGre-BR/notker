@@ -45,6 +45,31 @@ describe("impressão digital do projeto", () => {
 });
 
 describe("rastreador", () => {
+  it("markDirty: editado até o próximo markSaved", () => {
+    const { p } = base();
+    const t = createDirtyTracker();
+    t.markSaved(p);
+    t.markDirty();
+    expect(t.isDirty(p)).toBe(true);
+    t.markSaved(p);
+    expect(t.isDirty(p)).toBe(false);
+  });
+  it("baseline/restoreBaseline: abrir outro projeto que falha devolve a linha de base anterior", () => {
+    const { p } = base();
+    const edited = { ...p, title: p.title + " (editado)" };
+    const t = createDirtyTracker();
+    expect(t.baseline()).toBeNull();
+    t.markSaved(p);
+    const b = t.baseline();
+    expect(b).not.toBeNull();
+    t.markSaved(edited);               // loadProject marca o novo ANTES de saber se abre…
+    expect(t.isDirty(p)).toBe(true);
+    t.restoreBaseline(b);              // …e, se falhar, devolve a linha de base de antes
+    expect(t.isDirty(p)).toBe(false);
+    expect(t.isDirty(edited)).toBe(true);
+    t.restoreBaseline(null);           // nunca salvo = editado
+    expect(t.isDirty(p)).toBe(true);
+  });
   it("limpo após marcar; editar suja; voltar ao texto salvo limpa", () => {
     const { p, b } = base();
     const t = createDirtyTracker();
