@@ -457,18 +457,30 @@ async function boot() {
   }
   /** Troca o projeto inteiro (novo/abrir): nada do editor antigo vai para o novo. */
   function loadProject(p: NotkerProject): void {
+    captureEditorIntoProject(); // se falhar, o projeto anterior (com o texto atual) é restaurado
+    const prev = project;
+    const prevEpoch = projectEpoch;
     shownId = null;      // o texto no editor é do projeto antigo: não capturar
     chantStates.clear();
     projectEpoch++;
     toaster.dismiss();   // um "Desfazer" pendente era do projeto antigo
-    project = p;
-    // Baseline ANTES do sync (o renderTree dele atualiza o título): nunca pisca "Editado".
-    // O sync pode normalizar o texto via capture, então re-marca depois.
-    dirty.markSaved(project);
-    syncFromProject();
-    captureEditorIntoProject();
-    dirty.markSaved(project); // recém-aberto/criado = sem alterações
-    updateTitle();
+    try {
+      project = p;
+      // Baseline ANTES do sync (o renderTree dele atualiza o título): nunca pisca "Editado".
+      // O sync pode normalizar o texto via capture, então re-marca depois.
+      dirty.markSaved(project);
+      syncFromProject();
+      captureEditorIntoProject();
+      dirty.markSaved(project); // recém-aberto/criado = sem alterações
+      updateTitle();
+    } catch (err) {
+      console.error(err);
+      project = prev;
+      projectEpoch = prevEpoch;
+      shownId = null;
+      try { syncFromProject(); } catch (e2) { console.error(e2); }
+      toaster.show("Não foi possível abrir o projeto. " + String(err), { kind: "error" });
+    }
   }
   /** Pai ainda válido depois de um diálogo assíncrono; senão a raiz. */
   const liveParent = (parentId: string | null): string | null =>
@@ -480,6 +492,7 @@ async function boot() {
     if (!r) return;
     const chant = newChant({ title: r.name ?? "Novo", content: gabcSkeleton(r.name, r.office), family: r.family });
     const target = liveParent(parentId);
+    if (target !== parentId) index = Infinity; // o grupo sumiu: vai para o fim da raiz
     applyTree((p) => setActive(revealNode(insertNode(p, target, index, chant), chant.id), chant.id));
     view.focus();
   }
@@ -487,6 +500,7 @@ async function boot() {
   function newGroupAt(parentId: string | null, index: number): void {
     const grp = newGroup();
     const target = liveParent(parentId);
+    if (target !== parentId) index = Infinity;
     applyTree((p) => revealNode(insertNode(p, target, index, grp), grp.id));
     treePanel.startRename(grp.id);
   }
@@ -540,16 +554,25 @@ async function boot() {
 
   /** Salva (ou Salvar como). Devolve false se o usuário cancelou a escolha do caminho;
    *  LANÇA em erro de gravação (quem chama decide: toast ou diálogo de fechar). */
+  let saving: Promise<boolean> | null = null; // gravação em andamento (fechar espera por ela)
   async function doSave(saveAs: boolean): Promise<boolean> {
     captureEditorIntoProject();
     const snap = project; // o que vai ao disco: edições durante o await não entram no "salvo"
-    const path = await saveProject(snap, { saveAs });
-    if (!path) return false;
-    dirty.markSaved(snap);
-    project = { ...project, path };
-    updateTitle();
-    toaster.show("Projeto salvo.");
-    return true;
+    const epoch = projectEpoch;
+    const run = (async (): Promise<boolean> => {
+      const path = await saveProject(snap, { saveAs });
+      if (!path) return false;
+      // Outro projeto foi aberto/criado durante a gravação: não toca no projeto atual.
+      if (epoch !== projectEpoch) return true;
+      dirty.markSaved(snap);
+      project = { ...project, path };
+      updateTitle();
+      toaster.show("Projeto salvo.");
+      return true;
+    })();
+    saving = run;
+    try { return await run; }
+    finally { if (saving === run) saving = null; }
   }
   const saveCmd = (saveAs: boolean) => async (): Promise<void> => {
     try { await doSave(saveAs); }
@@ -595,7 +618,7 @@ async function boot() {
       try {
         captureEditorIntoProject();
         const n = await exportAllGabc(project);
-        if (n) toaster.show(`${n} cantos exportados.`);
+        if (n) toaster.show(n === 1 ? "1 canto exportado." : `${n} cantos exportados.`);
       } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     format: async () => {
@@ -917,6 +940,8 @@ async function boot() {
   try {
     void getCurrentWindow().onCloseRequested(async (ev) => {
       let proceed = true;
+      // Gravação em andamento: espera terminar (ok ou erro) antes de decidir; nunca prende a janela.
+      if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } }
       try { proceed = await resolveUnsaved(unsaved); } catch (e) { console.error("[notker] fechar:", e); }
       if (!proceed) { ev.preventDefault(); return; }
       try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }

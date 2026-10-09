@@ -54,8 +54,12 @@ export function toBundle(p: NotkerProject): Bundle {
   return { project_json: JSON.stringify(meta, null, 2), files };
 }
 
+/** Lookup seguro: chaves herdadas ("__proto__", "constructor") e não-strings viram undefined. */
+const fileOf = (files: Record<string, string>, k: string): string | undefined =>
+  Object.hasOwn(files, k) && typeof files[k] === "string" ? files[k] : undefined;
+
 function readInterp(files: Record<string, string>, file: string, content: string): Interpretation | undefined {
-  const raw = files[`interpretation/${baseOf(file)}.json`];
+  const raw = fileOf(files, `interpretation/${baseOf(file)}.json`);
   if (raw === undefined) return undefined;
   try {
     const v = JSON.parse(raw) as Interpretation;
@@ -70,12 +74,12 @@ function readInterp(files: Record<string, string>, file: string, content: string
 function chantFrom(meta: Record<string, unknown>, files: Record<string, string>): ChantNode {
   const file = typeof meta.file === "string" ? meta.file : "";
   const family = asFamily(meta.family);
-  const interpretation = file ? readInterp(files, file, files[file] ?? "") : undefined;
+  const interpretation = file ? readInterp(files, file, fileOf(files, file) ?? "") : undefined;
   return {
     kind: "chant",
     id: typeof meta.id === "string" && meta.id ? meta.id : genId(),
     title: typeof meta.title === "string" && meta.title ? meta.title : "Sem título",
-    content: files[file] ?? "",
+    content: fileOf(files, file) ?? "",
     ...(family ? { family } : {}),
     ...(interpretation ? { interpretation } : {}),
   };
@@ -93,10 +97,12 @@ function readV1(meta: Record<string, unknown>, files: Record<string, string>): T
 
 function readV2(meta: Record<string, unknown>, files: Record<string, string>): TreeNode[] {
   const byId = new Map<string, ChantNode>();
+  const dups: ChantNode[] = []; // id repetido: não se perde o conteúdo, cai como órfão
   for (const raw of Array.isArray(meta.chants) ? meta.chants : []) {
     if (!isObj(raw)) continue;
     const ch = chantFrom(raw, files);
     if (!byId.has(ch.id)) byId.set(ch.id, ch);
+    else { ch.id = genId(); dups.push(ch); }
   }
   const used = new Set<string>();
   const groupIds = new Set<string>();
@@ -124,6 +130,7 @@ function readV2(meta: Record<string, unknown>, files: Record<string, string>): T
   };
   const root = walk(meta.tree);
   for (const ch of byId.values()) if (!used.has(ch.id)) root.push(ch); // órfãos não se perdem
+  root.push(...dups);
   return root;
 }
 

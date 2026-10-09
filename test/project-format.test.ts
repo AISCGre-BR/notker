@@ -137,3 +137,40 @@ describe("exportação e slug", () => {
     expect(w.factors).toEqual({ "0:0": 1.2 });
   });
 });
+
+describe("leitura tolerante: endurecimento final", () => {
+  const mk = (o: object, files: Record<string, string>) =>
+    fromBundle(JSON.stringify({ schema: 2, kind: "notker-project", ...o }), files, undefined);
+  const flat = (p: ReturnType<typeof mk>): { id: string; content?: string }[] => {
+    const out: { id: string; content?: string }[] = [];
+    const rec = (ns: typeof p.root): void => ns.forEach((n) => (n.kind === "chant" ? out.push(n) : rec(n.children)));
+    rec(p.root);
+    return out;
+  };
+  it("id repetido em chants[] não perde o segundo: vira órfão na raiz com id novo", () => {
+    const p = mk({
+      tree: [{ chant: "x" }],
+      chants: [{ id: "x", file: "gabc/a.gabc", title: "A" }, { id: "x", file: "gabc/b.gabc", title: "B" }],
+    }, { "gabc/a.gabc": "AAA", "gabc/b.gabc": "BBB" });
+    const cs = flat(p);
+    expect(cs.map((c) => c.content)).toEqual(["AAA", "BBB"]);
+    expect(new Set(cs.map((c) => c.id)).size).toBe(2);
+  });
+  it("arquivo '__proto__'/'constructor' vira conteúdo '' (string), nunca não-string", () => {
+    const p = mk({
+      tree: [{ chant: "a" }, { chant: "b" }],
+      chants: [{ id: "a", file: "__proto__", title: "A" }, { id: "b", file: "constructor", title: "B" }],
+    }, {});
+    for (const c of flat(p)) expect(c.content).toBe("");
+  });
+  it("arquivo '../x' nunca produz caminho fora do plano de exportação", () => {
+    const p = mk({ tree: [{ chant: "a" }], chants: [{ id: "a", file: "../x", title: "../../etc" }] }, { "../x": "Z" });
+    for (const f of gabcExportPlan(p).files) { expect(f.path.includes("..")).toBe(false); expect(f.path.startsWith("/")).toBe(false); }
+  });
+  it("árvore só com grupos ganha canto esqueleto e activeId válido", () => {
+    const p = mk({ tree: [{ group: "g", title: "G", children: [] }], chants: [], active: "g" }, {});
+    const cs = flat(p);
+    expect(cs.length).toBe(1);
+    expect(p.activeId).toBe(cs[0].id);
+  });
+});
