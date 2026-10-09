@@ -102,6 +102,7 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
           ni.setAttribute("aria-label", "Novo nome do neuma");
           ni.addEventListener("keydown", (ev) => {
             ev.stopPropagation();
+            if (ev.isComposing) return;
             if (ev.key === "Escape") { ev.preventDefault(); naming = null; render(); input.focus(); }
             else if (ev.key === "Enter") {
               ev.preventDefault();
@@ -111,11 +112,17 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
               if (!name) { render(); input.focus(); return; }
               void Promise.resolve(deps.onName(ids, name))
                 .catch(() => { /* quem grava já avisou o erro */ })
-                .finally(() => { if (root.isConnected) { render(); input.focus(); } });
+                .finally(() => {
+                  if (!root.isConnected || naming !== null) return; // outro cadastro em curso: não mexe
+                  const ae = document.activeElement;
+                  render();
+                  if (ae === input || ae === document.body || ae === null) input.focus();
+                });
               render(); input.focus();
             }
           });
           ni.addEventListener("blur", onBlur);
+          for (const t of ["click", "mousedown"]) ni.addEventListener(t, (ev) => ev.stopPropagation());
           row.appendChild(ni);
           nameField = ni;
         } else {

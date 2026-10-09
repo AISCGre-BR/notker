@@ -106,3 +106,45 @@ describe("paleta de neumas: robustez", () => {
     expect(rows[1].getAttribute("aria-selected")).toBe("false");
   });
 });
+
+describe("paleta de neumas: cadastro rápido", () => {
+  it("resolver o onName de A não apaga o texto digitado no campo de B", async () => {
+    let resolveA!: () => void;
+    const onName = vi.fn(() => new Promise<void>((r) => { resolveA = r; }));
+    neumePalette(deps(onName)).open(view);
+    const input = document.querySelector<HTMLInputElement>(".neume-palette input")!;
+    kd(input, "Enter", { ctrlKey: true });
+    const a = document.querySelector<HTMLInputElement>(".neume-name-input")!;
+    a.value = "alfa";
+    kd(a, "Enter");
+    kd(input, "ArrowDown");
+    kd(input, "Enter", { ctrlKey: true });
+    const b = document.querySelector<HTMLInputElement>(".neume-name-input")!;
+    b.value = "abc";
+    resolveA();
+    await new Promise((r) => setTimeout(r, 0));
+    const now = document.querySelector<HTMLInputElement>(".neume-name-input")!;
+    expect(now.value).toBe("abc");
+    expect(document.activeElement).toBe(now);
+  });
+  it("clicar no campo de nome não insere nem fecha", () => {
+    neumePalette(deps()).open(view);
+    const input = document.querySelector<HTMLInputElement>(".neume-palette input")!;
+    kd(input, "Enter", { ctrlKey: true });
+    const f = document.querySelector<HTMLInputElement>(".neume-name-input")!;
+    f.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelector(".neume-palette")).not.toBeNull();
+    expect(view.state.doc.toString()).toBe("(f)");
+  });
+  it("Enter durante composição (IME) não grava", () => {
+    const onName = vi.fn();
+    neumePalette(deps(onName)).open(view);
+    const input = document.querySelector<HTMLInputElement>(".neume-palette input")!;
+    kd(input, "Enter", { ctrlKey: true });
+    const f = document.querySelector<HTMLInputElement>(".neume-name-input")!;
+    f.value = "x";
+    kd(f, "Enter", { isComposing: true });
+    expect(onName).not.toHaveBeenCalled();
+    expect(document.querySelector(".neume-name-input")).toBe(f);
+  });
+});

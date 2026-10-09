@@ -49,6 +49,28 @@ export function addName(o: Overlay, id: string, name: string): Overlay {
   return { ...o, entries: { ...o.entries, [id]: { ...prev, names } } };
 }
 
+/**
+ * Cadastra `name` em todas as entradas, exceto nas que já exibem o nome
+ * (igual, sem distinguir caixa, após trim; acentos preservados).
+ */
+export function addNameToEntries(
+  o: Overlay,
+  entries: { id: string; displayNames: string[] }[],
+  name: string,
+): { overlay: Overlay; changed: boolean } {
+  const n = name.trim();
+  if (!n) return { overlay: o, changed: false };
+  const key = n.toLowerCase();
+  let overlay = o;
+  let changed = false;
+  for (const e of entries) {
+    if (e.displayNames.some((d) => d.trim().toLowerCase() === key)) continue;
+    overlay = addName(overlay, e.id, n);
+    changed = true;
+  }
+  return { overlay, changed };
+}
+
 /** Remove um nome de um id (mutação imutável). Esvazia `names` quando fica vazio. */
 export function removeName(o: Overlay, id: string, name: string): Overlay {
   const prev = o.entries[id];

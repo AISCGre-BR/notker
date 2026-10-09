@@ -20,7 +20,7 @@ import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
 import { loadNeumeDb } from "./neume/db-load";
 import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
-import { mergeEntry, addName, mergeOverlays, cloneOverlay } from "./neume/overlay";
+import { mergeEntry, addNameToEntries, mergeOverlays, cloneOverlay } from "./neume/overlay";
 import { createAutosave } from "./neume/autosave";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
@@ -194,13 +194,13 @@ async function boot() {
       activeFamily: () => currentFamily(),
       onName: async (ids: string[], name: string) => {
         const n = name.trim();
-        if (!n) return;
-        let changed = false;
-        for (const id of ids) {
-          if (overlay.entries[id]?.names?.includes(n)) continue;
-          overlay = addName(overlay, id, n);
-          changed = true;
-        }
+        const targets = ids.map((id) => ({
+          id,
+          displayNames: effective().find((e) => e.id === id)?.displayNames ?? [],
+        }));
+        const r = addNameToEntries(overlay, targets, n);
+        overlay = r.overlay;
+        const changed = r.changed;
         if (!changed) return;
         reindex();
         overlayPanel?.refresh();
@@ -498,7 +498,7 @@ async function boot() {
     toggleFamily: () => { toggleFamily(); },
     openSearch: () => {
       if (!paletteRef) return;
-      view.focus();
+      if (!document.querySelector(".neume-palette")) view.focus();
       paletteRef.open(view);
     },
     openOverlayPanel: () => {
@@ -640,7 +640,6 @@ async function boot() {
     { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true },
     { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true },
     { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"] },
-    // Provisório até a Task 9 (paleta própria).
     { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
     { id: "names.panel", label: "Nomes dos neumas…", icon: "tag", run: h.openOverlayPanel, keys: ["Ctrl+Alt+N"] },
     { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
