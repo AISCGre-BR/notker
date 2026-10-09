@@ -7,8 +7,9 @@ import "./ui/notker.css";
 import { applyTheme, loadTheme, setTheme, type ThemeChoice } from "./app/theme";
 import { createToaster } from "./ui/pd/toast";
 import { EditorView } from "@codemirror/view";
-import { Compartment } from "@codemirror/state";
-import { createEditor, externalLinter } from "./editor/editor";
+import { Compartment, type Extension } from "@codemirror/state";
+import { createEditorState, externalLinter } from "./editor/editor";
+import { createChantStates } from "./editor/chant-states";
 import { highlightTheme } from "./editor/theme";
 import { LspClient } from "./lsp/client";
 import { SidecarTransport } from "./lsp/transport-sidecar";
@@ -74,7 +75,7 @@ async function boot() {
 
   // O tema (cores dos tokens) é SEMPRE incluído — independente de o WASM do
   // realce carregar — para que as marcas de decoração tenham cor quando existirem.
-  const extraExtensions: Parameters<typeof createEditor>[2] = [highlightTheme];
+  const extraExtensions: Extension[] = [highlightTheme];
 
   // Highlighter é opcional: uma falha de carga do WASM não pode impedir o editor
   // de montar. Falha vira aviso (toast) depois que o editor está de pé.
@@ -101,12 +102,21 @@ async function boot() {
     nabcMoveKeymap(() => getTree()),
   );
 
-  // Compartment para injetar extensões F2 após o carregamento assíncrono do db.
+  // Compartment das extensões F2 (paleta/hover/completion/régua), preenchido quando o
+  // db carrega. Estados criados DEPOIS já nascem com elas (neumeExt); o estado inicial
+  // recebe via reconfigure.
   const neumeCompartment = new Compartment();
-  extraExtensions.push(neumeCompartment.of([]));
+  let neumeExt: Extension = [];
+  // Um EditorState por canto (histórico/seleção/rolagem próprios) — spec §4.3.
+  const chantStates = createChantStates((doc) =>
+    createEditorState(doc, [...extraExtensions, neumeCompartment.of(neumeExt)]));
 
   let project: NotkerProject = newProject({ family: "stgall", name: "Novo" });
-  const view = createEditor(app, getActiveChant(project).content, extraExtensions);
+  const view = new EditorView({ parent: app, state: chantStates.get(project.activeId, getActiveChant(project).content) });
+  /** Canto cujo texto está no editor agora: o capture escreve SEMPRE nele. */
+  let shownId: string | null = project.activeId;
+  /** Muda a cada projeto carregado: um "Desfazer" antigo não age no projeto novo. */
+  let projectEpoch = 0;
 
   const client = new LspClient(new SidecarTransport());
   client.onNotification("textDocument/publishDiagnostics", (p: { uri: string; diagnostics: LspDiagnosticParam[] }) => {
@@ -210,7 +220,10 @@ async function boot() {
     };
     const neume = neumeExtensions(rt);
     paletteRef = neume.palette;
-    view.dispatch({ effects: neumeCompartment.reconfigure([...neume.extensions, ...gabcAssistExtensions(getTree)]) });
+    neumeExt = [...neume.extensions, ...gabcAssistExtensions(getTree)];
+    view.dispatch({ effects: neumeCompartment.reconfigure(neumeExt) });
+    // Estados de outros cantos criados antes do db carregar também recebem as extensões.
+    chantStates.mapAll((s) => s.update({ effects: neumeCompartment.reconfigure(neumeExt) }).state);
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
     toaster.show("O catálogo de neumas não carregou. " + String(err), { kind: "error" });
@@ -371,9 +384,10 @@ async function boot() {
       captureEditorIntoProject();
       const r = removeNode(project, id);
       if (!r) return;
+      const epoch = projectEpoch;
       applyTree(() => r.project);
       toaster.show("Canto excluído.", {
-        action: { label: "Desfazer", run: () => applyTree((p) => restoreRemoved(p, r)) },
+        action: { label: "Desfazer", run: () => { if (epoch === projectEpoch) applyTree((p) => restoreRemoved(p, r)); } },
       });
     },
     onSetFamily: (id, f) => {
@@ -386,35 +400,53 @@ async function boot() {
 
   let menubar: ReturnType<typeof createMenubar> | undefined;
   function renderTree(): void { docList.render(project); }
-  /** Reflete o canto ativo do projeto no editor + indicadores. */
+  /** Mostra no editor o canto ativo, com o EditorState DELE. Guarda antes o estado do
+   *  canto que sai (inclusive se ele acabou de ser excluído: o Desfazer o devolve com
+   *  histórico). O LSP recebe didChange completo; partitura e onda refazem. */
   function syncFromProject(): void {
+    if (shownId) chantStates.remember(shownId, view.state, view.scrollSnapshot());
     menubar?.setTitle(project.title);
     if (player.playing) stopPlayback();
     const chant = getActiveChant(project);
-    replaceDoc(chant.content);
+    const legend = view.state.field(legendVisible, false) ?? false;
+    diagnostics = []; // eram do texto anterior; o LSP republica após o didChange
+    view.setState(chantStates.get(chant.id, chant.content));
+    shownId = chant.id;
+    const snap = chantStates.scrollOf(chant.id);
+    if (snap) view.dispatch({ effects: snap });
+    // A régua da pauta é preferência de vista: atravessa a troca de canto.
+    if ((view.state.field(legendVisible, false) ?? false) !== legend) view.dispatch({ effects: toggleLegend.of(legend) });
+    wave = chant.interpretation ?? emptyWave(gabcBodyHash(chant.content));
     renderTree();
     reindex();
-    // Onda: restaura a interpretação persistida, ou cria vazia para o novo canto
-    wave = chant.interpretation ?? emptyWave(gabcBodyHash(chant.content));
-    if (waveLanes.enabled()) syncWaveWithDoc();
+    onDocChange(); // setState não dispara updateListener: LSP + partitura + onda à mão
   }
   function captureEditorIntoProject(): void {
-    project = updateChant(project, project.activeId, {
+    if (!shownId) return;
+    project = updateChant(project, shownId, {
       content: view.state.doc.toString(),
       interpretation: Object.keys(wave.factors).length > 0 ? wave : undefined,
     });
   }
-  /** Aplica uma mudança no projeto. O editor é capturado ANTES (o canto exibido leva o
-   *  texto atual); se o ativo mudou, o editor passa a mostrar o novo ativo. */
+  /** Aplica uma mudança no projeto. O editor é capturado ANTES; se o ativo deixou de ser
+   *  o canto exibido, o editor passa a mostrar o novo ativo. */
   function applyTree(fn: (p: NotkerProject) => NotkerProject): void {
     captureEditorIntoProject();
-    const before = project.activeId;
     project = fn(project);
-    if (project.activeId !== before) syncFromProject(); else renderTree();
+    if (project.activeId !== shownId) syncFromProject(); else renderTree();
   }
   function switchToChant(id: string): void {
-    if (id === project.activeId) return;
+    if (id === shownId) return;
     applyTree((p) => setActive(p, id));
+  }
+  /** Troca o projeto inteiro (novo/abrir): nada do editor antigo vai para o novo. */
+  function loadProject(p: NotkerProject): void {
+    shownId = null;      // o texto no editor é do projeto antigo: não capturar
+    chantStates.clear();
+    projectEpoch++;
+    toaster.dismiss();   // um "Desfazer" pendente era do projeto antigo
+    project = p;
+    syncFromProject();
   }
   // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
   async function addNewDoc(): Promise<void> {
@@ -449,16 +481,14 @@ async function boot() {
         okLabel: "Criar",
       });
       if (!r) return;
-      project = newProject({ family: r.family, name: r.name, office: r.office });
-      syncFromProject();
+      loadProject(newProject({ family: r.family, name: r.name, office: r.office }));
       view.focus();
     },
     openFile: async () => {
       try {
         const p = await openProject();
         if (!p) return;
-        project = p;
-        syncFromProject();
+        loadProject(p);
       } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     saveFile: async () => {
@@ -565,7 +595,7 @@ async function boot() {
     },
     toggleSplit: () => { split.toggle(); },
     toggleLegend: () => {
-      view.dispatch({ effects: toggleLegend.of(!view.state.field(legendVisible)) });
+      view.dispatch({ effects: toggleLegend.of(!(view.state.field(legendVisible, false) ?? false)) });
     },
     // F4: mover o neuma sob o cursor (espelham os atalhos Alt+setas).
     moveUp: () => { runMove(view, () => getTree(), "up"); },
@@ -675,7 +705,7 @@ async function boot() {
     { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
-    { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible) },
+    { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible, false) ?? false },
     { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
     { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
     { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },

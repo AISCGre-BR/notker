@@ -54,7 +54,7 @@ describe("achados da revisão final (beta 1a)", () => {
   });
   it("Excluir canto oferece Desfazer; clicar no canto ativo é no-op", () => {
     expect(main).toMatch(/onRemove:[\s\S]*?"Desfazer"/);
-    expect(main).toMatch(/function switchToChant\(id: string\): void \{\s*if \(id === project\.activeId\) return;/);
+    expect(main).toMatch(/function switchToChant\(id: string\): void \{\s*if \(id === shownId\) return;/);
   });
   it("nome duplicado avisa em vez de sucesso", () => {
     expect(main).toContain("Esse nome já existe.");
