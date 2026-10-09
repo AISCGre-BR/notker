@@ -54,7 +54,10 @@ export function mergeEntry(base: NeumeEntry, ov: OverlayEntry | undefined): Effe
   const displayNames = [...names, base.name];
   const terms = Array.from(new Set([...names.map(norm), ...base.terms]));
   const meaning = ov?.note ? (base.meaning ? `${base.meaning}\n${ov.note}` : ov.note) : base.meaning;
-  return { ...base, displayNames, terms, meaning, hidden: ov?.hidden ?? false };
+  return {
+    ...base, displayNames, terms, meaning, hidden: ov?.hidden ?? false,
+    userNames: [...names], ...(ov?.note ? { userNote: ov.note } : {}),
+  };
 }
 
 // ── nomes ────────────────────────────────────────────────────────────────────

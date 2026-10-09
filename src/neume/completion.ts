@@ -3,7 +3,7 @@ import type { Completion, CompletionContext, CompletionResult } from "@codemirro
 import { keymap, type EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 import { nabcFieldStart, inNabcTextual } from "../editor/context";
-import { glyphSvgEl } from "./render";
+import { neumeThumb } from "./render";
 import type { NeumeSearch } from "./search";
 import { composeFromField, setCompose } from "./compose-state";
 
@@ -25,13 +25,12 @@ export function nabcCompletion(search: () => NeumeSearch): Extension[] {
         for (const e of results) {
           if (seen.has(e.nabc)) continue;
           seen.add(e.nabc);
-          const svg = e.svg;
           const code = e.nabc;
           options.push({
             label: e.nabc,
             detail: e.displayNames[0],
             type: "constant",
-            info: () => glyphSvgEl(svg, 40),
+            info: () => neumeThumb(e, 40),
             apply: (view, _c, aFrom, aTo) => {
               view.dispatch({
                 changes: { from: aFrom, to: aTo, insert: code },

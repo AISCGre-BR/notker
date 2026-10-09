@@ -4,7 +4,7 @@ import { startCompletion } from "@codemirror/autocomplete";
 import type { Tree } from "web-tree-sitter";
 import { nabcContextAt, inNabcTextual } from "../editor/context";
 import { computeInsertion, type Placement } from "./insert";
-import { glyphSvgEl } from "./render";
+import { neumeThumb } from "./render";
 import type { NeumeSearch } from "./search";
 import type { EffectiveEntry } from "./types";
 
@@ -87,7 +87,7 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
           }
           const cell = document.createElement("div");
           cell.className = "neume-fam-cell";
-          cell.appendChild(glyphSvgEl(e.svg, 24));
+          cell.appendChild(neumeThumb(e, 24));
           const cap = document.createElement("span");
           cap.textContent = e.family === "stgall" ? "St. Gall" : "Laon";
           cell.appendChild(cap);

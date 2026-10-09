@@ -369,3 +369,7 @@ body.notker-dragging, body.notker-dragging * { cursor: grabbing !important; }
 .notker-sidebar__foot { display: flex; padding: var(--space-3); border-top: 1px solid var(--rule-soft); }
 .notker-split__main { flex: 1; border-radius: var(--radius-md) 0 0 var(--radius-md); }
 .notker-split__more { border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-left: 1px; }
+
+/* Miniatura de sequência (partes lado a lado) ou código quando não há glifo. */
+.neume-thumb--parts { display: inline-flex; align-items: center; gap: 1px; }
+.neume-thumb--code { font: 12px/1 var(--font-mono); color: var(--ink-soft); }

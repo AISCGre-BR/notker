@@ -3,7 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Tree } from "web-tree-sitter";
 import { nabcContextAt, outermostNabcAt, nabcPartsAt } from "../editor/context";
 import type { EffectiveEntry, Family } from "./types";
-import { glyphSvgEl } from "./render";
+import { neumeThumb } from "./render";
 import { describeToken } from "./decode";
 import { nameNeume } from "./naming";
 
@@ -17,7 +17,7 @@ export function buildEntryRow(
 ): HTMLElement {
   const row = document.createElement("div");
   row.className = "neume-tip-row";
-  row.appendChild(glyphSvgEl(entry.svg, 32));
+  row.appendChild(neumeThumb(entry, 32));
   const info = document.createElement("div");
   info.className = "neume-tip-info";
   const names = document.createElement("strong");
@@ -177,7 +177,7 @@ export function nabcHover(
           );
           const row = document.createElement("div");
           row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px;";
-          if (baseSorted.length > 0) row.appendChild(glyphSvgEl(baseSorted[0].svg, 32));
+          if (baseSorted.length > 0) row.appendChild(neumeThumb(baseSorted[0], 32));
           const info = buildUnknownInfo(
             token, naming.displayNames,
             baseSorted.length > 0 ? (baseSorted[0].family as Family) : null,
@@ -214,7 +214,7 @@ export function nabcHover(
             if (partSorted.length > 0) {
               // Mostra apenas a entrada da família ativa (ou a primeira disponível).
               const best = partSorted[0];
-              partRow.appendChild(glyphSvgEl(best.svg, 20));
+              partRow.appendChild(neumeThumb(best, 20));
               const label = buildPartLabel(best);
               partRow.appendChild(label);
             } else {

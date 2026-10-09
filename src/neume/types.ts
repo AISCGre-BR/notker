@@ -52,9 +52,20 @@ export interface Overlay {
   sequences: Record<string, UserSequence>;
 }
 
-export interface EffectiveEntry extends NeumeEntry {
-  displayNames: string[]; // overlay.names ++ [name]
+/** Entrada como a UI a vê: catálogo + nomes do usuário, ou sequência do usuário. */
+export interface EffectiveEntry extends Omit<NeumeEntry, "svg"> {
+  /** Glifo da fonte. Ausente nas sequências do usuário (o desenho vem do motor). */
+  svg?: GlyphSvg;
+  /** Glifos das partes da cadeia (`!`, `/`), quando todas existem no catálogo. */
+  partSvgs?: GlyphSvg[];
+  displayNames: string[]; // nomes do usuário ++ [name]
   hidden: boolean;
+  /** Só os nomes dados pelo usuário (o 1º é o principal). */
+  userNames?: string[];
+  /** Nota livre do usuário (o `note` do overlay), sem o significado do catálogo. */
+  userNote?: string;
+  /** Sequência criada pelo usuário (id `seq:…`). */
+  userSequence?: boolean;
 }
 
 export interface BaseAnnotations {

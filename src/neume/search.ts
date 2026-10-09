@@ -22,8 +22,9 @@ function scoreTerm(term: string, q: string): number {
 
 export class NeumeSearch {
   private items: EffectiveEntry[];
-  constructor(items: EffectiveEntry[], private activeFamily?: Family) {
-    this.items = items.filter((e) => !e.hidden);
+  /** `includeHidden`: a vista Neumas busca também os ocultos (para poder mostrá-los). */
+  constructor(items: EffectiveEntry[], private activeFamily?: Family, opts: { includeHidden?: boolean } = {}) {
+    this.items = opts.includeHidden ? items : items.filter((e) => !e.hidden);
   }
   query(raw: string, limit = 200): EffectiveEntry[] {
     const q = norm(raw.trim());
