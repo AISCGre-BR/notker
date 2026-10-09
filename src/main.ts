@@ -31,6 +31,7 @@ import type { Tree } from "web-tree-sitter";
 import { createRegistry } from "./app/commands";
 import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
+import { installTooltips } from "./ui/pd/tooltip";
 import { createMenubar, type MenuItem } from "./ui/menubar";
 import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
@@ -728,6 +729,8 @@ async function boot() {
   waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
     void commands.run("wave.reset");
   });
+
+  installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
 
   // Atalhos no nível da JANELA (registro único), em fase de BOLHA: o CodeMirror
   // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com
