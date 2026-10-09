@@ -24,7 +24,7 @@ describe("sink jsPDF", () => {
     vi.stubGlobal("fetch", async (url: string) => {
       fetched.push(url);
       const buf = readFileSync(url);
-      return { arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
+      return { ok: true, status: 200, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
     });
     const sink = await createJsPdfSink("a4", ["laon"], URLS);
     expect(fetched).not.toContain(URLS.gregall); // família Laon: gregall não é carregada
@@ -43,10 +43,15 @@ describe("sink jsPDF", () => {
   it("Carta: página de 612 × 792 pt", async () => {
     vi.stubGlobal("fetch", async (url: string) => {
       const buf = readFileSync(url);
-      return { arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
+      return { ok: true, status: 200, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
     });
     const sink = await createJsPdfSink("letter", ["stgall"], URLS);
     sink.title("Kyrie", 306, 56.69, 14);
     expect(mediaBoxes(new TextDecoder("latin1").decode(sink.bytes()))).toEqual([[612, 792]]);
+  });
+  it("fonte com HTTP 404 rejeita com a URL e o status", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) }));
+    await expect(createJsPdfSink("a4", ["stgall"], { ...URLS, gregall: "x/falta-404.ttf" }))
+      .rejects.toThrow("fonte x/falta-404.ttf: HTTP 404");
   });
 });
