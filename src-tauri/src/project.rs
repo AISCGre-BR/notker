@@ -55,7 +55,7 @@ pub fn write_project(
 /// Para cada caminho, se ainda é um ARQUIVO (Recentes: some o que foi apagado/movido).
 /// Não lê conteúdo e não depende do escopo do plugin-fs.
 #[tauri::command(rename_all = "snake_case")]
-pub fn existing_paths(paths: Vec<String>) -> Vec<bool> {
+pub async fn existing_paths(paths: Vec<String>) -> Vec<bool> {
     paths.iter().map(|p| std::path::Path::new(p).is_file()).collect()
 }
 
@@ -81,11 +81,11 @@ mod tests {
         let dir = std::env::temp_dir();
         let file = dir.join(format!("notker-exists-{}.notker", std::process::id()));
         std::fs::write(&file, b"x").unwrap();
-        let r = existing_paths(vec![
+        let r = tauri::async_runtime::block_on(existing_paths(vec![
             file.to_string_lossy().to_string(),
             dir.to_string_lossy().to_string(),
             dir.join("notker-nao-existe.notker").to_string_lossy().to_string(),
-        ]);
+        ]));
         assert_eq!(r, vec![true, false, false]);
         std::fs::remove_file(&file).ok();
     }

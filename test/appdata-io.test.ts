@@ -52,12 +52,35 @@ describe("appDataSlot", () => {
     await expect(appDataSlot(RECENT_FILE).write("x")).rejects.toThrow("disco cheio");
     expect(fs.rename).not.toHaveBeenCalled();
   });
-  it("remove: só se existe", async () => {
-    fs.exists.mockResolvedValueOnce(false);
+  it("remove: só se existe; apaga também o .tmp órfão", async () => {
+    fs.exists.mockResolvedValue(false);
     await appDataSlot(RECOVERY_FILE).remove();
     expect(fs.remove).not.toHaveBeenCalled();
+    fs.exists.mockResolvedValue(true);
     await appDataSlot(RECOVERY_FILE).remove();
     expect(fs.remove).toHaveBeenCalledWith("recovery/session.json", AD);
+    expect(fs.remove).toHaveBeenCalledWith("recovery/session.json.tmp", AD);
+  });
+  it("duas gravações simultâneas no mesmo slot são serializadas (2ª só começa após o rename da 1ª)", async () => {
+    let release!: () => void;
+    fs.rename.mockImplementationOnce(() => new Promise<void>((r) => { release = r; }));
+    const a = appDataSlot(RECENT_FILE).write("A");
+    const b = appDataSlot(RECENT_FILE).write("B");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fs.writeTextFile).toHaveBeenCalledTimes(1);
+    release();
+    await Promise.all([a, b]);
+    expect(fs.writeTextFile).toHaveBeenCalledTimes(2);
+    expect(fs.writeTextFile.mock.calls[1][1]).toBe("B");
+    expect(fs.rename.mock.invocationCallOrder[0]).toBeLessThan(fs.writeTextFile.mock.invocationCallOrder[1]);
+  });
+  it("falha da 1ª gravação não bloqueia a 2ª", async () => {
+    fs.writeTextFile.mockRejectedValueOnce(new Error("disco cheio"));
+    const a = appDataSlot(RECENT_FILE).write("A");
+    const b = appDataSlot(RECENT_FILE).write("B");
+    await expect(a).rejects.toThrow("disco cheio");
+    await expect(b).resolves.toBeUndefined();
+    expect(fs.rename).toHaveBeenCalledTimes(1);
   });
 });
 

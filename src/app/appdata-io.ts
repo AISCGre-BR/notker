@@ -1,7 +1,9 @@
 // src/app/appdata-io.ts  (IO Tauri — testado com plugin-fs simulado)
 /** Arquivos de texto na pasta de dados do app (AppData), dentro do escopo que a capability
  *  JÁ concede (`fs:allow-appdata-*-recursive`). Gravação atômica: escreve `<nome>.tmp` e
- *  renomeia por cima (um corte de energia não deixa JSON pela metade).
+ *  renomeia por cima (um crash do processo não deixa JSON pela metade). Limite: contra falta
+ *  de energia a durabilidade depende do sistema de arquivos (o plugin-fs não faz fsync).
+ *  Gravações no MESMO arquivo são serializadas (mesmo `.tmp`), mesmo entre instâncias do slot.
  *  A existência de caminhos ARBITRÁRIOS (recentes) é checada pelo comando Rust
  *  `existing_paths` — sem abrir o escopo do fs para a pasta pessoal inteira. */
 import { invoke } from "@tauri-apps/api/core";
@@ -13,20 +15,28 @@ export const RECOVERY_FILE = "recovery/session.json";
 
 const opts = { baseDir: BaseDirectory.AppData };
 
+const chains = new Map<string, Promise<unknown>>();
+
 export function appDataSlot(name: string): TextSlot {
   const dir = name.includes("/") ? name.slice(0, name.lastIndexOf("/")) : "";
+  const tmp = `${name}.tmp`;
+  async function doWrite(text: string): Promise<void> {
+    await mkdir(dir, { ...opts, recursive: true }).catch(() => {});
+    await writeTextFile(tmp, text, opts);
+    await rename(tmp, name, { oldPathBaseDir: BaseDirectory.AppData, newPathBaseDir: BaseDirectory.AppData });
+  }
   return {
     async read() {
       return (await exists(name, opts)) ? await readTextFile(name, opts) : null;
     },
-    async write(text) {
-      await mkdir(dir, { ...opts, recursive: true }).catch(() => {});
-      const tmp = `${name}.tmp`;
-      await writeTextFile(tmp, text, opts);
-      await rename(tmp, name, { oldPathBaseDir: BaseDirectory.AppData, newPathBaseDir: BaseDirectory.AppData });
+    write(text) {
+      const r = (chains.get(name) ?? Promise.resolve()).then(() => doWrite(text));
+      chains.set(name, r.catch(() => {}));
+      return r;
     },
     async remove() {
       if (await exists(name, opts)) await remove(name, opts);
+      if (await exists(tmp, opts)) await remove(tmp, opts);
     },
   };
 }
