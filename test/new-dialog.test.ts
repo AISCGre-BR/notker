@@ -1,68 +1,73 @@
 import { describe, it, expect } from "vitest";
 import { newDocumentDialog } from "../src/ui/new-dialog";
 
+const mk = () => { const host = document.createElement("div"); document.body.appendChild(host); return host; };
+const cancelBtn = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>(".sc-dialog__actions button")].find((b) => b.textContent === "Cancelar")!;
+const okBtn = (host: HTMLElement) => host.querySelector<HTMLButtonElement>(".sc-dialog__actions .sc-btn--filled")!;
+
 describe("diálogo Novo", () => {
-  it("resolve com família e campos preenchidos ao confirmar (toggle, sem radio)", async () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
+  it("resolve com família e campos preenchidos ao confirmar (segmentado, sem radio)", async () => {
+    const host = mk();
     const p = newDocumentDialog(host, { title: "Novo projeto" });
-    // família começa em stgall; escolhe Laon pelo botão-toggle
-    host.querySelector<HTMLButtonElement>('[data-fam="laon"]')!.click();
-    host.querySelector<HTMLInputElement>(".newdlg-name")!.value = "Rorate";
-    host.querySelector<HTMLInputElement>(".newdlg-office")!.value = "Introitus";
-    host.querySelector<HTMLButtonElement>(".newdlg-ok")!.click();
-    const r = await p;
-    expect(r).toEqual({ family: "laon", name: "Rorate", office: "Introitus" });
-    expect(host.querySelector(".newdlg-box")).toBeNull(); // fechou (host esvaziado)
+    host.querySelectorAll<HTMLButtonElement>(".sc-seg button")[1].click();
+    const inputs = host.querySelectorAll<HTMLInputElement>("input.sc-input");
+    inputs[0].value = "Rorate";
+    inputs[1].value = "Introitus";
+    okBtn(host).click();
+    expect(await p).toEqual({ family: "laon", name: "Rorate", office: "Introitus" });
+    expect(host.querySelector(".sc-dialog")).toBeNull();
     expect(host.style.display).toBe("none");
   });
 
   it("não usa controles de formulário nativos (sem radio/checkbox/select)", () => {
-    const host = document.createElement("div");
-    newDocumentDialog(host, { title: "x" });
+    const host = mk();
+    void newDocumentDialog(host, { title: "x" });
     expect(host.querySelector('input[type="radio"]')).toBeNull();
     expect(host.querySelector('input[type="checkbox"]')).toBeNull();
     expect(host.querySelector("select")).toBeNull();
-    expect(host.querySelectorAll(".newdlg-fam-btn").length).toBe(2);
+    expect(host.querySelectorAll(".sc-seg button").length).toBe(2);
   });
 
-  it("default é St. Gallen quando não se troca a família", async () => {
-    const host = document.createElement("div");
+  it("default é St. Gall quando não se troca a família", async () => {
+    const host = mk();
     const p = newDocumentDialog(host, { title: "x" });
-    host.querySelector<HTMLButtonElement>(".newdlg-ok")!.click();
+    okBtn(host).click();
     expect(await p).toEqual({ family: "stgall" });
   });
 
+  it("opts.family pré-seleciona a família", async () => {
+    const host = mk();
+    const p = newDocumentDialog(host, { title: "x", family: "laon" });
+    okBtn(host).click();
+    expect(await p).toEqual({ family: "laon" });
+  });
+
   it("resolve null ao cancelar", async () => {
-    const host = document.createElement("div");
+    const host = mk();
     const p = newDocumentDialog(host, { title: "Novo projeto" });
-    host.querySelector<HTMLButtonElement>(".newdlg-cancel")!.click();
+    cancelBtn(host).click();
     expect(await p).toBeNull();
   });
 
-  // Tarefa 2: aviso/rótulo no popup
-  it("com warning e okLabel, renderiza .newdlg-warning e botão ok com rótulo customizado", async () => {
-    const host = document.createElement("div");
+  it("com warning e okLabel, mostra o aviso e o botão com rótulo customizado", async () => {
+    const host = mk();
     const p = newDocumentDialog(host, {
       title: "Substituir projeto",
-      warning: "substitui o projeto atual — alterações não salvas serão perdidas",
+      warning: "O projeto atual será fechado.",
       okLabel: "Substituir",
     });
-    const warn = host.querySelector(".newdlg-warning");
-    expect(warn).not.toBeNull();
-    expect(warn!.textContent).toContain("substitui o projeto atual");
-    const ok = host.querySelector<HTMLButtonElement>(".newdlg-ok");
-    expect(ok!.textContent).toBe("Substituir");
-    // fecha para não deixar promessa pendente
-    host.querySelector<HTMLButtonElement>(".newdlg-cancel")!.click();
+    expect(host.querySelector(".sc-dialog__body")!.textContent).toContain("O projeto atual será fechado.");
+    expect(okBtn(host).textContent).toBe("Substituir");
+    cancelBtn(host).click();
     await p;
   });
 
-  it("sem warning/okLabel, não existe .newdlg-warning e ok diz 'Criar'", () => {
-    const host = document.createElement("div");
-    newDocumentDialog(host, { title: "Adicionar canto" });
-    expect(host.querySelector(".newdlg-warning")).toBeNull();
-    const ok = host.querySelector<HTMLButtonElement>(".newdlg-ok");
-    expect(ok!.textContent).toBe("Criar");
+  it("sem warning/okLabel, não há corpo e o botão diz 'Criar'", async () => {
+    const host = mk();
+    const p = newDocumentDialog(host, { title: "Adicionar canto" });
+    expect(host.querySelector(".sc-dialog__body")).toBeNull();
+    expect(okBtn(host).textContent).toBe("Criar");
+    cancelBtn(host).click();
+    await p;
   });
 });

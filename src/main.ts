@@ -35,6 +35,7 @@ import { installTooltips } from "./ui/pd/tooltip";
 import { createMenubar, type MenuItem } from "./ui/menubar";
 import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
+import { openDialog } from "./ui/pd/dialog";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
@@ -388,7 +389,7 @@ async function boot() {
   }
   // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
   async function addNewDoc(): Promise<void> {
-    const r = await newDocumentDialog(dialogHost, { title: "Adicionar canto" });
+    const r = await newDocumentDialog(dialogHost, { title: "Novo canto", family: effectiveFamily(project, project.activeId) });
     if (!r) return;
     captureEditorIntoProject();
     const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
@@ -406,8 +407,8 @@ async function boot() {
     newProjectCmd: async () => {
       const r = await newDocumentDialog(dialogHost, {
         title: "Novo projeto",
-        warning: "substitui o projeto atual — alterações não salvas serão perdidas",
-        okLabel: "Substituir",
+        warning: "O projeto atual será fechado. Alterações não salvas serão perdidas.",
+        okLabel: "Criar",
       });
       if (!r) return;
       project = newProject({ family: r.family, name: r.name, office: r.office });
@@ -651,8 +652,16 @@ async function boot() {
     checked: () => themeChoice === choice,
   });
   // Provisórios (toasts) até o diálogo da Task 8.
-  const showShortcuts = () => toaster.show("F2 ou Ctrl+K: buscar neuma · Ctrl+Enter na busca: cadastrar nome · Alt+setas: mover neuma");
-  const showAbout = () => toaster.show("Notker " + __APP_VERSION__ + " — editor de canto gregoriano. GPL-3.");
+  const showShortcuts = () => void openDialog(dialogHost, {
+    title: "Atalhos de teclado",
+    body: commands.ids().filter((id) => commands.shortcut(id)).map((id) => commands.label(id) + " — " + commands.shortcut(id)).join(" · "),
+    actions: [{ id: "ok", label: "Fechar", kind: "filled" }],
+  });
+  const showAbout = () => void openDialog(dialogHost, {
+    title: "Sobre o Notker",
+    body: "Notker " + __APP_VERSION__ + " — editor de canto gregoriano. GPL-3.",
+    actions: [{ id: "ok", label: "Fechar", kind: "filled" }],
+  });
   commands.register([
     themeCmd("system", "Tema: sistema"),
     themeCmd("light", "Tema: Pergaminho"),
