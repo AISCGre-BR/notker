@@ -426,7 +426,13 @@ body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none;
 .neumas-figure svg { max-width: 100%; height: auto; max-height: 96px; }
 .neumas-chain__row { display: flex; align-items: center; gap: var(--space-2); }
 .neumas-chain__input { font-family: var(--font-mono); flex: 1 1 auto; min-width: 0; }
-.neumas-chain__input[readonly] { color: var(--ink-soft); }
+.neumas-chain__input[readonly] { color: var(--ink-soft); background: var(--ink-wash); border: 1px dashed var(--rule); box-shadow: none; cursor: default; }
+.neumas-chain__input[readonly]:hover, .neumas-chain__input[readonly]:focus { border-color: var(--rule); box-shadow: none; }
+.neumas-chain__hint { margin-top: 4px; font: 400 12px/16px var(--font-sans); color: var(--ink-muted); }
+.neumas-chain__actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.neumas-compose-help { font: 400 12px/16px var(--font-sans); color: var(--ink-soft); }
+.neumas-compose-help:empty { display: none; }
+.neumas-save-seq.sc-btn { flex: none; }
 .neumas-validity { font: 500 12px/16px var(--font-sans); }
 .neumas-validity[data-state="valid"] { color: var(--success); }
 .neumas-validity[data-state="invalid"] { color: var(--danger); }

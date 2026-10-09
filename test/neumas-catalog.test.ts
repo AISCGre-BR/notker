@@ -90,3 +90,24 @@ describe("cartão Catálogo", () => {
     expect(c.focusGrid()).toBe(false);
   });
 });
+
+describe("onda final: catálogo", () => {
+  const NOSEQ = [e("stgall:pe"), e("stgall:vi")];
+  it("4. 'Nenhuma sequência ainda' só com busca vazia e filtro todos; com busca/filtro não há seção Minhas", () => {
+    const c = createCatalog(host, cbs());
+    c.render(catalogSections(NOSEQ, "stgall", "todos", ""), st());
+    expect(host.textContent).toContain("Nenhuma sequência ainda");
+    c.render(catalogSections(NOSEQ, "stgall", "todos", "pe"), st({ query: "pe" }));
+    expect(host.textContent).not.toContain("Nenhuma sequência ainda");
+    expect(host.querySelector('[data-section="minhas"]')).toBeNull();
+    c.render(catalogSections(NOSEQ, "stgall", "sem-nome", ""), st({ filter: "sem-nome" }));
+    expect(host.querySelector('[data-section="minhas"]')).toBeNull();
+    c.render(catalogSections(NOSEQ, "stgall", "sequencias", ""), st({ filter: "sequencias" }));
+    expect(host.textContent).toContain("Nenhuma sequência ainda");
+  });
+  it("15. a bolinha 'tem nome seu' é role=img", () => {
+    const c = createCatalog(host, cbs());
+    c.render(catalogSections(ALL, "stgall", "todos", ""), st());
+    expect(host.querySelector(".neumas-card__mine")!.getAttribute("role")).toBe("img");
+  });
+});

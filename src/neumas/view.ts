@@ -36,7 +36,7 @@ export interface NeumasView {
   refresh(): void;
   focusSearch(): void;
   family(): Family;
-  /** Grava já o que estiver pendente (nota em debounce). Chamar antes de trocar de vista. */
+  /** Saída da vista: grava o que estiver pendente (nota em debounce) e descarta o rascunho. Chamar antes de trocar de vista. */
   flush(): void;
 }
 
@@ -55,10 +55,12 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   let editChain: string | null = null;
   let composing = false;
   let saveState: BenchStatus["saveState"] = "";
+  /** A vista está na tela (open → exit/flush). Só então o foco perdido é devolvido. */
+  let opened = false;
 
   const catalog = createCatalog(host, {
     onQuery: (q) => { query = q; render(); },
-    onFamily: (f) => { if (f !== family) { bench.flushNote(); family = f; selectedId = null; draft = null; composing = false; editChain = null; render(); } },
+    onFamily: (f) => { if (f !== family) { resetForFamily(f); render(); } },
     onFilter: (f) => { filter = f; render(); },
     onSelect: (id) => select(id),
     onActivate: (id) => { if (composing && (draft || selectedIsUserSeq())) appendToChain(id); else select(id); },
@@ -68,7 +70,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   const bench = createBench(host, {
     onChainInput: (n) => { if (draft) draft.nabc = n; else editChain = n; renderBench(); },
     onChainCommit: (n, how) => commitChain(n, how),
-    onAddName: (n) => void addUserName(n),
+    onAddName: (n) => addUserName(n),
     onRemoveName: (n) => { if (selectedId) save(removeName(deps.overlay(), selectedId, n)); },
     onPromoteName: (n) => { if (selectedId) save(promoteName(deps.overlay(), selectedId, n)); },
     onNote: (n) => { if (selectedId) save(setNote(deps.overlay(), selectedId, n)); },
@@ -79,6 +81,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     },
     onDelete: () => deleteSelected(),
     onCreateFrom: () => { const e = selectedEntry(); if (e) newSequence(e.nabc); },
+    onSaveDraft: () => { bench.flushNote(); void createFromDraft().then((id) => { if (id) bench.focusName(); }); },
     onGoTo: (id) => { draft = null; editChain = null; composing = false; select(id); },
     onToggleCompose: () => { composing = !composing; render(); },
     onFieldEscape: () => { if (!catalog.focusGrid()) catalog.focusSearch(); },
@@ -106,6 +109,27 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     return { validity, duplicate };
   }
 
+  /** Descarta o rascunho; avisa se havia cadeia digitada (sem Desfazer). */
+  function discardDraft(): void {
+    if (draft && normalizeNabc(draft.nabc)) deps.toast("Rascunho descartado.", { kind: "warn" });
+    draft = null; editChain = null; composing = false;
+  }
+  /** Troca de família: nota gravada, seleção e rascunho não atravessam. */
+  function resetForFamily(f: Family): void {
+    bench.flushNote();
+    discardDraft();
+    family = f; selectedId = null;
+  }
+  /** Foco perdido (item removido do DOM → body): volta ao cartão lógico, para que as
+   *  teclas N/S/I/Esc da vista continuem valendo. */
+  function restoreFocus(): void {
+    if (!opened) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a !== document.documentElement) return;
+    if (!catalog.focusGrid()) catalog.focusSearch();
+  }
+  const cardIds = (): string[] => [...host.querySelectorAll<HTMLElement>(".neumas-card")].map((c) => c.dataset.id!);
+
   /** Redesenha tudo (grade + bancada). A grade tem centenas de cartões: digitar na
    *  cadeia só redesenha a bancada, e setas só remarcam a seleção. */
   function render(): void {
@@ -114,11 +138,13 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     const sections = catalogSections(all, family, filter, query, { pin: selectedId });
     catalog.render(sections, { family, filter, query, selectedId, composing });
     renderBench();
+    restoreFocus();
   }
   function renderBench(): void {
     const e = selectedEntry();
     const item: BenchItem | null = draft ? { kind: "draft", family } : e ? { kind: "entry", entry: e } : null;
     bench.render(item, { chain: currentChain(), ...chainStatus(), composing, saveState });
+    restoreFocus();
   }
 
   // ── gravação ──
@@ -128,8 +154,9 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     const p = deps.commit(next);
     render();
     return p.then(
-      () => { saveState = "salvo ✓"; render(); },
-      () => { saveState = "erro ao salvar"; render(); }, // o toast de erro vem de quem grava
+      // Só o estado de gravação mudou: refaz a bancada, não a grade (centenas de cartões).
+      () => { saveState = "salvo ✓"; renderBench(); },
+      () => { saveState = "erro ao salvar"; renderBench(); }, // o toast de erro vem de quem grava
     );
   }
 
@@ -137,14 +164,16 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   function select(id: string): void {
     bench.flushNote();
     const wasComposing = composing || !!draft;
-    draft = null; editChain = null; composing = false;
+    discardDraft();
     selectedId = id;
     const e = entryById(id);
-    if (e && e.family !== family) { family = e.family; render(); return; }
+    if (e && e.family !== family) { family = e.family; render(); catalog.reveal(id); return; }
     if (!wasComposing && catalog.markSelected(id)) renderBench(); else render();
+    catalog.reveal(id);
   }
   function newSequence(prefill: string): void {
     bench.flushNote();
+    discardDraft();
     selectedId = null; editChain = null;
     draft = { nabc: normalizeNabc(prefill) };
     composing = prefill === "";
@@ -162,6 +191,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   }
   /** Cria a sequência do rascunho (se válida e nova). Devolve o id, ou null. */
   function createFromDraft(): Promise<string | null> {
+    bench.flushNote();
     if (!draft) return Promise.resolve(null);
     const st = chainStatus();
     if (st.validity === "empty") { deps.toast("Digite a cadeia nabc da sequência.", { kind: "warn" }); return Promise.resolve(null); }
@@ -172,6 +202,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     return save(r.overlay).then(() => r.id);
   }
   function commitChain(raw: string, how: "enter" | "blur"): void {
+    bench.flushNote();
     if (draft) {
       draft.nabc = raw;
       if (how === "enter") void createFromDraft().then((id) => { if (id) bench.focusName(); });
@@ -191,7 +222,8 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     editChain = null;
     void save(r.overlay);
   }
-  async function addUserName(name: string): Promise<void> {
+  async function addUserName(name: string): Promise<boolean> {
+    bench.flushNote();
     if (draft) {
       const st = chainStatus();
       if (st.duplicate && (st.validity === "valid" || st.validity === "unknown")) {
@@ -200,24 +232,32 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
         draft = null; composing = false;
         selectedId = target.id;
         const r = addNameToEntries(deps.overlay(), [{ id: target.id, displayNames: target.displayNames }], name);
-        if (!r.changed) { render(); deps.toast("Esse nome já existe.", { kind: "warn" }); return; }
+        if (!r.changed) { render(); deps.toast("Esse nome já existe.", { kind: "warn" }); return false; }
         await save(r.overlay);
         deps.toast(`Nome “${name}” adicionado a “${st.duplicate.label}”, que já existia.`);
         catalog.focusGrid();
-        return;
+        return true;
       }
       const id = await createFromDraft();
-      if (!id) return;
+      if (!id) return false; // não criou (cadeia vazia/inválida/repetida): o nome digitado fica
       await save(addName(deps.overlay(), id, name));
       catalog.focusGrid();
-      return;
+      return true;
     }
     const e = selectedEntry();
-    if (!e) return;
+    if (!e) return false;
     const r = addNameToEntries(deps.overlay(), [{ id: e.id, displayNames: e.displayNames }], name);
-    if (!r.changed) { deps.toast("Esse nome já existe.", { kind: "warn" }); return; }
+    if (!r.changed) { deps.toast("Esse nome já existe.", { kind: "warn" }); return false; }
+    const before = cardIds();
     void save(r.overlay);
+    // Filtro "Sem nome": o item sai da grade ao ser nomeado; o foco vai ao vizinho.
+    if (!cardIds().includes(e.id)) {
+      const i = before.indexOf(e.id);
+      const nid = before[i + 1] ?? before[i - 1];
+      if (nid && nid !== e.id) select(nid);
+    }
     catalog.focusGrid();
+    return true;
   }
   function insertCurrent(): void {
     const chain = normalizeNabc(currentChain());
@@ -226,12 +266,15 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
       const v = deps.validate(chain);
       if (v === "invalid") { deps.toast("Cadeia nabc inválida — corrija antes de inserir.", { kind: "warn" }); return; }
     }
+    bench.flushNote();
+    draft = null; editChain = null; composing = false; // inserida: o rascunho cumpriu o papel
     deps.insert(chain);
   }
   function deleteSelected(): void {
+    bench.flushNote();
     const e = selectedEntry();
     if (!e?.userSequence) return;
-    const cards = [...host.querySelectorAll<HTMLElement>(".neumas-card")].map((c) => c.dataset.id!);
+    const cards = cardIds();
     const i = cards.indexOf(e.id);
     const r = removeSequence(deps.overlay(), e.id);
     if (!r.removed) return;
@@ -241,9 +284,26 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     void save(r.overlay);
     catalog.focusGrid();
     deps.toast("Sequência excluída.", {
-      action: { label: "Desfazer", run: () => { selectedId = e.id; void save(restoreSequence(deps.overlay(), e.id, removed)); } },
+      action: {
+        label: "Desfazer",
+        run: () => {
+          discardDraft();
+          selectedId = e.id;
+          void save(restoreSequence(deps.overlay(), e.id, removed));
+          if (opened) catalog.focusGrid();
+        },
+      },
     });
   }
+
+  /** Saída da vista: grava a nota, descarta o rascunho (avisando) e para de devolver foco. */
+  function leave(): void {
+    bench.flushNote();
+    discardDraft();
+    opened = false;
+  }
+  // Clique em área vazia da vista: o foco iria ao body e as teclas da vista parariam.
+  host.addEventListener("click", () => { restoreFocus(); });
 
   // ── teclado da vista (fora de campos) ──
   host.addEventListener("keydown", (e) => {
@@ -251,6 +311,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     if (e.key === "Escape") {
       e.preventDefault();
       if (composing) { composing = false; render(); return; }
+      leave();
       deps.exit();
       return;
     }
@@ -265,7 +326,8 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
 
   return {
     open(o = {}) {
-      if (o.family) family = o.family;
+      opened = true;
+      if (o.family && o.family !== family) resetForFamily(o.family);
       if (o.newChain !== undefined) {
         query = ""; filter = "todos";
         newSequence(o.newChain);
@@ -285,6 +347,6 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     refresh: () => render(),
     focusSearch: () => catalog.focusSearch(),
     family: () => family,
-    flush: () => bench.flushNote(),
+    flush: () => leave(),
   };
 }

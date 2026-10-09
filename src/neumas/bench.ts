@@ -6,6 +6,7 @@
 import type { EffectiveEntry, Family } from "../neume/types";
 import type { NabcValidity } from "../neume/validate-nabc";
 import { nameNeume } from "../neume/naming";
+import { normalizeNabc } from "../neume/overlay";
 import { debounce } from "../preview/debounce";
 
 export type BenchItem =
@@ -24,7 +25,8 @@ export interface BenchCallbacks {
   onChainInput(nabc: string): void;
   /** Enter (`how: "enter"`) ou saída (`"blur"`) do campo nabc. */
   onChainCommit(nabc: string, how: "enter" | "blur"): void;
-  onAddName(name: string): void;
+  /** `false` (ou promessa de `false`) = não gravou: o texto digitado fica no campo. */
+  onAddName(name: string): boolean | void | Promise<boolean | void>;
   onRemoveName(name: string): void;
   onPromoteName(name: string): void;
   onNote(note: string): void;
@@ -32,6 +34,8 @@ export interface BenchCallbacks {
   onToggleHidden(): void;
   onDelete(): void;
   onCreateFrom(): void;
+  /** Botão "Salvar sequência" do rascunho (o mesmo que Enter na cadeia). */
+  onSaveDraft(): void;
   onGoTo(id: string): void;
   onToggleCompose(): void;
   /** Esc num campo da bancada: volta à grade. */
@@ -85,7 +89,8 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     figure: HTMLElement; chain: HTMLInputElement; validity: HTMLElement; dup: HTMLElement;
     names: HTMLElement; newName: HTMLInputElement; note: HTMLTextAreaElement | null;
     hide: HTMLButtonElement | null; save: HTMLElement; compose: HTMLButtonElement | null;
-    family: Family; editable: boolean;
+    family: Family; editable: boolean; draft: boolean; savedChain: string;
+    composeHelp: HTMLElement | null; saveSeq: HTMLButtonElement | null; refBody: HTMLElement;
   } | null = null;
   let drawn = "";
   /** Nota gravada do item atual e debounce da gravação ao digitar. */
@@ -141,23 +146,37 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     const validity = el("span", "neumas-validity");
     validity.setAttribute("aria-live", "polite");
     row.append(chain, validity);
+    let saveSeq: HTMLButtonElement | null = null;
+    if (item.kind === "draft") {
+      saveSeq = button("Salvar sequência", "sc-btn--filled neumas-save-seq", () => cb.onSaveDraft());
+      row.appendChild(saveSeq);
+    }
     chainField.appendChild(row);
+    if (item.kind === "draft") chainField.appendChild(el("div", "neumas-chain__hint", "Enter salva · dê um nome para salvar junto"));
     const dup = el("div", "neumas-dup");
     if (editable) {
       chain.addEventListener("input", () => cb.onChainInput(chain.value));
       chain.addEventListener("blur", () => cb.onChainCommit(chain.value, "blur"));
-      fieldKeys(chain, () => cb.onChainCommit(chain.value, "enter"), () => cb.onFieldEscape());
+      fieldKeys(chain, () => cb.onChainCommit(chain.value, "enter"), () => {
+        // Esc numa sequência já gravada CANCELA a edição: restaura o valor gravado antes
+        // de sair do campo (o blur seguinte não grava nada).
+        if (entry?.userSequence && refs && chain.value !== refs.savedChain) { chain.value = refs.savedChain; cb.onChainInput(chain.value); }
+        cb.onFieldEscape();
+      });
     } else {
       fieldKeys(chain, null, () => cb.onFieldEscape());
     }
     let compose: HTMLButtonElement | null = null;
+    let composeHelp: HTMLElement | null = null;
     const chainActions = el("div", "neumas-chain__actions");
     if (editable) {
-      compose = button("Compor clicando", "neumas-compose", () => cb.onToggleCompose());
+      compose = button("Compor clicando", "sc-btn--elevated neumas-compose", () => cb.onToggleCompose());
       compose.dataset.tip = "Com Compor ligado, clicar num cartão acrescenta o código dele à cadeia";
       chainActions.appendChild(compose);
+      composeHelp = el("div", "neumas-compose-help");
+      composeHelp.setAttribute("aria-live", "polite");
     } else {
-      chainActions.appendChild(button("Criar sequência a partir deste", "neumas-create-from", () => cb.onCreateFrom()));
+      chainActions.appendChild(button("Criar sequência a partir deste", "sc-btn--elevated neumas-create-from", () => cb.onCreateFrom()));
     }
 
     // ── nomes do usuário ──
@@ -170,22 +189,27 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     fieldKeys(newName, () => {
       const n = newName.value.trim();
       if (!n) return;
+      const r = cb.onAddName(n);
+      if (r === false) return;
+      if (r && typeof (r as Promise<unknown>).then === "function") {
+        void (r as Promise<boolean | void>).then((ok) => { if (ok !== false && newName.value.trim() === n) newName.value = ""; }, () => {});
+        return;
+      }
       newName.value = "";
-      cb.onAddName(n);
     }, () => cb.onFieldEscape());
     namesBlock.append(names, newName);
 
     // ── referência ──
     const ref = el("div", "neumas-ref");
     ref.appendChild(el("span", "neumas-label", "Referência"));
+    const refBody = el("div", "neumas-ref__body");
+    ref.appendChild(refBody);
     if (entry) {
       const naming = nameNeume(entry.nabc, entry.family);
-      ref.appendChild(el("div", "neumas-ref__name", entry.name));
-      if (naming.systematic && naming.systematic !== entry.name) ref.appendChild(el("div", "neumas-ref__sys", naming.systematic));
+      refBody.appendChild(el("div", "neumas-ref__name", entry.name));
+      if (naming.systematic && naming.systematic !== entry.name) refBody.appendChild(el("div", "neumas-ref__sys", naming.systematic));
       const prov = entry.provenance?.[0];
-      if (prov) ref.appendChild(el("div", "neumas-ref__src", prov.source));
-    } else {
-      ref.appendChild(el("div", "neumas-ref__sys", "aparece quando a cadeia for válida"));
+      if (prov) refBody.appendChild(el("div", "neumas-ref__src", prov.source));
     }
 
     // ── nota ──
@@ -213,18 +237,22 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     actions.appendChild(insert);
     let hide: HTMLButtonElement | null = null;
     if (entry) {
-      hide = button(entry.hidden ? "Mostrar na busca" : "Ocultar da busca", "neumas-hide", () => cb.onToggleHidden());
+      hide = button(entry.hidden ? "Mostrar na busca" : "Ocultar da busca", "sc-btn--elevated neumas-hide", () => cb.onToggleHidden());
       actions.appendChild(hide);
     }
-    if (entry?.userSequence) actions.appendChild(button("Excluir sequência", "sc-btn--danger neumas-delete", () => cb.onDelete()));
+    if (entry?.userSequence) actions.appendChild(button("Excluir sequência", "sc-btn--elevated sc-btn--danger neumas-delete", () => cb.onDelete()));
     const save = el("span", "neumas-savestate");
     save.setAttribute("aria-live", "polite");
 
+    if (composeHelp) chainActions.appendChild(composeHelp);
     body.append(figure, chainField, dup, chainActions, namesBlock, ref);
     if (entry) body.appendChild(noteField);
     body.append(actions, save);
     card.append(head, body);
-    refs = { figure, chain, validity, dup, names, newName, note, hide, save, compose, family, editable };
+    refs = {
+      figure, chain, validity, dup, names, newName, note, hide, save, compose, family, editable,
+      draft: item.kind === "draft", savedChain: entry?.userSequence ? entry.nabc : "", composeHelp, saveSeq, refBody,
+    };
     drawn = "";
   }
 
@@ -238,10 +266,20 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
     r.dup.replaceChildren();
     if (st.duplicate && r.editable) {
       r.dup.append(el("span", undefined, `Já existe: ${st.duplicate.label}`));
-      const go = button("Ir para ele", "neumas-goto", () => cb.onGoTo(st.duplicate!.id));
+      const go = button("Ir para ele", "sc-btn--elevated neumas-goto", () => cb.onGoTo(st.duplicate!.id));
       r.dup.appendChild(go);
     }
     r.compose?.setAttribute("aria-pressed", String(st.composing));
+    if (r.composeHelp) r.composeHelp.textContent = st.composing ? "Clique nos cartões do catálogo para acrescentar à cadeia." : "";
+    if (r.saveSeq) r.saveSeq.disabled = !((st.validity === "valid" || st.validity === "unknown") && st.chain.trim() && !st.duplicate);
+    if (entry?.userSequence) r.savedChain = entry.nabc;
+    if (r.draft) {
+      const ok = (st.validity === "valid" || st.validity === "unknown") && normalizeNabc(st.chain);
+      if (ok) {
+        const nm = nameNeume(normalizeNabc(st.chain), r.family);
+        r.refBody.replaceChildren(el("div", "neumas-ref__name", nm.displayNames[0] ?? nm.systematic));
+      } else r.refBody.replaceChildren(el("div", "neumas-ref__sys", "aparece quando a cadeia for válida"));
+    }
     // nomes
     r.names.replaceChildren();
     const userNames = entry?.userNames ?? [];

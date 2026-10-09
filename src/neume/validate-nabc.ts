@@ -15,7 +15,11 @@ export function validateNabc(parser: NabcParser | null, raw: string): NabcValidi
   if (!n) return "empty";
   if (FORBIDDEN.test(n)) return "invalid";
   if (!parser) return "unknown";
-  const tree = parser.parse(`nabc-lines: 1;\nname: probe;\n%%\n(h|${n})`);
-  if (!tree) return "unknown";
-  return tree.rootNode.hasError ? "invalid" : "valid";
+  try {
+    const tree = parser.parse(`nabc-lines: 1;\nname: probe;\n%%\n(h|${n})`);
+    if (!tree) return "unknown";
+    return tree.rootNode.hasError ? "invalid" : "valid";
+  } catch {
+    return "unknown"; // parser indisponível/quebrado: não bloqueia o usuário
+  }
 }

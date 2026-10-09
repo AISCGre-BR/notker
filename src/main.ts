@@ -172,7 +172,7 @@ async function boot() {
 
   if (highlightFailed) toaster.show("O realce de sintaxe não carregou. O editor funciona sem cores.", { kind: "warn" });
 
-  // effectiveRef: hoistado para fora do bloco F2 para que os comandos o alcancem.
+  // effectiveRef: entradas efetivas atuais, hoistado para fora do bloco F2 (usado por "Nomear neuma…").
   let effectiveRef: () => EffectiveEntry[] = () => [];
 
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
@@ -186,8 +186,8 @@ async function boot() {
   }
   let reindex = () => {};
   let paletteRef: { open(v: EditorView): void } | null = null;
-  // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora pelo
-  // painel); só a ESCRITA é coalescida (300 ms). schedule() resolve quando o disco
+  // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora por
+  // `commitOverlay`: vista Neumas, hover); só a ESCRITA é coalescida (300 ms). schedule() resolve quando o disco
   // confirma (indicador "salvo ✓" verdadeiro); flush() antes de import/export/fechar.
   const overlayAutosave = createAutosave(async () => {
     try {
@@ -252,11 +252,9 @@ async function boot() {
           displayNames: effective().find((e) => e.id === id)?.displayNames ?? [],
         }));
         const r = addNameToEntries(overlay, targets, n);
-        overlay = r.overlay;
-        const changed = r.changed;
-        if (!changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
-        reindex();
-        try { await overlayAutosave.schedule(); toaster.show(`Nome “${n}” cadastrado.`); }
+        if (!r.changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
+        const saved = commitOverlay(r.overlay); // ponto único: overlay + índices + autosave
+        try { await saved; toaster.show(`Nome “${n}” cadastrado.`); }
         catch { /* o autosave já mostrou o erro */ }
       },
     };
@@ -308,7 +306,7 @@ async function boot() {
   // PLAYBACK-OFF (2026-10-09): barra da onda.
   // let waveBar: WaveBarHandle | null = null;
 
-  // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
+  // ── Onda de interpretação (Tuotilo B2a) — UI desligada (PLAYBACK-OFF); o estado `wave` segue vivo ─────────────────────────────────
   // PLAYBACK-OFF (2026-10-09): semente do playback.
   // // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
   // const WAVE_SEED = 12345;
@@ -400,7 +398,7 @@ async function boot() {
   // }
 
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
-  // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
+  // panel é declarado fora do try (PLAYBACK-OFF: o playToggle, comentado, o usava em runtime).
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
   try {
     const engine = new NabcLibEngine();
@@ -476,7 +474,7 @@ async function boot() {
   function renderTree(): void { treePanel.render(project); updateTitle(); }
   /** Mostra no editor o canto ativo, com o EditorState DELE. Guarda antes o estado do
    *  canto que sai (inclusive se ele acabou de ser excluído: o Desfazer o devolve com
-   *  histórico). O LSP recebe didChange completo; partitura e onda refazem. */
+   *  histórico). O LSP recebe didChange completo; a partitura refaz (onda: PLAYBACK-OFF). */
   function syncFromProject(): void {
     if (shownId) chantStates.remember(shownId, view.state, view.scrollSnapshot());
     // PLAYBACK-OFF (2026-10-09): não há player.
@@ -495,7 +493,7 @@ async function boot() {
     wave = chant.interpretation ?? emptyWave(gabcBodyHash(chant.content));
     renderTree();
     reindex();
-    onDocChange(); // setState não dispara updateListener: LSP + partitura + onda à mão
+    onDocChange(); // setState não dispara updateListener: LSP + partitura à mão (onda: PLAYBACK-OFF)
   }
   function captureEditorIntoProject(): void {
     if (!shownId) return;
@@ -651,7 +649,7 @@ async function boot() {
   function openNeumas(o: OpenOpts = {}): void {
     if (!neumasView) { toaster.show("O catálogo de neumas não carregou.", { kind: "error" }); return; }
     views.set("neumas");
-    neumasView.open({ family: o.family ?? currentFamily(), ...o });
+    neumasView.open({ ...o, family: o.family ?? currentFamily() });
   }
   /** "Nomear neuma…" (Ctrl+Shift+N): seleção num campo nabc, sílaba selecionada (clique na
    *  partitura) ou neuma sob o cursor → glifo/sequência existente ou sequência nova, com o
@@ -737,9 +735,16 @@ async function boot() {
           return;
         }
         await overlayAutosave.flush();
+        const previous = overlay;
         overlay = mergeOverlays(overlay, imported);
         reindex();
-        await writeOverlay();
+        try { await writeOverlay(); }
+        catch (e) {
+          // Escrita bloqueada/falhou: não mostrar nomes que não foram gravados.
+          overlay = previous;
+          reindex();
+          throw e;
+        }
         toaster.show(`Importados: ${countLabel(c)}.`);
       } catch (err) {
         toaster.show("Importar nomes falhou. " + String(err), { kind: "error" });

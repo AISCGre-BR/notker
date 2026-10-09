@@ -27,6 +27,8 @@ export interface Catalog {
   focusGrid(): boolean;
   /** Só remarca a seleção (sem refazer a grade). false se o cartão não está na grade. */
   markSelected(id: string): boolean;
+  /** Rola o cartão para a área visível, sem pular (nearest). */
+  reveal(id: string): void;
 }
 
 const FAMILIES: { id: Family; label: string }[] = [{ id: "stgall", label: "St. Gall" }, { id: "laon", label: "Laon" }];
@@ -130,6 +132,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
     c.append(fig, name, code);
     if (mine) {
       const dot = el("span", "neumas-card__mine");
+      dot.setAttribute("role", "img");
       dot.setAttribute("aria-label", "tem nome seu");
       c.appendChild(dot);
     }
@@ -151,7 +154,12 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
       list.replaceChildren();
       let any = false;
       for (const s of sections) {
-        if (s.id !== "minhas" && s.total === 0) continue;
+        if (s.total === 0) {
+          // "Minhas sequências" vazia só aparece sem busca e com filtro Todos/Sequências
+          // (é onde "+ Nova" e a frase de ajuda fazem sentido); fora disso, some.
+          const plain = !st.query.trim() && (st.filter === "todos" || st.filter === "sequencias");
+          if (s.id !== "minhas" || !plain) continue;
+        }
         const sec = el("div", "neumas-section");
         sec.setAttribute("role", "group");
         sec.dataset.section = s.id;
@@ -195,6 +203,10 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
         x.tabIndex = x === c ? 0 : -1;
       }
       return true;
+    },
+    reveal(id) {
+      const c = cards().find((x) => x.dataset.id === id);
+      if (c && typeof c.scrollIntoView === "function") c.scrollIntoView({ block: "nearest" });
     },
     focusGrid() {
       const all = cards();

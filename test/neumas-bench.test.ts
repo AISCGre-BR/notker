@@ -17,7 +17,7 @@ const seq: EffectiveEntry = {
 const st = (over: Partial<BenchStatus> = {}): BenchStatus => ({ chain: "pe", validity: "valid", duplicate: null, composing: false, saveState: "", ...over });
 const cbs = (): BenchCallbacks => ({
   onChainInput: vi.fn(), onChainCommit: vi.fn(), onAddName: vi.fn(), onRemoveName: vi.fn(), onPromoteName: vi.fn(), onNote: vi.fn(),
-  onInsert: vi.fn(), onToggleHidden: vi.fn(), onDelete: vi.fn(), onCreateFrom: vi.fn(), onGoTo: vi.fn(), onToggleCompose: vi.fn(), onFieldEscape: vi.fn(),
+  onInsert: vi.fn(), onToggleHidden: vi.fn(), onDelete: vi.fn(), onCreateFrom: vi.fn(), onSaveDraft: vi.fn(), onGoTo: vi.fn(), onToggleCompose: vi.fn(), onFieldEscape: vi.fn(),
 });
 const drawFn = () => vi.fn(async (_f: string, n: string) => Object.assign(document.createElement("span"), { className: "drawn", textContent: n }));
 let host: HTMLElement;
@@ -173,5 +173,50 @@ describe("bancada: nota grava ao digitar (debounce 400 ms)", () => {
     t.focus(); t.blur();
     vi.advanceTimersByTime(1000);
     expect(cb.onNote).not.toHaveBeenCalled();
+  });
+});
+
+describe("onda final: bancada", () => {
+  it("3. a Referência do rascunho mostra o nome sistemático da cadeia válida e volta à frase se inválida", async () => {
+    const { nameNeume } = await import("../src/neume/naming");
+    const b = createBench(host, cbs(), drawFn());
+    const item: BenchItem = { kind: "draft", family: "stgall" };
+    b.render(item, st({ chain: "", validity: "empty" }));
+    expect(q(".neumas-ref").textContent).toContain("aparece quando a cadeia for válida");
+    b.render(item, st({ chain: "pe!vi", validity: "valid" }));
+    const expected = nameNeume("pe!vi", "stgall").displayNames[0];
+    expect(expected).toBeTruthy();
+    expect(q(".neumas-ref").textContent).toContain(expected);
+    expect(q(".neumas-ref").textContent).not.toContain("aparece quando");
+    b.render(item, st({ chain: "pe!vi", validity: "unknown" }));
+    expect(q(".neumas-ref").textContent).toContain(expected);
+    b.render(item, st({ chain: "zz", validity: "invalid" }));
+    expect(q(".neumas-ref").textContent).toContain("aparece quando a cadeia for válida");
+  });
+  it("7. Novo nome: onAddName devolvendo false mantém o texto; promessa resolvida em false também", async () => {
+    const cb = cbs();
+    const b = createBench(host, cb, drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    const n = q<HTMLInputElement>(".neumas-newname");
+    n.value = "abc";
+    (cb.onAddName as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+    key(n, "Enter");
+    expect(n.value).toBe("abc");
+    (cb.onAddName as ReturnType<typeof vi.fn>).mockReturnValueOnce(Promise.resolve(false));
+    key(n, "Enter");
+    await Promise.resolve(); await Promise.resolve();
+    expect(n.value).toBe("abc");
+    (cb.onAddName as ReturnType<typeof vi.fn>).mockReturnValueOnce(Promise.resolve(true));
+    key(n, "Enter");
+    await Promise.resolve(); await Promise.resolve();
+    expect(n.value).toBe("");
+  });
+  it("5. botões de ação têm variante visível do Parchment", () => {
+    const b = createBench(host, cbs(), drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    for (const s of [".neumas-create-from", ".neumas-hide"]) expect(q(s).className).toMatch(/sc-btn--(elevated|tonal)/);
+    b.render({ kind: "entry", entry: seq }, st({ chain: "pe!vi" }));
+    for (const s of [".neumas-compose", ".neumas-hide"]) expect(q(s).className).toMatch(/sc-btn--(elevated|tonal)/);
+    expect(q(".neumas-delete").className).toMatch(/sc-btn--(elevated|tonal)/);
   });
 });

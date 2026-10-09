@@ -34,3 +34,10 @@ describe.skipIf(!wasmPresent)("validateNabc com tree-sitter-gregorio", () => {
     expect(validateNabc(parser, s)).toBe("invalid");
   });
 });
+
+describe("validateNabc com parser que lança", () => {
+  it("devolve unknown em vez de propagar", () => {
+    const boom = { parse: () => { throw new Error("wasm caiu"); } };
+    expect(validateNabc(boom, "pe!vi")).toBe("unknown");
+  });
+});

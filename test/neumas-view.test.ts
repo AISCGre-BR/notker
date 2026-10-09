@@ -231,3 +231,181 @@ describe("nota: flush da vista", () => {
     expect(ov().entries["stgall:pe"].note).toBe("anotei");
   });
 });
+
+describe("onda final: rascunho, seleção e foco", () => {
+  it("1. rascunho/seleção não vazam: sair e reabrir em outra família zera; mesma família mantém a seleção", () => {
+    const { view, deps } = setup();
+    view.open({ family: "stgall", newChain: "pe!vi" });
+    expect(q(".sc-panel__title").textContent).toBe("Nova sequência");
+    key(q(".neumas-chain__input"), "Escape"); // volta à grade
+    key(document.activeElement!, "Escape");
+    expect(deps.exit).toHaveBeenCalledTimes(1);
+    expect(deps.toast).toHaveBeenCalledWith("Rascunho descartado.", { kind: "warn" });
+    view.open({ family: "laon" });
+    expect(document.querySelector(".neumas-chain__input")).toBeNull();
+    expect(document.querySelector('.neumas-card[aria-selected="true"]')).toBeNull();
+    view.open({ family: "stgall", select: "stgall:cl" });
+    view.open({ family: "stgall" });
+    expect(card("stgall:cl").getAttribute("aria-selected")).toBe("true");
+    view.open({ family: "laon" });
+    expect(document.querySelector('.neumas-card[aria-selected="true"]')).toBeNull();
+  });
+  it("1. Desfazer da exclusão zera um rascunho aberto antes de selecionar o item restaurado", async () => {
+    const s = addSequence(emptyOverlay(), "stgall", "pe!vi", T);
+    const { view, toasts } = setup(s.overlay);
+    view.open({ select: s.id });
+    q<HTMLButtonElement>(".neumas-delete").click();
+    await flush();
+    view.open({ newChain: "pe" }); // rascunho aberto
+    toasts.at(-1)!.opts!.action!.run();
+    await flush();
+    expect(q(".sc-panel__title").textContent).toBe("Minha sequência");
+    expect(card(s.id).getAttribute("aria-selected")).toBe("true");
+  });
+  it("2. o foco não cai no body: × numa ficha, Esc ainda sai da vista", async () => {
+    const { view, deps } = setup(addName(emptyOverlay(), "stgall:pe", "podatus"));
+    view.open({ select: "stgall:pe" });
+    const x = q<HTMLButtonElement>(".neumas-name__remove");
+    x.focus();
+    x.click();
+    await flush();
+    expect(document.body.contains(x)).toBe(false);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(q("main").contains(document.activeElement)).toBe(true);
+    key(document.activeElement!, "Escape");
+    expect(deps.exit).toHaveBeenCalledTimes(1);
+  });
+  it("2. Enter na cadeia de uma sequência do usuário (id muda) deixa o foco dentro da vista", async () => {
+    const s = addSequence(emptyOverlay(), "stgall", "pe!vi", T);
+    const { view } = setup(s.overlay);
+    view.open({ select: s.id });
+    const chain = q<HTMLInputElement>(".neumas-chain__input");
+    chain.focus();
+    type(chain, "pe!vi!cl");
+    key(chain, "Enter");
+    await flush();
+    expect(q("main").contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+  it("2. Desfazer no toast devolve o foco à grade", async () => {
+    const s = addSequence(emptyOverlay(), "stgall", "pe!vi", T);
+    const { view, toasts } = setup(s.overlay);
+    view.open({ select: s.id });
+    q<HTMLButtonElement>(".neumas-delete").click();
+    await flush();
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    toasts.at(-1)!.opts!.action!.run();
+    await flush();
+    expect(q("main").contains(document.activeElement)).toBe(true);
+  });
+});
+
+describe("onda final: salvar e descartar o rascunho", () => {
+  it("6. botão Salvar sequência cria; desabilitado sem cadeia válida/nova; dica visível", async () => {
+    const { view, ov } = setup();
+    view.open({ family: "stgall", newChain: "" });
+    const btn = q<HTMLButtonElement>(".neumas-save-seq");
+    expect(btn.textContent).toBe("Salvar sequência");
+    expect(btn.disabled).toBe(true);
+    expect(q(".neumas-chain__hint").textContent).toBe("Enter salva · dê um nome para salvar junto");
+    type(q(".neumas-chain__input"), "zz");
+    expect(btn.disabled).toBe(true);
+    type(q(".neumas-chain__input"), "pe");
+    expect(btn.disabled).toBe(true); // já existe como glifo
+    type(q(".neumas-chain__input"), "pe!vi");
+    expect(btn.disabled).toBe(false);
+    btn.click();
+    await flush();
+    expect(Object.keys(ov().sequences)).toEqual(["seq:stgall:pe!vi"]);
+    expect(document.querySelector(".neumas-save-seq")).toBeNull();
+  });
+  it("6. abandonar rascunho não vazio avisa; rascunho vazio não avisa", () => {
+    const { view, deps } = setup();
+    view.open({ family: "stgall", newChain: "" });
+    view.open({ select: "stgall:pe" });
+    expect(deps.toast).not.toHaveBeenCalled();
+    view.open({ newChain: "pe!vi" });
+    card("stgall:cl").click(); // compor desligado: seleciona outro cartão
+    expect(deps.toast).toHaveBeenCalledWith("Rascunho descartado.", { kind: "warn" });
+    expect(q(".sc-panel__title").textContent).toBe("Glifo");
+  });
+  it("6. trocar de família com rascunho não vazio avisa", () => {
+    const { view, deps } = setup();
+    view.open({ family: "stgall", newChain: "pe!vi" });
+    q<HTMLButtonElement>('[data-family="laon"]').click();
+    expect(deps.toast).toHaveBeenCalledWith("Rascunho descartado.", { kind: "warn" });
+  });
+  it("6/5. Compor ligado mostra a linha de ajuda; desligado não", () => {
+    const { view } = setup();
+    view.open({ family: "stgall", newChain: "" });
+    expect(q(".neumas-compose-help").textContent).toBe("");
+    q<HTMLButtonElement>(".neumas-compose").click();
+    expect(q(".neumas-compose-help").textContent).toBe("Clique nos cartões do catálogo para acrescentar à cadeia.");
+  });
+});
+
+describe("onda final: menores da vista", () => {
+  it("7. Novo nome do rascunho com cadeia inválida: o texto digitado fica", async () => {
+    const { view } = setup();
+    view.open({ family: "stgall", newChain: "zz" });
+    type(q(".neumas-newname"), "nada");
+    key(q(".neumas-newname"), "Enter");
+    await flush();
+    expect(q<HTMLInputElement>(".neumas-newname").value).toBe("nada");
+  });
+  it("9. só o estado de gravação mudando não refaz a grade", async () => {
+    const { view } = setup();
+    view.open({ select: "stgall:pe", focus: "name" });
+    type(q(".neumas-newname"), "podatus");
+    key(q(".neumas-newname"), "Enter");
+    const c = card("stgall:pe"); // depois do render síncrono do salvar
+    await flush();
+    expect(q(".neumas-savestate").textContent).toBe("salvo ✓");
+    expect(card("stgall:pe")).toBe(c);
+  });
+  it("10. selecionar rola o cartão para a vista (nearest)", () => {
+    const spy = vi.fn();
+    (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = spy;
+    try {
+      const { view } = setup();
+      view.open({ select: "stgall:cl" });
+      expect(spy).toHaveBeenCalledWith({ block: "nearest" });
+    } finally { delete (Element.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView; }
+  });
+  it("12. Esc na cadeia de uma sequência do usuário cancela a edição", async () => {
+    const s = addSequence(emptyOverlay(), "stgall", "pe!vi", T);
+    const { view, ov, deps } = setup(s.overlay);
+    view.open({ select: s.id });
+    const chain = q<HTMLInputElement>(".neumas-chain__input");
+    chain.focus();
+    type(chain, "pe!vi!cl");
+    key(chain, "Escape");
+    chain.blur();
+    await flush();
+    expect(Object.keys(ov().sequences)).toEqual([s.id]);
+    expect(deps.commit).not.toHaveBeenCalled();
+    expect(chain.value).toBe("pe!vi");
+  });
+  it("14. filtro Sem nome: nomear faz o item sumir e o foco vai ao vizinho, não ao primeiro", async () => {
+    const { view } = setup();
+    view.open({ family: "stgall", select: "stgall:vi" });
+    q<HTMLButtonElement>('[data-filter="sem-nome"]').click();
+    expect([...document.querySelectorAll<HTMLElement>(".neumas-card")].map((c) => c.dataset.id)).toEqual(["stgall:pe", "stgall:vi", "stgall:cl"]);
+    key(card("stgall:vi"), "n");
+    type(q(".neumas-newname"), "virga alta");
+    key(q(".neumas-newname"), "Enter");
+    await flush();
+    expect(document.querySelector('.neumas-card[data-id="stgall:vi"]')).toBeNull();
+    expect(document.activeElement).toBe(card("stgall:cl"));
+  });
+  it("18. addUserName e excluir gravam a nota pendente antes", async () => {
+    const { view, ov } = setup();
+    view.open({ select: "stgall:pe" });
+    const t = q<HTMLTextAreaElement>(".neumas-note__input");
+    t.value = "pendente"; t.dispatchEvent(new Event("input"));
+    type(q(".neumas-newname"), "podatus");
+    key(q(".neumas-newname"), "Enter");
+    await flush();
+    expect(ov().entries["stgall:pe"]).toMatchObject({ note: "pendente", names: ["podatus"] });
+  });
+});
