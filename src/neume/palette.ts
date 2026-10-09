@@ -1,4 +1,5 @@
 import { type EditorView, keymap } from "@codemirror/view";
+import type { Extension } from "@codemirror/state";
 import { startCompletion } from "@codemirror/autocomplete";
 import type { Tree } from "web-tree-sitter";
 import { nabcContextAt, inNabcTextual } from "../editor/context";
@@ -7,10 +8,15 @@ import { glyphSvgEl } from "./render";
 import type { NeumeSearch } from "./search";
 import type { EffectiveEntry } from "./types";
 
+export interface NeumePalette {
+  keymap: Extension;
+  open(view: EditorView): void;
+}
+
 export interface PaletteDeps {
   getTree: () => Tree | null;
   search: () => NeumeSearch;
-  onAddName: (id: string) => void;
+  onName: (ids: string[], name: string) => void | Promise<void>;
 }
 
 /** Grupo de entradas com o mesmo código NABC (St. Gall e/ou Laon). */
@@ -30,31 +36,45 @@ function groupByNabc(flat: EffectiveEntry[]): NabcGroup[] {
   return order.map((nabc) => ({ nabc, entries: map.get(nabc)! }));
 }
 
-export function neumePalette(deps: PaletteDeps) {
-  function open(view: EditorView) {
-    if (document.querySelector(".neume-palette")) return; // já aberta
+export function neumePalette(deps: PaletteDeps): NeumePalette {
+  function openPalette(view: EditorView) {
+    const existing = document.querySelector<HTMLElement>(".neume-palette");
+    if (existing) { // já aberta: só devolve o foco (nunca cria uma 2ª)
+      (existing.querySelector<HTMLElement>(".neume-name-input")
+        ?? existing.querySelector<HTMLElement>("input"))?.focus();
+      return;
+    }
     const root = document.createElement("div");
-    root.className = "neume-palette";
+    root.className = "neume-palette sc-menu";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-label", "Buscar neuma");
     const input = document.createElement("input");
-    input.placeholder = "buscar neuma (nome ou código)…";
+    input.className = "sc-input";
+    input.placeholder = "Buscar neuma por nome ou código";
     const list = document.createElement("div");
     list.className = "neume-palette-list";
+    list.setAttribute("role", "listbox");
     root.append(input, list);
     (view.dom.closest("body") ?? document.body).appendChild(root);
     input.focus();
 
     let groups: NabcGroup[] = [];
     let sel = 0;
+    let naming: number | null = null;
     const placement: Placement = "outside";
 
     const render = () => {
       const flat = deps.search().query(input.value, 120);
       groups = groupByNabc(flat);
       sel = Math.min(sel, Math.max(0, groups.length - 1));
+      if (naming !== null && naming >= groups.length) naming = null;
       list.innerHTML = "";
+      let nameField = null as HTMLInputElement | null;
       groups.forEach((g, i) => {
         const row = document.createElement("div");
         row.className = "neume-row" + (i === sel ? " sel" : "");
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", i === sel ? "true" : "false");
 
         // Células: [miniatura + rótulo de família] │ [miniatura + rótulo de família]
         const thumbs = document.createElement("div");
@@ -75,16 +95,49 @@ export function neumePalette(deps: PaletteDeps) {
         });
         row.appendChild(thumbs);
 
-        // Label: Nome · nabc
-        const lbl = document.createElement("span");
-        lbl.textContent = `${g.entries[0].displayNames[0]}  ·  ${g.nabc}`;
-        row.appendChild(lbl);
+        if (naming === i) {
+          const ni = document.createElement("input");
+          ni.className = "sc-input neume-name-input";
+          ni.placeholder = "Novo nome";
+          ni.setAttribute("aria-label", "Novo nome do neuma");
+          ni.addEventListener("keydown", (ev) => {
+            ev.stopPropagation();
+            if (ev.key === "Escape") { ev.preventDefault(); naming = null; render(); input.focus(); }
+            else if (ev.key === "Enter") {
+              ev.preventDefault();
+              const name = ni.value.trim();
+              const ids = groups[i].entries.map((e) => e.id);
+              naming = null;
+              if (!name) { render(); input.focus(); return; }
+              void Promise.resolve(deps.onName(ids, name))
+                .catch(() => { /* quem grava já avisou o erro */ })
+                .finally(() => { if (root.isConnected) { render(); input.focus(); } });
+              render(); input.focus();
+            }
+          });
+          ni.addEventListener("blur", onBlur);
+          row.appendChild(ni);
+          nameField = ni;
+        } else {
+          const nm = document.createElement("span");
+          nm.className = "neume-row-name";
+          nm.textContent = g.entries[0].displayNames[0];
+          row.appendChild(nm);
+        }
+        const code = document.createElement("span");
+        code.className = "neume-row-code caption";
+        code.textContent = g.nabc;
+        row.appendChild(code);
 
         row.onclick = () => insertNabc(g.nabc);
         list.appendChild(row);
       });
+      nameField?.focus();
     };
     const close = () => root.remove();
+    function onBlur() {
+      setTimeout(() => { if (root.isConnected && !root.contains(document.activeElement)) close(); }, 150);
+    }
     const insertNabc = (nabc: string) => {
       const pos = view.state.selection.main.head;
       const doc = view.state.doc.toString();
@@ -100,27 +153,27 @@ export function neumePalette(deps: PaletteDeps) {
       if (ev.key === "Escape") { close(); view.focus(); }
       else if (ev.key === "ArrowDown") { sel = Math.min(sel + 1, groups.length - 1); render(); ev.preventDefault(); }
       else if (ev.key === "ArrowUp") { sel = Math.max(sel - 1, 0); render(); ev.preventDefault(); }
-      else if (ev.key === "Enter") { if (groups[sel]) insertNabc(groups[sel].nabc); ev.preventDefault(); }
-      else if (ev.ctrlKey && ev.key === "n") {
-        if (groups[sel]) {
-          groups[sel].entries.forEach((e) => deps.onAddName(e.id));
-        }
+      else if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+        if (groups[sel]) { naming = sel; render(); }
         ev.preventDefault();
       }
+      else if (ev.key === "Enter") { if (groups[sel]) insertNabc(groups[sel].nabc); ev.preventDefault(); }
     });
-    input.addEventListener("blur", () => { setTimeout(() => { if (!root.contains(document.activeElement)) close(); }, 150); });
+    input.addEventListener("blur", onBlur);
     render();
   }
 
   const openRun = (v: EditorView): boolean => {
     const pos = v.state.selection.main.head;
     if (inNabcTextual(v.state.doc.toString(), pos)) { startCompletion(v); return true; }
-    open(v);
+    openPalette(v);
     return true;
   };
-  return keymap.of([
-    { key: "Mod-Shift-p", run: openRun },  // Cmd/Ctrl+Shift+P — cross-platform "command palette"
-    { key: "F2", run: openRun },           // alternativa rápida
-    { key: "Ctrl-Space", run: openRun },   // padrão do spec (capturado pelo IME no Linux)
-  ]);
+  return {
+    open: openPalette,
+    keymap: keymap.of([
+      { key: "F2", run: openRun },         // alternativa rápida
+      { key: "Ctrl-Space", run: openRun }, // padrão do spec (capturado pelo IME no Linux)
+    ]),
+  };
 }

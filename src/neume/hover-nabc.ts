@@ -15,6 +15,7 @@ export function nabcHover(
   getTree: () => Tree | null,
   lookupByNabc: (nabc: string) => EffectiveEntry[],
   activeFamily: () => Family,
+  _onName?: (ids: string[], name: string) => void | Promise<void>, // usado na Task 10
 ) {
   return hoverTooltip((view, pos) => {
     const tree = getTree();

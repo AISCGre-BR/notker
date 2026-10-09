@@ -261,16 +261,6 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 }
 
 /* ── Paleta de busca (modal) e tooltips ────────────────────────────────────── */
-.neume-palette {
-  box-shadow: var(--shadow) !important; border: 1px solid var(--rule) !important;
-  border-radius: 0 !important; font-family: var(--font) !important;
-}
-.neume-palette input {
-  font-family: var(--font) !important; color: var(--ink);
-  border-bottom: 1px solid var(--rule) !important;
-}
-.neume-palette input::placeholder { color: var(--ink-muted); }
-.neume-row.sel, .neume-row:hover { background: var(--cream-deep) !important; }
 .neume-tooltip, .gabc-tooltip {
   font-family: var(--font) !important; border: 1px solid var(--rule);
   box-shadow: var(--shadow); line-height: 1.5;
@@ -334,15 +324,22 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .doc-remove { border: none; background: transparent; cursor: pointer; color: var(--ink-muted); }
 
 /* ── Paleta de neumas, tooltips e régua de pauta (movidos do index.html) ────── */
-.neume-palette { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); width: 520px; max-height: 60vh; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); box-shadow: var(--elev-3); display: flex; flex-direction: column; z-index: 1000; font-family: var(--font-sans); }
-.neume-palette input { padding: 10px; border: none; border-bottom: 1px solid var(--rule); font-size: 15px; background: transparent; }
-.neume-palette-list { overflow: auto; }
-.neume-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; cursor: pointer; }
+.neume-palette { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); max-height: 60vh; display: flex; flex-direction: column; gap: 4px; z-index: 1000; }
+.neume-palette > .sc-input { margin: 2px 2px 4px; }
+.neume-palette-list { overflow: auto; display: flex; flex-direction: column; gap: 1px; }
+.neume-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; min-height: 28px; padding: 3px 10px 3px 6px; border-radius: var(--radius-sm); cursor: pointer; color: var(--ink); }
+.neume-row:hover { background: var(--ink-wash); }
+.neume-row.sel { background: var(--rubric); color: var(--on-rubric); }
+.neume-row.sel .neume-row-code, .neume-row.sel .neume-fam-cell span { color: var(--on-rubric); }
+.neume-row-name { font: 400 15px/20px var(--font-serif); }
+.neume-row-code { font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.neume-name-input { height: 26px; padding: 2px 8px; font-family: var(--font-serif); }
 .neume-fam-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.neume-fam-cell span { font-size: 9px; color: var(--ink-muted); line-height: 1; }
+.neume-fam-cell span { font-size: 9px; line-height: 1; color: var(--ink-muted); }
 .neume-fam-sep { display: inline-block; width: 1px; height: 30px; background: var(--rule); margin: 0 3px; align-self: center; }
-.neume-row.sel, .neume-row:hover { background: var(--cream-deep); }
-.neume-row svg, .neume-tooltip svg { color: var(--ink); }
+/* miniaturas: glifos em tinta; sobre a linha selecionada, no tom do texto */
+.neume-row svg { color: currentColor; }
+.neume-tooltip svg { color: var(--ink); }
 .neume-tooltip, .gabc-tooltip { max-width: 320px; padding: 8px 10px; font-family: var(--font-sans); background: var(--surface); color: var(--ink); }
 .staff-legend { padding: 4px 10px; font-family: var(--font-sans); font-size: 13px; border-top: 1px solid var(--rule); background: var(--cream-deep); }
 .staff-legend .legend-cell { margin-right: 8px; white-space: nowrap; }

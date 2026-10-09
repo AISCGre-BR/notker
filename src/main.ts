@@ -135,6 +135,7 @@ async function boot() {
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
+  let paletteRef: { open(v: EditorView): void } | null = null;
   // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora pelo
   // painel); só a ESCRITA é coalescida (300 ms). schedule() resolve quando o disco
   // confirma (indicador "salvo ✓" verdadeiro); flush() antes de import/export/fechar.
@@ -191,18 +192,25 @@ async function boot() {
       lookupByNabc: (nabc: string): EffectiveEntry[] =>
         (byNabc.get(nabc) ?? []).map((e) => mergeEntry(e, overlay.entries[e.id])),
       activeFamily: () => currentFamily(),
-      onAddName: async (id: string) => {
-        const name = window.prompt("Novo nome para este neuma:");
-        if (!name) return;
-        try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
-        overlay = addName(overlay, id, name);
+      onName: async (ids: string[], name: string) => {
+        const n = name.trim();
+        if (!n) return;
+        let changed = false;
+        for (const id of ids) {
+          if (overlay.entries[id]?.names?.includes(n)) continue;
+          overlay = addName(overlay, id, n);
+          changed = true;
+        }
+        if (!changed) return;
         reindex();
         overlayPanel?.refresh();
-        try { await saveUserOverlay(overlay); }
-        catch (e) { toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" }); }
+        try { await overlayAutosave.schedule(); toaster.show(`Nome “${n}” cadastrado.`); }
+        catch { /* o autosave já mostrou o erro */ }
       },
     };
-    view.dispatch({ effects: neumeCompartment.reconfigure([...neumeExtensions(rt), ...gabcAssistExtensions(getTree)]) });
+    const neume = neumeExtensions(rt);
+    paletteRef = neume.palette;
+    view.dispatch({ effects: neumeCompartment.reconfigure([...neume.extensions, ...gabcAssistExtensions(getTree)]) });
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
     toaster.show("O catálogo de neumas não carregou. " + String(err), { kind: "error" });
@@ -488,11 +496,10 @@ async function boot() {
       }
     },
     toggleFamily: () => { toggleFamily(); },
-    // palette.ts não exporta função open isolada; openRun é interno ao keymap.
-    // Estratégia: focar o editor e disparar KeyboardEvent "F2" no contentDOM.
     openSearch: () => {
+      if (!paletteRef) return;
       view.focus();
-      view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true }));
+      paletteRef.open(view);
     },
     openOverlayPanel: () => {
       const host = document.querySelector<HTMLElement>("#overlay-host")!;
@@ -634,7 +641,7 @@ async function boot() {
     { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true },
     { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"] },
     // Provisório até a Task 9 (paleta própria).
-    { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K"] },
+    { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
     { id: "names.panel", label: "Nomes dos neumas…", icon: "tag", run: h.openOverlayPanel, keys: ["Ctrl+Alt+N"] },
     { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
