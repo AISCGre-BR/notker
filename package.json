@@ -32,7 +32,9 @@
     "@tauri-apps/plugin-fs": "2.5.0",
     "@tauri-apps/plugin-shell": "2.3.5",
     "@testneumz/nabc-lib": "2.2.22",
+    "jspdf": "2.5.2",
     "parchment-design": "git+https://github.com/AISCGre-BR/parchment-design.git#v1.0.2",
+    "svg2pdf.js": "2.7.0",
     "vscode-languageserver-protocol": "3.17.5",
     "web-tree-sitter": "0.26.8"
   },
