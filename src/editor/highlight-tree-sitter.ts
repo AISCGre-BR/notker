@@ -151,7 +151,12 @@ function buildDecorations(root: { type: string; startIndex: number; endIndex: nu
 export async function makeTreeSitterHighlighter(
   runtimeWasmUrl: string,
   grammarWasmUrl: string
-): Promise<{ extension: Extension; getTree: () => Tree | null }> {
+): Promise<{
+  extension: Extension;
+  getTree: () => Tree | null;
+  /** Parse avulso (validação de cadeia nabc): só diz se houve erro; a árvore é liberada. */
+  parse: (text: string) => { rootNode: { hasError: boolean } } | null;
+}> {
   await Parser.init({ locateFile: () => runtimeWasmUrl });
   const lang = await Language.load(grammarWasmUrl);
   const parser = new Parser();
@@ -184,7 +189,15 @@ export async function makeTreeSitterHighlighter(
     { decorations: (v) => v.decorations }
   );
 
-  return { extension, getTree: () => lastTree };
+  const parse = (text: string): { rootNode: { hasError: boolean } } | null => {
+    const t = parser.parse(text);
+    if (!t) return null;
+    const hasError = t.rootNode.hasError;
+    t.delete();
+    return { rootNode: { hasError } };
+  };
+
+  return { extension, getTree: () => lastTree, parse };
 }
 
 /** Exported for testing: build decorations directly from source text. */
