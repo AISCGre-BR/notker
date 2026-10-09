@@ -3,7 +3,7 @@
  *  tela cheia (sc-backdrop) — um elemento inset:0 não repinta no RDP/llvmpipe.
  *  Escolhas são segmentados (botões), nunca radio/select nativos. */
 export interface DialogField { key: string; label: string; value?: string; placeholder?: string; serif?: boolean }
-export interface DialogSeg { key: string; label: string; options: { value: string; label: string }[]; value: string }
+export interface DialogSeg { key: string; label: string; options: { value: string; label: string; disabled?: boolean }[]; value: string }
 export interface DialogAction { id: string; label: string; kind?: "filled" | "elevated" | "danger" | "text" }
 export interface DialogSpec {
   title: string; body?: string; fields?: DialogField[]; segs?: DialogSeg[];
@@ -68,7 +68,9 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
         b.type = "button";
         b.textContent = o.label;
         b.setAttribute("aria-pressed", String(o.value === s.value));
+        if (o.disabled) b.disabled = true; // indisponível agora (ex.: "Grupo" sem grupo selecionado)
         b.addEventListener("click", () => {
+          if (b.disabled) return;
           values[s.key] = o.value;
           btns.forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
         });
@@ -106,14 +108,14 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
       // Nenhuma tecla vaza para os atalhos globais (registro escuta em window).
       e.stopPropagation();
       if (e.key === "Tab") {
-        const items = [...box.querySelectorAll<HTMLElement>("input, button")];
+        const items = [...box.querySelectorAll<HTMLElement>("input, button:not(:disabled)")];
         const first = items[0], last = items[items.length - 1];
         if (!first) return;
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
         return;
       }
-      if (e.key === "Escape") { e.preventDefault(); finish(null); }
+      if (e.key === "Escape" && !e.isComposing) { e.preventDefault(); finish(null); }
       else if (e.key === "Enter" && !e.isComposing && def && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); finish(def); }
     }
     box.addEventListener("keydown", onKey);

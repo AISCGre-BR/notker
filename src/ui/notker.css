@@ -549,3 +549,7 @@ body[data-screen="welcome"] #toolbar, body[data-screen="guide"] #toolbar,
 body[data-screen="welcome"] #wave-bar-host, body[data-screen="guide"] #wave-bar-host,
 body[data-screen="welcome"] #body-row, body[data-screen="guide"] #body-row,
 body[data-screen="welcome"] #overlay-host, body[data-screen="guide"] #overlay-host { display: none !important; }
+
+/* ── Opção de segmentado indisponível (diálogo Exportar PDF: "Grupo" sem grupo) ── */
+.sc-seg > button:disabled,
+.sc-seg > button:disabled:hover { color: var(--ink-muted); opacity: 0.55; cursor: default; }
