@@ -1,45 +1,62 @@
-import type { Commands } from "../app/commands";
+/** Toolbar do Parchment (44px): grupos segmentados SÓ de ícone (tooltip com atalho),
+ *  espaçador e a ação principal da vista (única preenchida, com texto). Estado
+ *  (rótulo, pressionado, habilitado) vem do registro — refresh() reavalia. */
+import type { CommandRegistry } from "../app/commands";
+import { icon, type IconName } from "./pd/icons";
 
-export interface ToolbarItem { id: string; label: string; title?: string; primary?: boolean; }
-export type ToolbarEntry = ToolbarItem | "|";
+export type ToolbarEntry = { group: string[] } | { primary: string } | "spacer" | "sep";
+export interface ToolbarHandle { refresh(): void; }
 
-/** Handle para atualizar botões pelo id do comando (substitui o antigo hack
- *  de querySelector por title). setPressed dá estado visível aos toggles. */
-export interface ToolbarHandle {
-  setLabel(id: string, label: string): void;
-  setPressed(id: string, on: boolean): void;
-}
-
-export function createToolbar(host: HTMLElement, commands: Commands, items: ToolbarEntry[]): ToolbarHandle {
+export function createToolbar(host: HTMLElement, commands: CommandRegistry, items: ToolbarEntry[]): ToolbarHandle {
   const bar = document.createElement("div");
-  bar.className = "toolbar";
+  bar.className = "sc-toolbar";
+  bar.setAttribute("role", "toolbar");
+  const updaters: (() => void)[] = [];
+  const handle: ToolbarHandle = { refresh: () => updaters.forEach((u) => u()) };
+  const click = (id: string) => () => { void commands.run(id).then(() => handle.refresh()); };
 
-  const byCmd = new Map<string, HTMLButtonElement>();
   for (const it of items) {
-    if (it === "|") {
-      const sep = document.createElement("span");
-      sep.className = "toolbar-sep";
-      bar.appendChild(sep);
+    if (it === "spacer") { bar.appendChild(Object.assign(document.createElement("span"), { className: "sc-toolbar__spacer" })); continue; }
+    if (it === "sep") { bar.appendChild(Object.assign(document.createElement("span"), { className: "sc-toolbar__sep" })); continue; }
+    if ("group" in it) {
+      const seg = document.createElement("div");
+      seg.className = "sc-seg";
+      for (const id of it.group) {
+        const def = commands.get(id);
+        if (!def) continue;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "is-icon";
+        b.dataset.cmd = id;
+        if (def.icon) b.appendChild(icon(def.icon));
+        b.addEventListener("click", click(id));
+        seg.appendChild(b);
+        updaters.push(() => {
+          b.setAttribute("aria-label", commands.label(id));
+          b.dataset.tip = commands.tooltip(id);
+          if (def.checked) b.setAttribute("aria-pressed", String(def.checked()));
+          b.disabled = def.enabled ? !def.enabled() : false;
+        });
+      }
+      bar.appendChild(seg);
       continue;
     }
+    const id = it.primary;
     const b = document.createElement("button");
-    b.className = "toolbar-btn" + (it.primary ? " toolbar-primary" : "");
-    b.dataset.cmd = it.id;
-    b.textContent = it.label;
-    if (it.title) b.title = it.title;
-    b.addEventListener("click", () => { void commands.run(it.id); });
+    b.type = "button";
+    b.className = "sc-btn sc-btn--filled";
+    b.dataset.cmd = id;
+    b.addEventListener("click", click(id));
     bar.appendChild(b);
-    byCmd.set(it.id, b);
+    updaters.push(() => {
+      const label = commands.label(id);
+      const ic: IconName = label === "Parar" ? "square" : "play";
+      b.replaceChildren(icon(ic), document.createTextNode(label));
+      b.dataset.tip = commands.tooltip(id);
+      b.disabled = commands.get(id)?.enabled ? !commands.get(id)!.enabled!() : false;
+    });
   }
   host.appendChild(bar);
-
-  return {
-    setLabel: (id, label) => { const b = byCmd.get(id); if (b) b.textContent = label; },
-    setPressed: (id, on) => {
-      const b = byCmd.get(id);
-      if (!b) return;
-      b.setAttribute("aria-pressed", String(on));
-      b.classList.toggle("pressed", on);
-    },
-  };
+  handle.refresh();
+  return handle;
 }

@@ -61,48 +61,8 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .sc-menubar__title { font: 500 14px/1 var(--font-serif); color: var(--ink); }
 .sc-menubar__state { font-family: var(--font-sans); font-size: 13px; }
 
-/* ── Toolbar: faixa-cabeçalho de aparato erudito ───────────────────────────── */
-.toolbar {
-  display: flex; align-items: center; gap: 2px;
-  flex-wrap: wrap; /* janela estreita: quebra linha em vez de cortar botões */
-  background: linear-gradient(var(--cream), var(--cream-deep));
-  border-bottom: 1px solid var(--rule);
-  padding: 0 10px; min-height: 40px;
-}
-.toolbar-brand {
-  font-family: var(--font-display); font-size: 23px; font-weight: 600;
-  letter-spacing: 0.01em; color: var(--ink); line-height: 1;
-  padding: 0 16px 0 4px; margin-right: 6px;
-  position: relative; user-select: none;
-}
-.toolbar-brand::after {
-  content: ""; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-  width: 1px; height: 22px; background: var(--rule);
-}
-.toolbar-brand::first-letter { color: var(--rubric); }
-.toolbar-btn {
-  font: 500 12px/1 var(--font); color: var(--ink-soft);
-  text-transform: uppercase; letter-spacing: 0.08em;
-  background: transparent; border: none; border-bottom: 1px solid transparent;
-  padding: 9px 12px 8px; margin: 0 1px; cursor: pointer;
-  transition: color 180ms var(--ease), border-color 180ms var(--ease);
-}
-.toolbar-btn:hover { color: var(--rubric); border-bottom-color: var(--rubric); }
-.toolbar-btn:active { color: var(--rubric-soft); }
-/* toggle ligado: sublinhado rubricado persistente (mesma linguagem do hover) */
-.toolbar-btn.pressed { color: var(--ink); border-bottom-color: var(--rubric); }
-/* ação primária (Tocar): rubrica cheia */
-.toolbar-btn.toolbar-primary {
-  color: var(--cream); background: var(--rubric);
-  border: 1px solid var(--rubric); padding: 8px 14px 7px;
-}
-.toolbar-btn.toolbar-primary:hover { background: var(--rubric-soft); color: var(--cream); }
-.toolbar-sep {
-  display: inline-block; width: 1px; height: 18px;
-  background: var(--rule); margin: 0 8px; align-self: center;
-}
-/* foco por teclado rubricado (a11y) — consistente em toda a faixa superior */
-.toolbar-btn:focus-visible, .sc-menubar__top:focus-visible, .wave-bar-reset:focus-visible {
+/* foco por teclado rubricado: .sc-menubar__top e .wave-bar-reset */
+.sc-menubar__top:focus-visible, .wave-bar-reset:focus-visible {
   outline: 1px solid var(--rubric); outline-offset: -1px;
 }
 

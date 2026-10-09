@@ -276,6 +276,7 @@ async function boot() {
    *  o controller de lanes integrado ao SVG da partitura. */
   function rebuildWave(): void {
     waveBar?.setCount(Object.keys(wave.factors).length);
+    toolbarHandle?.refresh(); // wave.reset só habilita com fatores editados
     const map = panel?.sourceMap?.() ?? [];
     const texto = view.state.doc.toString();
     const reals = map.filter((s) => s.syllableIndex >= 1);
@@ -344,8 +345,7 @@ async function boot() {
   /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
   function stopPlayback(): void {
     player.stop();
-    toolbarHandle?.setLabel("play.toggle", "Tocar");
-    toolbarHandle?.setPressed("play.toggle", false);
+    toolbarHandle?.refresh();
     const svg = panel?.svgEl?.() ?? null;
     if (svg) clearHighlight(svg);
     waveCursorClear();
@@ -538,7 +538,7 @@ async function boot() {
     // (leitura de solmização); sinais e legato só no interpretado.
     modeToggle: () => {
       playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
-      toolbarHandle?.setLabel("play.mode", playbackMode === "interpretado" ? "Interpretado" : "Solfejo");
+      toolbarHandle?.refresh();
       waveBar?.setSolfejo(playbackMode !== "interpretado");
       if (player.playing) stopPlayback();
     },
@@ -577,8 +577,7 @@ async function boot() {
         return;
       }
       const svg = panel?.svgEl?.() ?? null;
-      toolbarHandle?.setLabel("play.toggle", "Parar");
-      toolbarHandle?.setPressed("play.toggle", true);
+      toolbarHandle?.refresh();
       let lastSyl = -1;
       player.play(
         toPlay,
@@ -607,7 +606,7 @@ async function boot() {
       if (on) syncWaveWithDoc();
       waveBar?.setVisible(on);
       waveBar?.setSolfejo(playbackMode !== "interpretado");
-      toolbarHandle?.setPressed("wave.toggle", on);
+      toolbarHandle?.refresh();
     },
     resetWave: () => {
       wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
@@ -639,9 +638,9 @@ async function boot() {
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
     { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible) },
     { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
-    { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), run: h.modeToggle },
+    { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
     { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },
-    { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() },
+    { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() && Object.keys(wave.factors).length > 0 },
   ]);
 
   let themeChoice = loadTheme();
@@ -717,22 +716,14 @@ async function boot() {
   menubar.setTitle(project.title);
 
   toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { id: "play.toggle", label: "Tocar", title: "playback semiológico (Tuotilo)", primary: true },
-    { id: "play.mode", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
-    { id: "wave.toggle", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
-    "|",
-    { id: "neume.moveLeft", label: "◀", title: "Alt+← — mover neuma para a esquerda" },
-    { id: "neume.moveDown", label: "▼", title: "Alt+↓ — mover neuma para baixo" },
-    { id: "neume.moveUp", label: "▲", title: "Alt+↑ — mover neuma para cima" },
-    { id: "neume.moveRight", label: "▶", title: "Alt+→ — mover neuma para a direita" },
-    { id: "neume.moveReset", label: "⟳", title: "Alt+0 — resetar posição do neuma" },
-    "|",
-    { id: "neume.palette", label: "Buscar", title: "F2" },
-    { id: "names.panel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
+    { group: ["edit.undo", "edit.redo"] },
+    { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"] },
+    { group: ["edit.format", "neume.palette", "names.panel"] },
+    { group: ["view.split", "view.legend"] },
+    "spacer",
+    { group: ["play.mode", "wave.toggle", "wave.reset"] },
+    { primary: "play.toggle" },
   ]);
-
-  // Estado inicial dos toggles da toolbar (a11y: aria-pressed desde o boot).
-  toolbarHandle.setPressed("wave.toggle", false);
 
   waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
     void commands.run("wave.reset");
