@@ -340,7 +340,12 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 /* miniaturas: glifos em tinta; sobre a linha selecionada, no tom do texto */
 .neume-row svg { color: currentColor; }
 .neume-tooltip svg { color: var(--ink); }
-.neume-tooltip, .gabc-tooltip { max-width: 320px; padding: 8px 10px; font-family: var(--font-sans); background: var(--surface); color: var(--ink); }
+.gabc-tooltip { max-width: 320px; padding: 8px 10px; font-family: var(--font-sans); background: var(--surface); color: var(--ink); }
+.neume-tooltip { background: var(--surface-high); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--highlight), var(--elev-3); padding: 8px 10px; font: 400 13px/18px var(--font-sans); max-width: 380px; }
+.neume-tip-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-bottom: 4px; }
+.neume-tip-name { font: 600 15px/20px var(--font-serif); }
+.neume-tip-fam { font-size: 12px; color: var(--ink-muted); }
+.neume-name-btn { height: 26px; padding: 0 8px; }
 .staff-legend { padding: 4px 10px; font-family: var(--font-sans); font-size: 13px; border-top: 1px solid var(--rule); background: var(--cream-deep); }
 .staff-legend .legend-cell { margin-right: 8px; white-space: nowrap; }
 /* NABC em composição — campo inteiro tratado como um único neuma */

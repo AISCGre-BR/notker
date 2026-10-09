@@ -11,11 +11,67 @@ function familyLabel(f: Family): string {
   return f === "stgall" ? "St. Gall" : "Laon";
 }
 
+export function buildEntryRow(
+  entry: EffectiveEntry, isActive: boolean,
+  onName?: (ids: string[], name: string) => void | Promise<void>,
+): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "neume-tip-row";
+  row.appendChild(glyphSvgEl(entry.svg, 32));
+  const info = document.createElement("div");
+  info.className = "neume-tip-info";
+  const names = document.createElement("strong");
+  names.className = "neume-tip-name";
+  names.textContent = entry.displayNames[0];
+  const fam = document.createElement("span");
+  fam.className = "neume-tip-fam";
+  fam.textContent = familyLabel(entry.family as Family) + (isActive ? " · ativa" : "");
+  info.append(names, document.createTextNode(" "), fam);
+  if (entry.qualifiers.length) info.append(Object.assign(document.createElement("small"), { textContent: entry.qualifiers.join(" ") }));
+  if (entry.meaning) info.append(Object.assign(document.createElement("div"), { textContent: entry.meaning }));
+  row.appendChild(info);
+  if (onName) {
+    const showButton = (): HTMLButtonElement => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "sc-btn neume-name-btn";
+      b.textContent = "Nomear…";
+      b.addEventListener("mousedown", (ev) => ev.preventDefault()); // não fecha o tooltip
+      b.addEventListener("click", () => {
+        const f = document.createElement("input");
+        f.className = "sc-input neume-name-input";
+        f.placeholder = "Novo nome";
+        // nada por baixo (editor) reage a cliques/teclas no campo
+        f.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        f.addEventListener("click", (ev) => ev.stopPropagation());
+        f.addEventListener("keydown", (ev) => {
+          ev.stopPropagation();
+          if (ev.key === "Escape") { ev.preventDefault(); f.replaceWith(showButton()); }
+          else if (ev.key === "Enter") {
+            if (ev.isComposing) return; // IME / teclas mortas
+            ev.preventDefault();
+            const n = f.value.trim();
+            if (!n) return;
+            void onName([entry.id], n);
+            names.textContent = `${entry.displayNames[0]} · ${n}`;
+            f.replaceWith(showButton());
+          }
+        });
+        b.replaceWith(f);
+        f.focus();
+      });
+      return b;
+    };
+    row.appendChild(showButton());
+  }
+  return row;
+}
+
 export function nabcHover(
   getTree: () => Tree | null,
   lookupByNabc: (nabc: string) => EffectiveEntry[],
   activeFamily: () => Family,
-  _onName?: (ids: string[], name: string) => void | Promise<void>, // usado na Task 10
+  onName?: (ids: string[], name: string) => void | Promise<void>,
 ) {
   return hoverTooltip((view, pos) => {
     const tree = getTree();
@@ -91,23 +147,7 @@ export function nabcHover(
           row.appendChild(info);
           dom.appendChild(row);
         } else {
-          for (const entry of sorted) {
-            const row = document.createElement("div");
-            row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px;";
-
-            row.appendChild(glyphSvgEl(entry.svg, 32));
-
-            const info = document.createElement("div");
-            const isActive = entry.family === af;
-            const familyStr = familyLabel(entry.family as Family);
-            const activeMark = isActive ? " <small>• ativa</small>" : "";
-            info.innerHTML =
-              `<strong>${entry.displayNames[0]}</strong> · <em>${familyStr}</em>${activeMark}` +
-              (entry.qualifiers.length ? `<br><small>${entry.qualifiers.join(" ")}</small>` : "") +
-              (entry.meaning ? `<br>${entry.meaning}` : "");
-            row.appendChild(info);
-            dom.appendChild(row);
-          }
+          for (const entry of sorted) dom.appendChild(buildEntryRow(entry, entry.family === af, onName));
         }
 
         // ── Partes individuais (apenas para neumas genuinamente compostos) ──
