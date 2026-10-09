@@ -536,3 +536,13 @@ body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none;
 .notker-guide__gabc { font: 400 13px/20px ui-monospace, monospace; min-height: 140px; }
 .notker-guide__cancel { margin-top: 8px; padding-left: 0; }
 .notker-submenu { min-width: 280px; }
+
+/* ── Telas sem mesa (1b-2): tela inicial e criação guiada ────────────────────
+   body[data-screen] escolhe (src/app/screen.ts). Hosts pré-existentes, display alternado. */
+#welcome-host, #guide-host { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; }
+body[data-screen="welcome"] #welcome-host,
+body[data-screen="guide"] #guide-host { display: flex; }
+body[data-screen="welcome"] #toolbar, body[data-screen="guide"] #toolbar,
+body[data-screen="welcome"] #wave-bar-host, body[data-screen="guide"] #wave-bar-host,
+body[data-screen="welcome"] #body-row, body[data-screen="guide"] #body-row,
+body[data-screen="welcome"] #overlay-host, body[data-screen="guide"] #overlay-host { display: none !important; }
