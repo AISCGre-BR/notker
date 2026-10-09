@@ -4,6 +4,7 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  // src-tauri/target (GBs de artefatos) esgota o limite de inotify (ENOSPC): fora do watcher.
+  server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/**", "**/.superpowers/**", "**/vendor/**"] } },
   assetsInclude: ["**/*.wasm"],
 });
