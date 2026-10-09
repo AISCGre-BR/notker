@@ -16,6 +16,7 @@ npm run tauri dev
 ```
 
 Testes: `npm run test`.
+Projeto de exemplo (`src/assets/example-project.json`, gerado de `samples/`): `npm run example`.
 
 ## Agradecimentos
 
@@ -47,6 +48,8 @@ O playback (Tocar, modos e onda de interpretação) está desligado nesta versã
 
 `Ctrl+Shift+S` — Salvar como…
 
+Tela inicial: o projeto mais recente em destaque (Continuar), os anteriores em cartões, ou Novo projeto / Abrir… / Projeto de exemplo. `Ctrl+N` — Novo projeto · Arquivo ▸ Abrir recente ▸ (até 10; Limpar recentes) · `Ctrl+W` — Fechar projeto · Ajuda ▸ Abrir projeto de exemplo. Novo projeto é guiado em passos (Esc cancela). Com alterações não salvas, o Notker guarda um retrato a cada 30 s; se o app fechar sem salvar, a tela inicial oferece **Recuperar**.
+
 ### Créditos adicionais (F2)
 
 - Fontes `gregall`/`grelaon` e a referência NABC (`GregorioNabcRef`, `gregoriotex-nabc.lua`): **The Gregorio Project** — GPLv3 com exceção de fonte.
@@ -57,6 +60,8 @@ O playback (Tocar, modos e onda de interpretação) está desligado nesta versã
 - Ícones: [Lucide](https://lucide.dev), licença ISC — SVGs copiados em `src/ui/pd/icons.ts`.
 - Fontes: [Source Sans 3](https://github.com/adobe-fonts/source-sans) e [Source Serif 4](https://github.com/adobe-fonts/source-serif) (Adobe, SIL Open Font License 1.1) via [@fontsource](https://fontsource.org).
 - Linguagem visual: [Parchment Design](https://github.com/AISCGre-BR/parchment-design) (AISCGre-BR, MIT).
+- Tela inicial e criação guiada de projeto: desenho do [Mocquereau](https://github.com/AISCGre-BR/mocquereau) (AISCGre-BR), adaptado.
+- Projeto de exemplo: os `.gabc` de `samples/` (transcrições creditadas no cabeçalho de cada arquivo — Andrew Hinkley, Jakub Jelínek, Marek Klein).
 
 ## Instalação (builds não assinadas)
 
