@@ -1,8 +1,14 @@
 /* src/ui/notker.css — CSS específico do Notker sobre o Parchment Design.
-   Regra: só variáveis do Parchment (parchment.css); nenhum token próprio além de --font-mono
-   e dos --tok-* do realce (mantenha os três blocos --tok-* em sincronia). */
+   Regra: só variáveis do Parchment (parchment.css); nenhum token próprio além de --font-mono,
+   --notker-selection e dos --tok-* do realce (mantenha os três blocos --tok-* em sincronia). */
 :root {
   --font-mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", monospace;
+  /* Seleção do editor: mais forte que --rubric-wash, acima do --ink-wash da linha ativa. */
+  --notker-selection: color-mix(in srgb, var(--rubric) 18%, transparent);
+}
+:root[data-theme="dark"] { --notker-selection: color-mix(in srgb, var(--rubric) 34%, transparent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --notker-selection: color-mix(in srgb, var(--rubric) 34%, transparent); }
 }
 
 /* Realce de sintaxe do editor — Pergaminho (claro). */
@@ -79,7 +85,7 @@ body { font-family: var(--font-sans); color: var(--ink); background: var(--parch
 }
 #app ::-webkit-scrollbar-thumb, #preview::-webkit-scrollbar-thumb,
 .overlay-list::-webkit-scrollbar-thumb, #doc-list::-webkit-scrollbar-thumb {
-  /* inset via clip (não depende da cor do fundo — preview é cream-deep) */
+  /* inset via clip (não depende da cor do fundo) */
   background: var(--rule); background-clip: padding-box;
   border: 2px solid transparent; border-radius: 0;
 }
@@ -261,6 +267,7 @@ body { font-family: var(--font-sans); color: var(--ink); background: var(--parch
 
 /* ── Paleta de busca (modal) e tooltips ────────────────────────────────────── */
 .gabc-tooltip {
+  max-width: 320px; padding: 8px 10px; background: var(--surface); color: var(--ink);
   font-family: var(--font-sans) !important; border: 1px solid var(--rule);
   box-shadow: var(--elev-3); line-height: 1.5;
 }
@@ -329,7 +336,6 @@ body { font-family: var(--font-sans); color: var(--ink); background: var(--parch
 /* miniaturas: glifos em tinta; sobre a linha selecionada, no tom do texto */
 .neume-row svg { color: currentColor; }
 .neume-tooltip svg { color: var(--ink); }
-.gabc-tooltip { max-width: 320px; padding: 8px 10px; font-family: var(--font-sans); background: var(--surface); color: var(--ink); }
 .neume-tooltip { background: var(--surface-high); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--highlight), var(--elev-3); padding: 8px 10px; font: 400 13px/18px var(--font-sans); max-width: 380px; }
 .neume-tip-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-bottom: 4px; }
 .neume-tip-name { font: 600 15px/20px var(--font-serif); }
