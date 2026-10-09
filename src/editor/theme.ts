@@ -25,7 +25,7 @@ export const highlightTheme = EditorView.theme(
     ".cm-content": { caretColor: "var(--rubric)", padding: "8px 0" },
     ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--rubric)", borderLeftWidth: "2px" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-      backgroundColor: "var(--rubric-wash)",
+      backgroundColor: "var(--notker-selection)",
     },
     ".cm-gutters": {
       backgroundColor: "var(--parchment-deep)",
