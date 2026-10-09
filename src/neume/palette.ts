@@ -2,8 +2,8 @@ import { type EditorView, keymap } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 import { startCompletion } from "@codemirror/autocomplete";
 import type { Tree } from "web-tree-sitter";
-import { nabcContextAt, inNabcTextual } from "../editor/context";
-import { computeInsertion, type Placement } from "./insert";
+import { inNabcTextual } from "../editor/context";
+import { insertNabcAtCursor } from "./insert";
 import { neumeThumb } from "./render";
 import type { NeumeSearch } from "./search";
 import type { EffectiveEntry } from "./types";
@@ -61,7 +61,6 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
     let groups: NabcGroup[] = [];
     let sel = 0;
     let naming: number | null = null;
-    const placement: Placement = "outside";
 
     const render = () => {
       const flat = deps.search().query(input.value, 120);
@@ -146,12 +145,7 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
       setTimeout(() => { if (root.isConnected && !root.contains(document.activeElement)) close(); }, 150);
     }
     const insertNabc = (nabc: string) => {
-      const pos = view.state.selection.main.head;
-      const doc = view.state.doc.toString();
-      const tree = deps.getTree();
-      const ctx = tree ? nabcContextAt(tree as any, doc, pos) : { inNabc: false, tokenFrom: pos, tokenTo: pos };
-      const ins = computeInsertion(ctx, nabc, pos, placement);
-      view.dispatch({ changes: { from: ins.from, to: ins.to, insert: ins.insert } });
+      insertNabcAtCursor(view, deps.getTree() as Parameters<typeof insertNabcAtCursor>[1], nabc);
       close(); view.focus();
     };
 

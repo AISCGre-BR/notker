@@ -21,7 +21,13 @@ import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
 import { loadNeumeDb } from "./neume/db-load";
 import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
-import { mergeEntry, addNameToEntries, mergeOverlays, cloneOverlay, emptyOverlay } from "./neume/overlay";
+import { addNameToEntries, mergeOverlays, emptyOverlay, overlayCounts } from "./neume/overlay";
+import { buildEffective, glyphIndex, byNabcIndex } from "./neume/effective";
+import { validateNabc, type NabcParser } from "./neume/validate-nabc";
+import { createNeumeDrawer } from "./neume/draw";
+import { insertNabcAtCursor } from "./neume/insert";
+import { createNabcOnlyRenderer } from "./preview/nabc-only";
+import { createNeumasView, type NeumasView, type OpenOpts } from "./neumas/view";
 import { createAutosave } from "./neume/autosave";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
@@ -55,7 +61,6 @@ import { installSync, syncFromCursor } from "./preview/sync";
 // import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuotilo/duration";
 // import { syllableRangeOfSelection } from "./preview/source-map";
 // import { DEFAULT_PROFILE } from "./tuotilo/profile";
-import { createOverlayPanel, type OverlayPanel } from "./overlay-ui/panel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
@@ -92,10 +97,13 @@ async function boot() {
   // de montar. Falha vira aviso (toast) depois que o editor está de pé.
   let highlightFailed = false;
   let getTree: () => Tree | null = () => null;
+  /** Parser do realce, reusado para validar cadeias nabc na vista Neumas (null sem WASM). */
+  let nabcParser: NabcParser | null = null;
   try {
     const ts = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
     extraExtensions.push(ts.extension);
     getTree = ts.getTree;
+    nabcParser = { parse: ts.parse };
   } catch (err) {
     highlightFailed = true;
     console.error("[notker] falha ao carregar highlighter WASM:", err);
@@ -181,16 +189,16 @@ async function boot() {
   const overlayAutosave = createAutosave(async () => {
     try {
       await writeOverlay();
-      reindex();
     } catch (e) {
       toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" });
       throw e;
     }
   }, 300);
-  // Painel de nomes aberto (se houver): re-sincroniza quando o overlay muda POR FORA
-  // dele (hover "adicionar nome", importar) — senão o próximo autosave do rascunho
-  // antigo apagaria a mudança.
-  let overlayPanel: OverlayPanel | null = null;
+  /** Vista Neumas (criada quando o catálogo carrega). Lê o overlay sempre de `overlay`:
+   *  não guarda rascunho, então mudanças por fora (hover, paleta, importar) não se perdem. */
+  let neumasView: NeumasView | null = null;
+  /** Adota um overlay novo: índices na hora, gravação coalescida (autosave). */
+  let commitOverlay: (next: Overlay) => Promise<void> = () => Promise.resolve();
   const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
@@ -212,22 +220,25 @@ async function boot() {
       overlayBlocked = e instanceof Error ? e.message : String(e);
       toaster.show("Os nomes de neumas salvos não puderam ser lidos. Novos nomes não serão gravados nesta sessão. " + overlayBlocked, { kind: "error" });
     }
-    const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
+    // Catálogo + nomes do usuário + sequências do usuário, recalculados a cada mudança
+    // do overlay (busca, paleta, completion, hover e vista Neumas leem daqui).
+    const glyphOf = glyphIndex(db.all());
+    let effectiveCache = buildEffective(db.all(), overlay, glyphOf);
+    let lookup = byNabcIndex(effectiveCache);
+    const effective = (): EffectiveEntry[] => effectiveCache;
     effectiveRef = effective;
-    let searchInst = new NeumeSearch(effective(), currentFamily());
-    reindex = () => { searchInst = new NeumeSearch(effective(), currentFamily()); };
-    // Agrupamento por nabc: múltiplas entradas (famílias diferentes) podem compartilhar o mesmo código.
-    const byNabc = new Map<string, import("./neume/types").NeumeEntry[]>();
-    for (const e of db.all()) {
-      const arr = byNabc.get(e.nabc) ?? [];
-      arr.push(e);
-      byNabc.set(e.nabc, arr);
-    }
+    let searchInst = new NeumeSearch(effectiveCache, currentFamily());
+    const rebuildIndex = (): void => {
+      effectiveCache = buildEffective(db.all(), overlay, glyphOf);
+      lookup = byNabcIndex(effectiveCache);
+      searchInst = new NeumeSearch(effectiveCache, currentFamily());
+    };
+    reindex = () => { rebuildIndex(); if (views.current() === "neumas") neumasView?.refresh(); };
+    commitOverlay = (next) => { overlay = next; rebuildIndex(); return overlayAutosave.schedule(); };
     const rt = {
       getTree,
       search: () => searchInst,
-      lookupByNabc: (nabc: string): EffectiveEntry[] =>
-        (byNabc.get(nabc) ?? []).map((e) => mergeEntry(e, overlay.entries[e.id])),
+      lookupByNabc: (nabc: string): EffectiveEntry[] => lookup(nabc),
       activeFamily: () => currentFamily(),
       onName: async (ids: string[], name: string) => {
         const n = name.trim();
@@ -240,7 +251,6 @@ async function boot() {
         const changed = r.changed;
         if (!changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
         reindex();
-        overlayPanel?.refresh();
         try { await overlayAutosave.schedule(); toaster.show(`Nome “${n}” cadastrado.`); }
         catch { /* o autosave já mostrou o erro */ }
       },
@@ -251,6 +261,25 @@ async function boot() {
     view.dispatch({ effects: neumeCompartment.reconfigure(neumeExt) });
     // Estados de outros cantos criados antes do db carregar também recebem as extensões.
     chantStates.mapAll((s) => s.update({ effects: neumeCompartment.reconfigure(neumeExt) }).state);
+
+    // Vista Neumas (tela de nomes). Desenho grande: glifo da fonte → motor do preview
+    // (só nabc) → partes; medição num host pré-existente fora da tela.
+    const drawer = createNeumeDrawer(glyphOf, createNabcOnlyRenderer(document.querySelector<HTMLElement>("#measure-host")!));
+    neumasView = createNeumasView(document.querySelector<HTMLElement>("#neumas-view")!, {
+      entries: effective,
+      overlay: () => overlay,
+      commit: (next) => commitOverlay(next),
+      validate: (n) => validateNabc(nabcParser, n),
+      draw: (f, n) => drawer.draw(f, n, 96),
+      insert: (n) => {
+        backToEdit();
+        insertNabcAtCursor(view, getTree() as Parameters<typeof insertNabcAtCursor>[1], n);
+        view.focus();
+      },
+      exit: () => backToEdit(),
+      toast: (text, opts) => toaster.show(text, opts),
+      now: () => new Date().toISOString(),
+    });
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
     toaster.show("O catálogo de neumas não carregou. " + String(err), { kind: "error" });
@@ -613,8 +642,15 @@ async function boot() {
   const views = createViews(document.body, () => { toolbarHandle?.refresh(); });
   const inEdit = (): boolean => views.current() === "edicao";
   /** Volta à Edição com o cursor e a seleção do editor intactos (o EditorState não muda). */
-  function backToEdit(): void { views.set("edicao"); view.focus(); }
-  function openNeumas(): void { views.set("neumas"); }
+  function backToEdit(): void { neumasView?.flush(); views.set("edicao"); view.focus(); }
+  function openNeumas(o: OpenOpts = {}): void {
+    if (!neumasView) { toaster.show("O catálogo de neumas não carregou.", { kind: "error" }); return; }
+    views.set("neumas");
+    neumasView.open({ family: o.family ?? currentFamily(), ...o });
+  }
+  const countLabel = (c: { named: number; sequences: number }): string =>
+    [c.named ? `${c.named} ${c.named === 1 ? "neuma com nome" : "neumas com nome"}` : "",
+     c.sequences ? `${c.sequences} ${c.sequences === 1 ? "sequência" : "sequências"}` : ""].filter(Boolean).join(" e ");
 
   const commands = createRegistry();
   const h = {
@@ -664,10 +700,11 @@ async function boot() {
     },
     exportOverlay: async () => {
       try {
-        const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
+        try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
+        const c = overlayCounts(overlay);
+        if (c.named + c.sequences === 0) { toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" }); return; }
         await exportOverlay(overlay);
-        if (n) toaster.show(`${n} nomes exportados.`);
-        else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
+        toaster.show(`Exportados: ${countLabel(c)}.`);
       } catch (err) {
         toaster.show("Exportar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao exportar overlay:", err);
@@ -677,17 +714,16 @@ async function boot() {
       try {
         const imported = await importOverlay();
         if (!imported) return;
-        const n = Object.keys(imported.entries).length;
-        if (n === 0) {
+        const c = overlayCounts(imported);
+        if (c.named + c.sequences === 0) {
           toaster.show("O arquivo não tem nomes para importar.", { kind: "warn" });
           return;
         }
         await overlayAutosave.flush();
         overlay = mergeOverlays(overlay, imported);
-        await writeOverlay();
         reindex();
-        overlayPanel?.refresh();
-        toaster.show(`${n} nomes importados.`);
+        await writeOverlay();
+        toaster.show(`Importados: ${countLabel(c)}.`);
       } catch (err) {
         toaster.show("Importar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao importar overlay:", err);
@@ -695,38 +731,10 @@ async function boot() {
     },
     toggleFamily: () => { toggleFamily(); },
     openSearch: () => {
+      if (views.current() === "neumas") { neumasView?.focusSearch(); return; }
       if (!paletteRef) return;
       if (!document.querySelector(".neume-palette")) view.focus();
       paletteRef.open(view);
-    },
-    openOverlayPanel: () => {
-      const host = document.querySelector<HTMLElement>("#overlay-host")!;
-      const closePanel = () => { host.style.display = "none"; host.innerHTML = ""; overlayPanel = null; };
-      // Toggle: se já está aberto, fecha.
-      if (host.style.display === "block") { closePanel(); return; }
-      host.style.display = "block";
-      const op = createOverlayPanel(host, {
-        entries: effectiveRef,
-        initial: () => overlay,
-        onChange: (o) => {
-          overlay = cloneOverlay(o); // em dia JÁ (clone: sem aliasing com o rascunho)
-          return overlayAutosave.schedule();
-        },
-        onExport: async () => {
-          // `overlay` já reflete a tela; grava o pendente antes de exportar.
-          try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
-          const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
-          await exportOverlay(overlay);
-          if (n) toaster.show(`${n} nomes exportados.`);
-          else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
-        },
-        onImport: async () => {
-          await commands.run("names.import"); // flush + merge + refresh do painel lá dentro
-        },
-        onClose: closePanel,
-      });
-      overlayPanel = op;
-      op.open();
     },
     togglePreview: () => {
       previewHost.style.display = previewHost.style.display === "none" ? "" : "none";
@@ -849,6 +857,7 @@ async function boot() {
     // O painel lateral "Nomes" não é mais aberto pela UI: Ctrl+Alt+N abre a vista Neumas.
     { id: "view.edicao", label: "Edição", run: backToEdit, keys: ["Ctrl+Digit1"], checked: () => views.current() === "edicao" },
     { id: "view.neumas", label: "Neumas", run: () => openNeumas(), keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => views.current() === "neumas" },
+    { id: "neumas.search", label: "Buscar na tela de nomes", run: () => neumasView?.focusSearch(), keys: ["Ctrl+F"], enabled: () => views.current() === "neumas" },
     { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
