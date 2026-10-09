@@ -847,8 +847,10 @@ async function boot() {
     await recovery.tick();
     if (recovery.owns() && pendingPrev === null) {
       try { await recoveryPrevSlot.remove(); } catch (e) { console.warn("[notker] recuperação:", e); }
-    } else if (!recovery.owns()) {
-      pendingPrev = snap; // não gravou: o retrato continua valendo
+    } else if (!recovery.owns() && pendingPrev === null) {
+      // não gravou: o retrato continua valendo — mas só se a rotação não pôs outro no `.prev`
+      // (senão a memória trocaria o pendente certo por este, e o disco teria o outro)
+      pendingPrev = snap;
     }
   }
   async function discardRecovery(id: string): Promise<void> {
