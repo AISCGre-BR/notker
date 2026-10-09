@@ -37,7 +37,7 @@ pip install 'fonttools==4.59.0'   # uma vez
 npm run neume                      # extrai glifos + gera o db (precisa do wasm: npm run grammar)
 ```
 
-Atalhos: `Ctrl+Space` busca de neumas · `Ctrl+Alt+L` régua de altura na pauta · `Ctrl+Alt+E`/`Ctrl+Alt+I` exportar/importar nomes.
+Atalhos: F2 ou Ctrl+K: buscar neuma (Ctrl+Enter num resultado: cadastrar nome) · `Ctrl+Alt+L` régua de altura na pauta · `Ctrl+Alt+E`/`Ctrl+Alt+I` exportar/importar nomes.
 
 ### Créditos adicionais (F2)
 
