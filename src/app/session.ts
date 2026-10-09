@@ -36,7 +36,7 @@ export async function resolveUnsaved(g: UnsavedGuard): Promise<boolean> {
       return await g.save();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      error = `Não foi possível salvar: ${msg}. Escolha “Não salvar” para continuar sem salvar.`;
+      error = `Não foi possível salvar: ${msg.replace(/\.+$/, "")}. Escolha “Não salvar” para continuar sem salvar.`;
     }
   }
 }

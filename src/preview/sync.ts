@@ -14,7 +14,9 @@ export function installSync(view: EditorView, panel: PreviewPanel): void {
   panel.onSyllable((n) => {
     const src = sourceOfSyllable(panel.sourceMap(), n);
     if (!src) return;
-    view.dispatch({ selection: { anchor: src.from, head: src.to } });
+    // O mapa pode ser de outro canto por ~150 ms após a troca: limita ao doc atual.
+    const len = view.state.doc.length;
+    view.dispatch({ selection: { anchor: Math.min(src.from, len), head: Math.min(src.to, len) } });
     view.focus();
     const svg = panel.svgEl();
     if (svg) highlightSyllable(svg, n);   // realça também no preview

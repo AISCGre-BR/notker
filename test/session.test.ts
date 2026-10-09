@@ -44,6 +44,15 @@ describe("resolveUnsaved", () => {
   });
 });
 
+describe("resolveUnsaved: mensagem de erro", () => {
+  it("não dobra o ponto quando a mensagem já termina em '.'", async () => {
+    const { g, errors } = guard(["save", "discard"], { save: vi.fn(async () => { throw new Error("Disco cheio."); }) });
+    await resolveUnsaved(g);
+    expect(errors[1]).toContain("Não foi possível salvar: Disco cheio. Escolha");
+    expect(errors[1]).not.toContain("..");
+  });
+});
+
 describe("askSaveChanges", () => {
   let host: HTMLElement;
   beforeEach(() => {

@@ -1,5 +1,5 @@
 /** Toast do Parchment (sc-toast): faixa no pé da janela, um ponto de cor do estado,
- *  uma frase e no máximo uma ação. Sucesso some em 4 s; erro fica até dispensar.
+ *  uma frase e no máximo uma ação. Sucesso some em 4 s (10 s se tiver ação); erro fica até dispensar.
  *  Monta num host PRÉ-EXISTENTE alternando display (WebKitGTK só repinta assim). */
 export type ToastKind = "ok" | "warn" | "error";
 export interface Toaster {
@@ -7,6 +7,7 @@ export interface Toaster {
   dismiss(): void;
 }
 const AUTO_MS = 4000;
+const AUTO_MS_ACTION = 10000; // com "Desfazer" o usuário precisa de tempo
 
 export function createToaster(host: HTMLElement): Toaster {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -38,7 +39,7 @@ export function createToaster(host: HTMLElement): Toaster {
       }
       host.appendChild(t);
       host.style.display = "block";
-      if (kind !== "error") timer = setTimeout(dismiss, AUTO_MS);
+      if (kind !== "error") timer = setTimeout(dismiss, opts.action ? AUTO_MS_ACTION : AUTO_MS);
     },
   };
 }
