@@ -115,18 +115,23 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
   /** Último texto recusado (repetido etc.): sair do campo de novo não repete o aviso; Enter sim. */
   let nameRefused: string | null = null;
 
+  /** Desenha e aplica só se o token ainda vale; desenho que rejeita mantém a figura anterior (sem rejeição solta). */
+  const paint = (token: number, family: Family, nabc: string): void => {
+    let p: Promise<Element>;
+    try { p = Promise.resolve(draw(family, nabc)); } catch { return; }
+    p.then((node) => {
+      if (token === drawToken && refs) refs.figure.replaceChildren(node);
+    }).catch(() => { /* desenho falhou: mantém a figura anterior */ });
+  };
   const redraw = debounce((family: Family, nabc: string) => {
     const token = ++drawToken;
-    void draw(family, nabc).then((node) => {
-      if (token !== drawToken || !refs) return;
-      refs.figure.replaceChildren(node);
-    });
+    paint(token, family, nabc);
   }, 120);
   const ensureDrawing = (family: Family, nabc: string, now: boolean): void => {
     const k = `${family}:${nabc}`;
     if (k === drawn) return;
     drawn = k;
-    if (now) { redraw.cancel(); const token = ++drawToken; void draw(family, nabc).then((n) => { if (token === drawToken && refs) refs.figure.replaceChildren(n); }); }
+    if (now) { redraw.cancel(); paint(++drawToken, family, nabc); }
     else redraw(family, nabc);
   };
 
