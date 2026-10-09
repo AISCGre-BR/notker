@@ -279,3 +279,75 @@ describe("árvore: menu de contexto e rodapé", () => {
     expect(o.onRename).not.toHaveBeenCalled();
   });
 });
+
+describe("árvore: arrastar e soltar (Pointer Events)", () => {
+  const rect = (i: number) => ({ top: i * 30, bottom: i * 30 + 30, height: 30, left: 0, right: 240, width: 240, x: 0, y: i * 30, toJSON() { return this; } }) as DOMRect;
+  const layout = () => rows().forEach((r, i) => { r.getBoundingClientRect = () => rect(i); });
+  const down = (id: string, y: number) => row(id).dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 20, clientY: y }));
+  const move = (y: number) => window.dispatchEvent(new MouseEvent("pointermove", { clientX: 20, clientY: y }));
+  const up = (y: number) => window.dispatchEvent(new MouseEvent("pointerup", { clientX: 20, clientY: y }));
+
+  it("soltar no meio de um grupo põe dentro dele; o clique seguinte não abre canto", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("a", 10);
+    move(105);                                   // meio de "o"
+    expect(row("o").classList.contains("is-drop-inside")).toBe(true);
+    expect(document.body.classList.contains("notker-dragging")).toBe(true);
+    up(105);
+    expect(o.onMove).toHaveBeenCalledWith("a", "o", 1);
+    expect(row("o").classList.contains("is-drop-inside")).toBe(false);
+    expect(document.body.classList.contains("notker-dragging")).toBe(false);
+    row("a").click();
+    expect(o.onSelect).not.toHaveBeenCalled();
+  });
+  it("entre linhas mostra o indicador rubrica na borda", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("a", 10);
+    move(152);                                   // topo de "d"
+    const ind = host.querySelector<HTMLElement>(".notker-tree__drop")!;
+    expect(ind.hidden).toBe(false);
+    expect(ind.style.top).toBe("149px");
+    up(152);
+    expect(o.onMove).toHaveBeenCalledWith("a", null, 2);
+    expect(ind.hidden).toBe(true);
+  });
+  it("menos de 4 px é clique, não arrasto", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("a", 10);
+    move(12);
+    up(12);
+    expect(o.onMove).not.toHaveBeenCalled();
+    row("a").click();
+    expect(o.onSelect).toHaveBeenCalledWith("a");
+  });
+  it("grupo não entra em si mesmo nem num descendente", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("n", 40);
+    move(135);                                   // "c", dentro de "o", dentro de "n"
+    up(135);
+    expect(o.onMove).not.toHaveBeenCalled();
+  });
+  it("Esc cancela o arrasto", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("a", 10);
+    move(105);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    up(105);
+    expect(o.onMove).not.toHaveBeenCalled();
+    expect(host.querySelector(".is-drop-inside")).toBeNull();
+  });
+  it("o painel não usa a API HTML5 de arrastar", () => {
+    createTreePanel(host, opts()).render(proj());
+    expect(host.querySelector("[draggable]")).toBeNull();
+  });
+});

@@ -6,7 +6,8 @@
  *  preventDefault — o registro da janela ignora eventos já tratados (F2 aqui renomeia,
  *  não abre a paleta; Alt+↑/↓ move o nó, não o neuma). */
 import type { Family } from "../neume/types";
-import { type NotkerProject, type TreeNode, type VisibleRow, visibleRows, findNode, locate, childrenOf } from "./tree";
+import { type NotkerProject, type TreeNode, type VisibleRow, visibleRows, findNode, locate, childrenOf, subtreeHas } from "./tree";
+import { computeDrop, type Drop, type DropRow } from "./tree-dnd";
 import { icon } from "../ui/pd/icons";
 import { openContextMenu, closeContextMenu, type CtxEntry } from "../ui/pd/context-menu";
 
@@ -44,6 +45,15 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
   list.setAttribute("role", "tree");
   list.setAttribute("aria-label", "Cantos do projeto");
   host.replaceChildren(list, buildFoot());
+
+  // ── Arrastar e soltar: Pointer Events próprios (a API HTML5 de DnD é instável no
+  //    WebKitGTK). Sem preventDefault no pointerdown (o clique e o foco seguem normais). ──
+  const indicator = document.createElement("div");
+  indicator.className = "notker-tree__drop";
+  indicator.hidden = true;
+  host.appendChild(indicator);
+  let drag: { id: string; x: number; y: number; active: boolean; drop: Drop | null } | null = null;
+  let suppressClick = false;
 
   const rowById = (id: string): HTMLElement | undefined => els.find((el) => el.dataset.id === id);
   const rowOf = (t: EventTarget | null): HTMLElement | null =>
@@ -211,6 +221,80 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
 
   function focusNode(id: string): void { visibleFor(id)?.focus(); }
 
+  function geometry(): DropRow[] {
+    return rows.map((r, i) => {
+      const b = els[i].getBoundingClientRect();
+      const n = r.node;
+      return {
+        id: n.id, kind: n.kind, parentId: r.parentId, index: r.index, top: b.top, height: b.height,
+        expanded: n.kind === "group" && !n.collapsed, childCount: n.kind === "group" ? n.children.length : 0,
+      };
+    });
+  }
+  function showDrop(d: Drop | null): void {
+    els.forEach((el) => el.classList.remove("is-drop-inside"));
+    indicator.hidden = true;
+    const row = d ? rowById(d.rowId) : undefined;
+    if (!d || !row) return;
+    if (d.where === "inside") { row.classList.add("is-drop-inside"); return; }
+    const hb = host.getBoundingClientRect();
+    const rb = row.getBoundingClientRect();
+    const level = Number(row.getAttribute("aria-level")) || 1;
+    const depth = d.where === "end" ? 0 : d.parentId === d.rowId ? level : level - 1;
+    indicator.style.top = `${(d.where === "before" ? rb.top : rb.bottom) - hb.top - 1}px`;
+    indicator.style.left = `${10 + depth * 16}px`;
+    indicator.hidden = false;
+  }
+  function endDrag(commit: boolean): void {
+    const d = drag;
+    drag = null;
+    window.removeEventListener("pointermove", onDragMove);
+    window.removeEventListener("pointerup", onDragUp);
+    window.removeEventListener("pointercancel", onDragCancel);
+    document.removeEventListener("keydown", onDragKey, true);
+    document.body.classList.remove("notker-dragging");
+    els.forEach((el) => el.classList.remove("is-dragging"));
+    showDrop(null);
+    if (!d || !d.active) return;
+    suppressClick = true; // o click que o navegador manda depois do pointerup
+    setTimeout(() => { suppressClick = false; }, 0);
+    if (commit && d.drop) opts.onMove(d.id, d.drop.parentId, d.drop.index);
+  }
+  function onDragMove(e: MouseEvent): void {
+    if (!drag || !project) return;
+    if (!drag.active) {
+      if (Math.abs(e.clientX - drag.x) < 4 && Math.abs(e.clientY - drag.y) < 4) return;
+      drag.active = true;
+      closeContextMenu();
+      document.body.classList.add("notker-dragging");
+      rowById(drag.id)?.classList.add("is-dragging");
+    }
+    const lb = list.getBoundingClientRect();
+    if (e.clientY < lb.top + 24) list.scrollTop -= 8;
+    else if (e.clientY > lb.bottom - 24) list.scrollTop += 8;
+    const node = findNode(project, drag.id);
+    drag.drop = node ? computeDrop(geometry(), e.clientY, (pid) => pid !== null && subtreeHas(node, pid)) : null;
+    showDrop(drag.drop);
+  }
+  function onDragUp(): void { endDrag(true); }
+  function onDragCancel(): void { endDrag(false); }
+  function onDragKey(e: KeyboardEvent): void {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    endDrag(false);
+  }
+  list.addEventListener("pointerdown", (e: MouseEvent) => {
+    if (e.button !== 0 || !project || drag || e.target instanceof HTMLInputElement) return;
+    const row = rowOf(e.target);
+    if (!row?.dataset.id) return;
+    drag = { id: row.dataset.id, x: e.clientX, y: e.clientY, active: false, drop: null };
+    window.addEventListener("pointermove", onDragMove);
+    window.addEventListener("pointerup", onDragUp);
+    window.addEventListener("pointercancel", onDragCancel);
+    document.addEventListener("keydown", onDragKey, true);
+  });
+
   list.addEventListener("focusin", (e) => {
     const row = rowOf(e.target);
     if (!row?.dataset.id) return;
@@ -219,6 +303,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
   });
 
   list.addEventListener("click", (e) => {
+    if (suppressClick) { suppressClick = false; return; }
     const row = rowOf(e.target);
     const n = row ? nodeOf(row) : undefined;
     if (!n) return;
