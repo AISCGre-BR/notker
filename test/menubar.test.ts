@@ -273,3 +273,35 @@ describe("menubar — Alt e foco", () => {
     expect(document.activeElement).toBe(ed);
   });
 });
+
+describe("menubar — blur e Esc no botão de topo", () => {
+  const key = (type: string, k: string, extra: KeyboardEventInit = {}) =>
+    document.dispatchEvent(new KeyboardEvent(type, { key: k, bubbles: true, ...extra }));
+  it("blur da janela zera o Alt pendente", () => {
+    mount(BASIC);
+    key("keydown", "Alt", { altKey: true });
+    window.dispatchEvent(new Event("blur"));
+    key("keyup", "Alt");
+    expect(document.activeElement).toBe(document.body);
+  });
+  it("Esc no botão de topo (menu fechado) devolve o foco a quem o tinha", () => {
+    const { host } = mount(BASIC);
+    const inp = document.createElement("input");
+    document.body.appendChild(inp);
+    inp.focus();
+    key("keydown", "Alt", { altKey: true });
+    key("keyup", "Alt");
+    const top = host.querySelector<HTMLButtonElement>(".sc-menubar__top")!;
+    expect(document.activeElement).toBe(top);
+    top.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe(inp);
+  });
+  it("Esc no botão de topo sem foco anterior vai para o body", () => {
+    const { host } = mount(BASIC);
+    const top = host.querySelector<HTMLButtonElement>(".sc-menubar__top")!;
+    top.focus();
+    top.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe(document.body);
+  });
+});
+

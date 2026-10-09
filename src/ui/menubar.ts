@@ -72,7 +72,7 @@ export function createMenubar(
   function runItem(item: MenuItem): void {
     if (item.enabled && !item.enabled()) return;
     closeAll(true);
-    void commands.run(item.cmd);
+    commands.run(item.cmd).catch((e) => console.error(`[notker] comando "${item.cmd}" falhou:`, e));
   }
 
   function buildPop(i: number): HTMLElement {
@@ -180,6 +180,11 @@ export function createMenubar(
     top.setAttribute("aria-expanded", "false");
     // Antes de o foco mover para o botão (mouse), guarda quem o tinha.
     top.addEventListener("mousedown", rememberFocus);
+    top.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || openIdx !== null) return;
+      e.preventDefault();
+      if (returnFocus) restoreFocus(); else top.blur();
+    });
     top.addEventListener("click", () => {
       if (openIdx === i) closeAll(true);
       else openMenu(i);
@@ -213,6 +218,8 @@ export function createMenubar(
     }
     altAlone = false;
   }, { capture: true, signal });
+
+  window.addEventListener("blur", () => { altAlone = false; }, { signal });
 
   return {
     closeAll: () => closeAll(),
