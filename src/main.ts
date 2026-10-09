@@ -50,10 +50,10 @@ import { createOverlayPanel, type OverlayPanel } from "./overlay-ui/panel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
-import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
+import { openProject, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveDoc, effectiveFamily,
-  withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
+  withActiveContent, setActive, setDocFamily, addDoc, removeDoc, moveDoc, gabcName,
 } from "./project/model";
 import { createDocList } from "./project/doc-list";
 import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
@@ -366,7 +366,20 @@ async function boot() {
   const docList = createDocList(docListHost, {
     onSelect: (id) => switchToDoc(id),
     onAdd: () => void addNewDoc(),
+    onImport: () => void importGabcAsDoc(),
     onRemove: (id) => { project = removeDoc(project, id); syncFromProject(); },
+    onSetFamily: (id, f) => {
+      captureEditorIntoProject();
+      project = setDocFamily(project, id, f);
+      docList.render(project);
+      if (id === project.activeId) reindex();
+      toaster.show("Família do canto: " + familyLabel(f) + ".");
+    },
+    onMove: (id, delta) => {
+      captureEditorIntoProject();
+      project = moveDoc(project, id, delta);
+      docList.render(project);
+    },
   });
 
   let menubar: ReturnType<typeof createMenubar> | undefined;
@@ -405,6 +418,20 @@ async function boot() {
     project = setActive(project, project.docs[project.docs.length - 1].id);
     syncFromProject();
     view.focus();
+  }
+  // Importa um .gabc solto como novo canto do projeto e o ativa.
+  async function importGabcAsDoc(): Promise<void> {
+    try {
+      const f = await pickGabcFile();
+      if (!f) return;
+      captureEditorIntoProject();
+      project = addDoc(project, { title: gabcName(f.content, f.name), content: f.content });
+      project = setActive(project, project.docs[project.docs.length - 1].id);
+      syncFromProject();
+      view.focus();
+    } catch (e) {
+      toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" });
+    }
   }
   docList.render(project);
 

@@ -85,6 +85,16 @@ export function removeDoc(p: NotkerProject, id: string): NotkerProject {
   return { ...p, docs, activeId };
 }
 
+/** Troca o canto com o vizinho (delta -1 sobe, +1 desce); no-op nas pontas. */
+export function moveDoc(p: NotkerProject, id: string, delta: -1 | 1): NotkerProject {
+  const i = p.docs.findIndex((d) => d.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= p.docs.length) return p;
+  const docs = [...p.docs];
+  [docs[i], docs[j]] = [docs[j], docs[i]];
+  return { ...p, docs };
+}
+
 interface ProjectJsonDoc { id: string; file: string; title: string; family?: Family }
 interface ProjectJson {
   schema: 1; kind: "notker-project"; title: string; family: Family;

@@ -26,6 +26,13 @@ export async function openProject(): Promise<NotkerProject | null> {
   return ephemeralFromGabc(content, baseName(path));
 }
 
+/** Escolhe um `.gabc` e devolve nome (sem extensão) e conteúdo. */
+export async function pickGabcFile(): Promise<{ name: string; content: string } | null> {
+  const path = await open({ multiple: false, filters: [GABC_FILTER] });
+  if (typeof path !== "string") return null;
+  return { name: baseName(path).replace(/\.gabc$/i, ""), content: await readTextFile(path) };
+}
+
 /** Salva o projeto como `.notker`. Se não tem path, pede um (Salvar como). */
 export async function saveProject(p: NotkerProject): Promise<string | null> {
   let path = p.path;

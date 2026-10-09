@@ -1,58 +1,68 @@
-import { describe, it, expect, vi } from "vitest";
-import { createDocList } from "../src/project/doc-list";
-import { newProject, addDoc } from "../src/project/model";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createDocList, type DocListOpts } from "../src/project/doc-list";
+import type { NotkerProject } from "../src/project/model";
 
-describe("lista de documentos", () => {
-  it("renderiza um item por doc, marca o ativo e dispara onSelect", () => {
-    const host = document.createElement("div");
-    let p = newProject({ family: "stgall", name: "A" });
-    p = addDoc(p, { title: "B", content: "name: B;\n%%\n(c4) b" });
-    const onSelect = vi.fn();
-    const list = createDocList(host, { onSelect, onAdd: vi.fn(), onRemove: vi.fn() });
-    list.render(p);
-    const items = host.querySelectorAll(".doc-item");
-    expect(items.length).toBe(2);
-    expect(host.querySelector(".doc-item.active")!.textContent).toContain("A");
-    (items[1] as HTMLElement).click();
-    expect(onSelect).toHaveBeenCalledWith(p.docs[1].id);
+const proj = (over: Partial<NotkerProject> = {}): NotkerProject => ({
+  schema: 1, kind: "notker-project", title: "P", family: "stgall", activeId: "a",
+  docs: [
+    { id: "a", title: "Puer natus", content: "" },
+    { id: "b", title: "Viderunt", content: "", family: "laon" },
+    { id: "c", title: "Dies", content: "" },
+  ], ...over,
+});
+const opts = (): DocListOpts => ({ onSelect: vi.fn(), onAdd: vi.fn(), onImport: vi.fn(), onRemove: vi.fn(), onSetFamily: vi.fn(), onMove: vi.fn() });
+let host: HTMLElement;
+beforeEach(() => { document.body.innerHTML = ""; host = document.createElement("aside"); document.body.appendChild(host); });
+
+describe("barra lateral de cantos", () => {
+  it("linhas sem botões; ativa com aria-selected; legenda com a família efetiva", () => {
+    createDocList(host, opts()).render(proj());
+    const rows = host.querySelectorAll<HTMLElement>(".notker-row");
+    expect(rows.length).toBe(3);
+    expect(rows[0].getAttribute("aria-selected")).toBe("true");
+    expect(rows[0].tabIndex).toBe(0);
+    expect(rows[1].tabIndex).toBe(-1);
+    expect(host.querySelector(".notker-sidebar__list button")).toBeNull();
+    expect([...rows].map((r) => r.querySelector(".notker-row__meta")!.textContent)).toEqual(["St. Gall", "Laon", "St. Gall"]);
   });
-
-  // Botão "+" antigo (doc-add) foi removido do cabeçalho; agora é doc-add-row no rodapé.
-  it("o doc-add-row chama onAdd e o × chama onRemove com o id do ativo", () => {
-    const host = document.createElement("div");
-    let p = newProject({ family: "stgall", name: "A" });
-    p = addDoc(p, { title: "B", content: "name: B;\n%%\n(c4) b" }); // × só aparece com >1 doc
-    const onAdd = vi.fn(); const onRemove = vi.fn();
-    const list = createDocList(host, { onSelect: vi.fn(), onAdd, onRemove });
-    list.render(p);
-    // Linha "+ Adicionar canto" (substitui o botão "+" do cabeçalho)
-    host.querySelector<HTMLButtonElement>(".doc-add-row")!.click();
-    expect(onAdd).toHaveBeenCalled();
-    host.querySelector<HTMLButtonElement>(".doc-remove")!.click(); // × do 1º doc (ativo)
-    expect(onRemove).toHaveBeenCalledWith(p.activeId);
+  it("clique e Enter selecionam; ↓ move o foco", () => {
+    const o = opts();
+    createDocList(host, o).render(proj());
+    const rows = host.querySelectorAll<HTMLElement>(".notker-row");
+    rows[1].click();
+    expect(o.onSelect).toHaveBeenCalledWith("b");
+    rows[0].focus();
+    rows[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(document.activeElement).toBe(rows[1]);
+    rows[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(o.onSelect).toHaveBeenLastCalledWith("b");
   });
-
-  it("renderiza .doc-add-row com texto '+ Adicionar canto' após os itens", () => {
-    const host = document.createElement("div");
-    const p = newProject({ family: "stgall", name: "A" });
-    const list = createDocList(host, { onSelect: vi.fn(), onAdd: vi.fn(), onRemove: vi.fn() });
-    list.render(p);
-    const btn = host.querySelector<HTMLButtonElement>(".doc-add-row");
-    expect(btn).not.toBeNull();
-    expect(btn!.textContent).toBe("+ Adicionar canto");
-    // Deve aparecer após os itens de doc no DOM
-    const allChildren = Array.from(host.querySelector(".doc-list")!.children);
-    const itemIdx = allChildren.findIndex((el) => el.classList.contains("doc-item"));
-    const addRowIdx = allChildren.findIndex((el) => el.classList.contains("doc-add-row"));
-    expect(addRowIdx).toBeGreaterThan(itemIdx);
+  it("menu de contexto: família, mover e excluir", () => {
+    const o = opts();
+    createDocList(host, o).render(proj());
+    const row = host.querySelectorAll<HTMLElement>(".notker-row")[2];
+    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
+    const labels = [...host.querySelectorAll(".sc-menu__item")].map((b) => b.textContent);
+    expect(labels.some((l) => l!.includes("Família: Laon"))).toBe(true);
+    [...host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")].find((b) => b.textContent!.includes("Família: Laon"))!.click();
+    expect(o.onSetFamily).toHaveBeenCalledWith("c", "laon");
+    row.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true }));
+    [...host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")].find((b) => b.textContent!.includes("Excluir canto"))!.click();
+    expect(o.onRemove).toHaveBeenCalledWith("c");
   });
-
-  it("NÃO existe mais botão .doc-add no cabeçalho", () => {
-    const host = document.createElement("div");
-    const p = newProject({ family: "stgall", name: "A" });
-    const list = createDocList(host, { onSelect: vi.fn(), onAdd: vi.fn(), onRemove: vi.fn() });
-    list.render(p);
-    expect(host.querySelector(".doc-add")).toBeNull();
-    expect(host.querySelector(".doc-list-head .doc-add")).toBeNull();
+  it("com um só canto não há Excluir no menu", () => {
+    createDocList(host, opts()).render(proj({ docs: [{ id: "a", title: "Só", content: "" }] }));
+    host.querySelector<HTMLElement>(".notker-row")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    expect([...host.querySelectorAll(".sc-menu__item")].some((b) => b.textContent!.includes("Excluir"))).toBe(false);
+  });
+  it("rodapé: + Novo canto e menu para cima com Importar .gabc…", () => {
+    const o = opts();
+    createDocList(host, o).render(proj());
+    const [add, more] = host.querySelectorAll<HTMLButtonElement>(".notker-sidebar__foot button");
+    add.click();
+    expect(o.onAdd).toHaveBeenCalled();
+    more.click();
+    [...host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")].find((b) => b.textContent!.includes("Importar .gabc"))!.click();
+    expect(o.onImport).toHaveBeenCalled();
   });
 });

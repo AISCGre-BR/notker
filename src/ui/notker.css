@@ -314,14 +314,6 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .wave-hit { fill: transparent; cursor: ns-resize; }
 
 /* ── Lista lateral de documentos ──────────────────────────────────────────── */
-.doc-list { display: flex; flex-direction: column; font-family: serif; font-size: 13px; height: 100%; }
-.doc-list-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--rule); }
-.doc-add-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; cursor: pointer; width: 100%; font-family: serif; color: var(--ink-soft); background: transparent; border: none; text-align: left; }
-.doc-add-row:hover { background: var(--cream-deep); }
-.doc-item { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; cursor: pointer; }
-.doc-item.active { background: var(--cream-deep); border-left: 2px solid var(--rubric-soft); }
-.doc-item-label { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.doc-remove { border: none; background: transparent; cursor: pointer; color: var(--ink-muted); }
 
 /* ── Paleta de neumas, tooltips e régua de pauta (movidos do index.html) ────── */
 .neume-palette { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); max-height: 60vh; display: flex; flex-direction: column; gap: 4px; z-index: 1000; }
@@ -350,3 +342,15 @@ body { font-family: var(--font); color: var(--ink); background: var(--cream); }
 .staff-legend .legend-cell { margin-right: 8px; white-space: nowrap; }
 /* NABC em composição — campo inteiro tratado como um único neuma */
 .nabc-composing { background: var(--cream-deep); border-bottom: 2px solid var(--rubric-soft); }
+
+/* ── Barra lateral de cantos (Mocquereau) ─────────────────────────────────── */
+.notker-sidebar__list { flex: 1 1 auto; overflow: auto; padding: var(--space-3) var(--space-2); display: flex; flex-direction: column; gap: 2px; }
+.notker-row { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+.notker-row:hover { background: var(--ink-wash); }
+.notker-row[aria-selected="true"] { background: var(--rubric-wash); }
+.notker-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.notker-row__name { font: 500 15px/20px var(--font-serif); color: var(--ink); }
+.notker-row__meta { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+.notker-sidebar__foot { display: flex; padding: var(--space-3); border-top: 1px solid var(--rule-soft); }
+.notker-split__main { flex: 1; border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.notker-split__more { border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-left: 1px; }
