@@ -17,7 +17,7 @@ const ALL = [
   e("stgall:pe"), e("stgall:vi", { hidden: true }), e("stgall:cl"),
 ];
 const cbs = (): CatalogCallbacks => ({
-  onQuery: vi.fn(), onFamily: vi.fn(), onFilter: vi.fn(), onSelect: vi.fn(), onActivate: vi.fn(), onNewSequence: vi.fn(), onSearchEscape: vi.fn(),
+  onQuery: vi.fn(), onFamily: vi.fn(), onFilter: vi.fn(), onSelect: vi.fn(), onActivate: vi.fn(), onNewSequence: vi.fn(), onSearchEscape: vi.fn(), onMore: vi.fn(),
 });
 const st = (over: Partial<CatalogState> = {}): CatalogState => ({ family: "stgall", filter: "todos", query: "", selectedId: null, composing: false, ...over });
 let host: HTMLElement;
@@ -109,5 +109,38 @@ describe("onda final: catálogo", () => {
     const c = createCatalog(host, cbs());
     c.render(catalogSections(ALL, "stgall", "todos", ""), st());
     expect(host.querySelector(".neumas-card__mine")!.getAttribute("role")).toBe("img");
+  });
+});
+
+describe("paginação incremental por seção", () => {
+  const MANY = Array.from({ length: 400 }, (_, i) => e(`stgall:g${String(i).padStart(3, "0")}`));
+  it("o modelo aceita teto por seção e informa o total", () => {
+    const g = (caps?: { glifos?: number }) => catalogSections(MANY, "stgall", "todos", "", { caps }).find((s) => s.id === "glifos")!;
+    expect(g().items.length).toBe(150);
+    expect(g({ glifos: 300 }).items.length).toBe(300);
+    expect(g({ glifos: Infinity }).items.length).toBe(400);
+    expect(g({ glifos: Infinity }).total).toBe(400);
+  });
+  it("seção cortada mostra 'Mostrar mais (N restantes)' e 'Mostrar todos' (botões elevados) que viram onMore", () => {
+    const cb = cbs();
+    const c = createCatalog(host, cb);
+    c.render(catalogSections(MANY, "stgall", "todos", ""), st());
+    expect(host.querySelectorAll(".neumas-card").length).toBe(150);
+    expect(host.querySelector(".neumas-more")!.textContent).toContain("mostrando 150 de 400");
+    const more = host.querySelector<HTMLButtonElement>(".neumas-more-btn")!;
+    const all = host.querySelector<HTMLButtonElement>(".neumas-all-btn")!;
+    expect(more.textContent).toBe("Mostrar mais (250 restantes)");
+    expect(all.textContent).toBe("Mostrar todos");
+    expect(more.classList.contains("sc-btn--elevated")).toBe(true);
+    expect(all.classList.contains("sc-btn--elevated")).toBe(true);
+    more.click();
+    expect(cb.onMore).toHaveBeenLastCalledWith("glifos", false);
+    all.click();
+    expect(cb.onMore).toHaveBeenLastCalledWith("glifos", true);
+  });
+  it("seção inteira não mostra botões", () => {
+    const c = createCatalog(host, cbs());
+    c.render(catalogSections(ALL, "stgall", "todos", ""), st());
+    expect(host.querySelector(".neumas-more-btn")).toBeNull();
   });
 });

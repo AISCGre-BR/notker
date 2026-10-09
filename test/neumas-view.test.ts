@@ -14,11 +14,11 @@ const ne = (family: Family, code: string, nabc: string, name: string, extra: Par
 const CAT = [ne("stgall", "pe", "pe", "pes"), ne("stgall", "vi", "vi", "virga"), ne("stgall", "cl", "cl", "clivis"), ne("laon", "un", "un", "uncinus")];
 const T = "2026-10-09T12:00:00.000Z";
 
-function setup(initial: Overlay = emptyOverlay()) {
+function setup(initial: Overlay = emptyOverlay(), cat: NeumeEntry[] = CAT) {
   let overlay = initial;
   const toasts: { text: string; opts?: Parameters<NeumasDeps["toast"]>[1] }[] = [];
   const deps: NeumasDeps = {
-    entries: () => buildEffective(CAT, overlay),
+    entries: () => buildEffective(cat, overlay),
     overlay: () => overlay,
     commit: vi.fn(async (o: Overlay) => { overlay = o; }),
     validate: (n: string): NabcValidity => (!n.trim() ? "empty" : /^(pe|vi|cl|un)(!(pe|vi|cl|un))*$/.test(n.replace(/\s+/g, "")) ? "valid" : "invalid"),
@@ -407,5 +407,48 @@ describe("onda final: menores da vista", () => {
     key(q(".neumas-newname"), "Enter");
     await flush();
     expect(ov().entries["stgall:pe"]).toMatchObject({ note: "pendente", names: ["podatus"] });
+  });
+});
+
+describe("paginação incremental da grade", () => {
+  const BIG = [
+    ...Array.from({ length: 400 }, (_, i) => { const c = `g${String(i).padStart(3, "0")}`; return ne("stgall", c, c, "glifo " + c); }),
+    ne("laon", "un", "un", "uncinus"),
+  ];
+  const count = () => document.querySelectorAll('.neumas-section[data-section="glifos"] .neumas-card').length;
+  const btn = (c: string) => document.querySelector<HTMLButtonElement>(c)!;
+  it("150 → 300 → 400 e voltar a 150 ao trocar filtro, busca ou família", () => {
+    const { view } = setup(emptyOverlay(), BIG);
+    view.open({ family: "stgall" });
+    expect(count()).toBe(150);
+    expect(btn(".neumas-more-btn").textContent).toBe("Mostrar mais (250 restantes)");
+    btn(".neumas-more-btn").click();
+    expect(count()).toBe(300);
+    expect(btn(".neumas-more-btn").textContent).toBe("Mostrar mais (100 restantes)");
+    btn(".neumas-all-btn").click();
+    expect(count()).toBe(400);
+    expect(document.querySelector(".neumas-more-btn")).toBeNull();
+    btn('[data-filter="sem-nome"]').click();
+    expect(count()).toBe(150);
+    btn(".neumas-all-btn").click();
+    expect(count()).toBe(400);
+    type(q<HTMLInputElement>(".neumas-search"), "glifo");
+    expect(count()).toBe(150);
+    btn(".neumas-all-btn").click();
+    btn('[data-family="laon"]').click();
+    btn('[data-family="stgall"]').click();
+    expect(count()).toBe(150);
+  });
+  it("os cartões novos entram na navegação por setas", () => {
+    const { view } = setup(emptyOverlay(), BIG);
+    view.open({ family: "stgall" });
+    btn(".neumas-all-btn").click();
+    const last = document.querySelectorAll<HTMLElement>(".neumas-card");
+    const end = last[last.length - 1];
+    end.focus();
+    key(end, "Home");
+    expect(document.activeElement).toBe(last[0]);
+    key(last[0], "End");
+    expect((document.activeElement as HTMLElement).dataset.id).toBe(end.dataset.id);
   });
 });

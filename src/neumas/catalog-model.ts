@@ -12,7 +12,7 @@ export const FILTERS: { id: CatalogFilter; label: string }[] = [
 ];
 export type SectionId = "minhas" | "catalogo" | "glifos";
 export interface CatalogSection { id: SectionId; title: string; items: EffectiveEntry[]; total: number }
-/** Teto por seção sem/ com busca (a grade inteira teria ~600 cartões por família). */
+/** Teto inicial por seção (a grade inteira teria ~600 cartões por família); a vista amplia por seção ("Mostrar mais"). */
 export const SECTION_CAP = 150;
 
 const TITLES: Record<SectionId, string> = {
@@ -31,7 +31,7 @@ export const sectionOf = (e: EffectiveEntry): SectionId =>
  */
 export function catalogSections(
   all: EffectiveEntry[], family: Family, filter: CatalogFilter, query: string,
-  opts: { cap?: number; pin?: string | null } = {},
+  opts: { cap?: number; caps?: Partial<Record<SectionId, number>>; pin?: string | null } = {},
 ): CatalogSection[] {
   const cap = opts.cap ?? SECTION_CAP;
   const fam = all.filter((e) => e.family === family);
@@ -43,7 +43,7 @@ export function catalogSections(
   const ids: SectionId[] = filter === "sequencias" ? ["minhas", "catalogo"] : ["minhas", "catalogo", "glifos"];
   return ids.map((id) => {
     const list = groups[id];
-    const items = list.slice(0, cap);
+    const items = list.slice(0, opts.caps?.[id] ?? cap);
     const pinned = opts.pin ? list.find((e) => e.id === opts.pin) : undefined;
     if (pinned && !items.includes(pinned)) items.push(pinned);
     return { id, title: TITLES[id], items, total: list.length };

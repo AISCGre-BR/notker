@@ -9,7 +9,7 @@ import {
   addSequence, removeSequence, restoreSequence, changeSequenceNabc, normalizeNabc,
 } from "../neume/overlay";
 import { findChain } from "../neume/effective";
-import { catalogSections, type CatalogFilter } from "./catalog-model";
+import { catalogSections, SECTION_CAP, type CatalogFilter, type SectionId } from "./catalog-model";
 import { createCatalog } from "./catalog";
 import { createBench, type BenchItem, type BenchStatus, type DrawFn } from "./bench";
 
@@ -54,17 +54,20 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   /** Texto do campo nabc ao editar uma sequência do usuário (null = igual à gravada). */
   let editChain: string | null = null;
   let composing = false;
+  /** Teto de cartões por seção; ausente = SECTION_CAP. Volta ao padrão ao mudar família, filtro ou busca. */
+  let caps: Partial<Record<SectionId, number>> = {};
   let saveState: BenchStatus["saveState"] = "";
   /** A vista está na tela (open → exit/flush). Só então o foco perdido é devolvido. */
   let opened = false;
 
   const catalog = createCatalog(host, {
-    onQuery: (q) => { query = q; render(); },
+    onQuery: (q) => { query = q; caps = {}; render(); },
     onFamily: (f) => { if (f !== family) { resetForFamily(f); render(); } },
-    onFilter: (f) => { filter = f; render(); },
+    onFilter: (f) => { filter = f; caps = {}; render(); },
     onSelect: (id) => select(id),
     onActivate: (id) => { if (composing && (draft || selectedIsUserSeq())) appendToChain(id); else select(id); },
     onNewSequence: () => newSequence(""),
+    onMore: (id, all) => { caps[id] = all ? Infinity : (caps[id] ?? SECTION_CAP) + SECTION_CAP; render(); },
     onSearchEscape: () => { if (!catalog.focusGrid()) bench.focusName(); },
   });
   const bench = createBench(host, {
@@ -118,7 +121,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   function resetForFamily(f: Family): void {
     bench.flushNote();
     discardDraft();
-    family = f; selectedId = null;
+    family = f; selectedId = null; caps = {};
   }
   /** Foco perdido (item removido do DOM → body): volta ao cartão lógico, para que as
    *  teclas N/S/I/Esc da vista continuem valendo. */
@@ -135,7 +138,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   function render(): void {
     const all = deps.entries();
     if (selectedId && !all.some((e) => e.id === selectedId)) { selectedId = null; editChain = null; }
-    const sections = catalogSections(all, family, filter, query, { pin: selectedId });
+    const sections = catalogSections(all, family, filter, query, { pin: selectedId, caps });
     catalog.render(sections, { family, filter, query, selectedId, composing });
     renderBench();
     restoreFocus();
@@ -329,7 +332,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
       opened = true;
       if (o.family && o.family !== family) resetForFamily(o.family);
       if (o.newChain !== undefined) {
-        query = ""; filter = "todos";
+        query = ""; filter = "todos"; caps = {};
         newSequence(o.newChain);
         composing = false;
         render();
@@ -337,7 +340,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
         const e = entryById(o.select);
         if (e) {
           // o item precisa aparecer: limpa busca/filtro que o escondessem
-          query = ""; filter = "todos";
+          query = ""; filter = "todos"; caps = {};
           select(o.select);
         } else render();
       } else render();

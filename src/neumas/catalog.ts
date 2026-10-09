@@ -3,7 +3,7 @@
 // (render) e as intenções saem por callbacks. Textos do usuário sempre por textContent.
 import type { EffectiveEntry, Family } from "../neume/types";
 import { neumeThumb } from "../neume/render";
-import { FILTERS, verticalNeighbor, type CatalogFilter, type CatalogSection } from "./catalog-model";
+import { FILTERS, verticalNeighbor, type CatalogFilter, type CatalogSection, type SectionId } from "./catalog-model";
 
 export interface CatalogCallbacks {
   onQuery(q: string): void;
@@ -14,6 +14,8 @@ export interface CatalogCallbacks {
   /** Clique ou Enter num cartão (selecionar, ou acrescentar à cadeia ao compor). */
   onActivate(id: string): void;
   onNewSequence(): void;
+  /** "Mostrar mais" (150 a mais) ou "Mostrar todos" (`all`) numa seção cortada. */
+  onMore(section: SectionId, all: boolean): void;
   /** Esc no campo de busca: devolve o foco à grade. */
   onSearchEscape(): void;
 }
@@ -182,7 +184,17 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
         }
         sec.appendChild(grid);
         if (s.items.length < s.total) {
-          sec.appendChild(el("div", "neumas-more", `mostrando ${s.items.length} de ${s.total} — refine a busca`));
+          const more = el("div", "neumas-more");
+          more.appendChild(el("span", "neumas-more__text", `mostrando ${s.items.length} de ${s.total}`));
+          const rest = s.total - s.items.length;
+          const next = el("button", "sc-btn sc-btn--elevated neumas-more-btn", `Mostrar mais (${rest} restantes)`);
+          next.type = "button";
+          next.addEventListener("click", () => cb.onMore(s.id, false));
+          const every = el("button", "sc-btn sc-btn--elevated neumas-all-btn", "Mostrar todos");
+          every.type = "button";
+          every.addEventListener("click", () => cb.onMore(s.id, true));
+          more.append(next, every);
+          sec.appendChild(more);
         }
         list.appendChild(sec);
         any = any || s.items.length > 0;
