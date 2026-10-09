@@ -48,12 +48,12 @@ export const highlightTheme = EditorView.theme(
     ".cm-tooltip": {
       backgroundColor: "var(--surface)",
       border: "1px solid var(--rule)",
-      borderRadius: "0",
+      borderRadius: "var(--radius-md)",
       boxShadow: "var(--elev-3)",
       fontFamily: "var(--font-sans)",
     },
     ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-      backgroundColor: "var(--parchment-deep)",
+      backgroundColor: "var(--rubric-wash)",
       color: "var(--ink)",
     },
     // ── tokens GABC/NABC: tinta quente, quase-monocromática, rubrica nos sinais ──
@@ -70,5 +70,8 @@ export const highlightTheme = EditorView.theme(
     ".tok-bar": { color: "var(--rubric)", fontWeight: "700" },
     ".tok-comment": { color: "var(--ink-muted)", fontStyle: "italic" },
   },
+  // dark:false é intencional: todas as superfícies do CM (seleção, gutters, tooltips, lint,
+  // autocompletar) são sobrescritas acima com tokens do Parchment; verificado no
+  // debug/shell-probe (Vigília) em 2026-10-09 — nada fica claro/ilegível.
   { dark: false },
 );
