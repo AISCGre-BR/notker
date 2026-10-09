@@ -109,3 +109,26 @@ describe("hover — Nomear…", () => {
     expect(el.textContent).toContain("<s>l</s>");
   });
 });
+
+describe("hover — sequências do usuário e tela de nomes", () => {
+  it("sequência do usuário com nome mostra 'Seu nome: …' (texto literal)", () => {
+    const seq = { ...e, id: "seq:stgall:cl!vi", userSequence: true, userNames: ["<b>x</b>"], displayNames: ["<b>x</b>"] } as unknown as EffectiveEntry;
+    const row = buildEntryRow(seq, true);
+    expect(row.querySelector(".neume-tip-name")!.textContent).toBe("Seu nome: <b>x</b>");
+    expect(row.querySelector("b")).toBeNull();
+  });
+  it("glifo do catálogo continua mostrando o nome de exibição", () => {
+    expect(buildEntryRow(e, true).querySelector(".neume-tip-name")!.textContent).toBe("clivis");
+  });
+  it("com onOpen, o botão 'Abrir na tela de nomes' chama com id/família/cadeia", () => {
+    const onOpen = vi.fn();
+    const row = buildEntryRow(e, true, undefined, onOpen);
+    const b = row.querySelector<HTMLButtonElement>(".neume-open-names")!;
+    expect(b.textContent).toBe("Abrir na tela de nomes");
+    b.click();
+    expect(onOpen).toHaveBeenCalledWith({ id: "stgall:cl", family: "stgall", nabc: "cl" });
+  });
+  it("sem onOpen, não há botão", () => {
+    expect(buildEntryRow(e, true).querySelector(".neume-open-names")).toBeNull();
+  });
+});

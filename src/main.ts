@@ -28,6 +28,9 @@ import { createNeumeDrawer } from "./neume/draw";
 import { insertNabcAtCursor } from "./neume/insert";
 import { createNabcOnlyRenderer } from "./preview/nabc-only";
 import { createNeumasView, type NeumasView, type OpenOpts } from "./neumas/view";
+import { chainAtSelection, resolveNameTarget } from "./neumas/name-target";
+import { nabcFieldStart } from "./editor/context";
+import { openContextMenu } from "./ui/pd/context-menu";
 import { createAutosave } from "./neume/autosave";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
@@ -240,6 +243,8 @@ async function boot() {
       search: () => searchInst,
       lookupByNabc: (nabc: string): EffectiveEntry[] => lookup(nabc),
       activeFamily: () => currentFamily(),
+      openNames: (t: { id?: string; family: Family; nabc: string }) =>
+        openNeumas(t.id ? { family: t.family, select: t.id, focus: "name" } : { family: t.family, newChain: t.nabc, focus: "name" }),
       onName: async (ids: string[], name: string) => {
         const n = name.trim();
         const targets = ids.map((id) => ({
@@ -648,6 +653,18 @@ async function boot() {
     views.set("neumas");
     neumasView.open({ family: o.family ?? currentFamily(), ...o });
   }
+  /** "Nomear neuma…" (Ctrl+Shift+N): seleção num campo nabc, sílaba selecionada (clique na
+   *  partitura) ou neuma sob o cursor → glifo/sequência existente ou sequência nova, com o
+   *  foco em "Novo nome…". */
+  function nameNeumeCmd(): void {
+    const sel = view.state.selection.main;
+    const chain = chainAtSelection(view.state.doc.toString(), sel.from, sel.to,
+      getTree() as Parameters<typeof chainAtSelection>[3]);
+    if (!chain) { toaster.show("Ponha o cursor num neuma (no nabc, depois do |) para nomeá-lo.", { kind: "warn" }); return; }
+    const family = currentFamily();
+    const t = resolveNameTarget(effectiveRef(), family, chain);
+    openNeumas(t.kind === "existing" ? { family, select: t.id, focus: "name" } : { family, newChain: t.nabc, focus: "name" });
+  }
   const countLabel = (c: { named: number; sequences: number }): string =>
     [c.named ? `${c.named} ${c.named === 1 ? "neuma com nome" : "neumas com nome"}` : "",
      c.sequences ? `${c.sequences} ${c.sequences === 1 ? "sequência" : "sequências"}` : ""].filter(Boolean).join(" e ");
@@ -857,6 +874,7 @@ async function boot() {
     // O painel lateral "Nomes" não é mais aberto pela UI: Ctrl+Alt+N abre a vista Neumas.
     { id: "view.edicao", label: "Edição", run: backToEdit, keys: ["Ctrl+Digit1"], checked: () => views.current() === "edicao" },
     { id: "view.neumas", label: "Neumas", run: () => openNeumas(), keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => views.current() === "neumas" },
+    { id: "neume.name", label: "Nomear neuma…", icon: "tag", run: nameNeumeCmd, keys: ["Ctrl+Shift+N"], enabled: inEdit },
     { id: "neumas.search", label: "Buscar na tela de nomes", run: () => neumasView?.focusSearch(), keys: ["Ctrl+F"], enabled: () => views.current() === "neumas" },
     { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
@@ -923,7 +941,7 @@ async function boot() {
         { ...menuItem("edit.undo"), shortcut: "Ctrl+Z" },
         { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" },
         "---",
-        menuItem("neume.palette"), menuItem("edit.format"),
+        menuItem("neume.palette"), menuItem("neume.name"), menuItem("edit.format"),
         "---",
         menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"),
         menuItem("neume.moveRight"), menuItem("neume.moveReset"),
@@ -958,7 +976,7 @@ async function boot() {
     { tabs: ["view.edicao", "view.neumas"], label: "Vistas" },
     { group: ["edit.undo", "edit.redo"], view: "edicao" },
     { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"], view: "edicao" },
-    { group: ["edit.format", "neume.palette"], view: "edicao" },
+    { group: ["edit.format", "neume.palette", "neume.name"], view: "edicao" },
     { group: ["view.split", "view.legend"], view: "edicao" },
     "spacer",
     // PLAYBACK-OFF (2026-10-09): modo, onda e Tocar na toolbar.
@@ -972,6 +990,20 @@ async function boot() {
   // });
 
   installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
+
+  // Menu de contexto do editor SÓ dentro de um campo nabc (fora dele fica o menu nativo,
+  // com copiar/colar). O clique direito leva o cursor ao ponto, salvo dentro da seleção.
+  view.dom.addEventListener("contextmenu", (e) => {
+    const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+    if (pos == null || nabcFieldStart(view.state.doc.toString(), pos) === -1) return;
+    e.preventDefault();
+    const sel = view.state.selection.main;
+    if (sel.empty || pos < sel.from || pos > sel.to) view.dispatch({ selection: { anchor: pos } });
+    openContextMenu(app, e.clientX, e.clientY, [
+      { label: "Nomear neuma…", shortcut: commands.shortcut("neume.name"), run: () => void commands.run("neume.name") },
+      { label: "Buscar neuma…", shortcut: commands.shortcut("neume.palette"), run: () => void commands.run("neume.palette") },
+    ], view.contentDOM);
+  });
 
   // Atalhos no nível da JANELA (registro único), em fase de BOLHA: o CodeMirror
   // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com

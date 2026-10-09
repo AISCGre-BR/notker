@@ -11,9 +11,23 @@ function familyLabel(f: Family): string {
   return f === "stgall" ? "St. Gall" : "Laon";
 }
 
+/** "Abrir na tela de nomes": `id` quando o item existe; senão a cadeia nova. */
+export type OpenNames = (t: { id?: string; family: Family; nabc: string }) => void;
+
+function openNamesButton(run: () => void): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "sc-btn neume-open-names";
+  b.textContent = "Abrir na tela de nomes";
+  b.addEventListener("mousedown", (ev) => ev.preventDefault()); // não fecha o tooltip antes do clique
+  b.addEventListener("click", run);
+  return b;
+}
+
 export function buildEntryRow(
   entry: EffectiveEntry, isActive: boolean,
   onName?: (ids: string[], name: string) => void | Promise<void>,
+  onOpen?: OpenNames,
 ): HTMLElement {
   const row = document.createElement("div");
   row.className = "neume-tip-row";
@@ -22,7 +36,9 @@ export function buildEntryRow(
   info.className = "neume-tip-info";
   const names = document.createElement("strong");
   names.className = "neume-tip-name";
-  names.textContent = entry.displayNames[0];
+  names.textContent = entry.userSequence && entry.userNames?.length
+    ? `Seu nome: ${entry.userNames[0]}`
+    : entry.displayNames[0];
   const fam = document.createElement("span");
   fam.className = "neume-tip-fam";
   fam.textContent = familyLabel(entry.family as Family) + (isActive ? " · ativa" : "");
@@ -66,6 +82,7 @@ export function buildEntryRow(
     };
     row.appendChild(showButton());
   }
+  if (onOpen) row.appendChild(openNamesButton(() => onOpen({ id: entry.id, family: entry.family as Family, nabc: entry.nabc })));
   return row;
 }
 
@@ -120,6 +137,7 @@ export function nabcHover(
   lookupByNabc: (nabc: string) => EffectiveEntry[],
   activeFamily: () => Family,
   onName?: (ids: string[], name: string) => void | Promise<void>,
+  onOpen?: OpenNames,
 ) {
   return hoverTooltip((view, pos) => {
     const tree = getTree();
@@ -185,8 +203,9 @@ export function nabcHover(
           );
           row.appendChild(info);
           dom.appendChild(row);
+          if (onOpen) dom.appendChild(openNamesButton(() => onOpen({ family: af, nabc: token })));
         } else {
-          for (const entry of sorted) dom.appendChild(buildEntryRow(entry, entry.family === af, onName));
+          for (const entry of sorted) dom.appendChild(buildEntryRow(entry, entry.family === af, onName, onOpen));
         }
 
         // ── Partes individuais (apenas para neumas genuinamente compostos) ──
