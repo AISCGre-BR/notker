@@ -1,6 +1,6 @@
 // test/hover-name.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { buildEntryRow } from "../src/neume/hover-nabc";
+import { buildEntryRow, buildPartLabel, buildUnknownInfo } from "../src/neume/hover-nabc";
 import type { EffectiveEntry } from "../src/neume/types";
 
 const e: EffectiveEntry = {
@@ -42,10 +42,11 @@ describe("hover — Nomear…", () => {
     expect(row.querySelector(".neume-name-btn")).not.toBeNull();
     row.querySelector<HTMLButtonElement>(".neume-name-btn")!.click();
     f = row.querySelector<HTMLInputElement>(".neume-name-input")!;
+    const before = row.textContent;
     f.value = "  ";
     kd(f, "Enter");
     expect(onName).not.toHaveBeenCalled();
-    expect(row.textContent).not.toContain("·  ");
+    expect(row.textContent).toBe(before);
     expect(row.querySelector(".neume-name-input")).not.toBeNull();
   });
   it("Enter durante composição (IME) é ignorado", () => {
@@ -73,5 +74,22 @@ describe("hover — Nomear…", () => {
     f.click();
     kd(f, "a");
     expect(outer).not.toHaveBeenCalled();
+  });
+
+  it("partes: nome do usuário com HTML vira texto literal", () => {
+    const evil = { ...e, displayNames: ["<img src=x onerror=alert(1)>"] };
+    const el = buildPartLabel(evil);
+    expect(el.querySelector("img")).toBeNull();
+    expect(el.querySelector("strong")!.textContent).toBe("<img src=x onerror=alert(1)>");
+    expect(el.querySelector("em")).not.toBeNull();
+  });
+  it("fora do catálogo: token/nomes/letras/fonte com HTML viram texto", () => {
+    const el = buildUnknownInfo("<b>x</b>", ["<i>n1</i>", "<u>n2</u>"], "stgall", ["<s>l</s>"], "<a>src</a>");
+    expect(el.querySelector("i, u, s, a")).toBeNull();
+    expect(el.querySelectorAll("b").length).toBe(1); // só o <b> legítimo das letras
+    expect(el.querySelector("code")!.textContent).toBe("<b>x</b>");
+    expect(el.textContent).toContain("<i>n1</i> · <u>n2</u>");
+    expect(el.textContent).toContain("fonte: <a>src</a>");
+    expect(el.textContent).toContain("<s>l</s>");
   });
 });

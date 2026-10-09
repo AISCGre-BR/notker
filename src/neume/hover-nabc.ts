@@ -67,6 +67,52 @@ export function buildEntryRow(
   return row;
 }
 
+export function buildPartLabel(best: EffectiveEntry): HTMLElement {
+  const label = document.createElement("span");
+  label.style.cssText = "font-size:0.85em;";
+  const strong = document.createElement("strong");
+  strong.textContent = best.displayNames[0];
+  const em = document.createElement("em");
+  em.textContent = familyLabel(best.family as Family);
+  label.append(strong, " · ", em);
+  return label;
+}
+
+export function buildUnknownInfo(
+  token: string, displayNames: string[], baseFamily: Family | null,
+  letters: string[], source?: string,
+): HTMLElement {
+  const info = document.createElement("div");
+  displayNames.forEach((n, i) => {
+    if (i > 0) info.append(" · ");
+    const el = document.createElement(i === 0 ? "strong" : "span");
+    el.textContent = n;
+    info.append(el);
+  });
+  if (baseFamily) {
+    const em = document.createElement("em");
+    em.textContent = familyLabel(baseFamily);
+    info.append(" · ", em);
+  }
+  const line = (build: (small: HTMLElement) => void): void => {
+    const small = document.createElement("small");
+    build(small);
+    info.append(document.createElement("br"), small);
+  };
+  line((sm) => {
+    const code = document.createElement("code");
+    code.textContent = token;
+    sm.append("composto: ", code);
+  });
+  if (letters.length) line((sm) => {
+    const b = document.createElement("b");
+    b.textContent = letters.join(", ");
+    sm.append("letra significativa: ", b);
+  });
+  if (source) line((sm) => { sm.textContent = `fonte: ${source}`; });
+  return info;
+}
+
 export function nabcHover(
   getTree: () => Tree | null,
   lookupByNabc: (nabc: string) => EffectiveEntry[],
@@ -130,20 +176,11 @@ export function nabcHover(
           const row = document.createElement("div");
           row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px;";
           if (baseSorted.length > 0) row.appendChild(glyphSvgEl(baseSorted[0].svg, 32));
-          const info = document.createElement("div");
-          const fam = baseSorted.length > 0
-            ? ` · <em>${familyLabel(baseSorted[0].family as Family)}</em>` : "";
-          const namesHtml = naming.displayNames
-            .map((n, i) => (i === 0 ? `<strong>${n}</strong>` : `<span>${n}</span>`))
-            .join(" · ");
-          const provHtml = naming.provenance.length
-            ? `<br><small>fonte: ${naming.provenance[0].source}</small>` : "";
-          info.innerHTML =
-            `${namesHtml}${fam}` +
-            `<br><small>composto: <code>${token}</code></small>` +
-            (desc.letters.length
-              ? `<br><small>letra significativa: <b>${desc.letters.join(", ")}</b></small>` : "") +
-            provHtml;
+          const info = buildUnknownInfo(
+            token, naming.displayNames,
+            baseSorted.length > 0 ? (baseSorted[0].family as Family) : null,
+            desc.letters, naming.provenance[0]?.source,
+          );
           row.appendChild(info);
           dom.appendChild(row);
         } else {
@@ -176,11 +213,7 @@ export function nabcHover(
               // Mostra apenas a entrada da família ativa (ou a primeira disponível).
               const best = partSorted[0];
               partRow.appendChild(glyphSvgEl(best.svg, 20));
-              const label = document.createElement("span");
-              label.style.cssText = "font-size:0.85em;";
-              label.innerHTML =
-                `<strong>${best.displayNames[0]}</strong>` +
-                ` · <em>${familyLabel(best.family as Family)}</em>`;
+              const label = buildPartLabel(best);
               partRow.appendChild(label);
             } else {
               // Sem entrada no DB: mostra o texto bruto.
