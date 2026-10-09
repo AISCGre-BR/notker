@@ -324,7 +324,7 @@ export function restoreRemoved(p: NotkerProject, r: RemoveResult): NotkerProject
   if (subtreeHas(r.removed, r.prevActiveId)) next = setActive(next, r.prevActiveId);
   if (r.createdId) {
     const ph = findChant(next, r.createdId);
-    if (ph && ph.content === gabcSkeleton(PLACEHOLDER_TITLE) && !ph.interpretation && next.activeId !== ph.id) {
+    if (ph && ph.title === PLACEHOLDER_TITLE && ph.content === gabcSkeleton(PLACEHOLDER_TITLE) && !ph.interpretation && next.activeId !== ph.id) {
       next = removeNode(next, ph.id)?.project ?? next;
     }
   }

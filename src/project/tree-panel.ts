@@ -251,6 +251,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     window.removeEventListener("pointermove", onDragMove);
     window.removeEventListener("pointerup", onDragUp);
     window.removeEventListener("pointercancel", onDragCancel);
+    window.removeEventListener("blur", onDragBlur);
     document.removeEventListener("keydown", onDragKey, true);
     document.body.classList.remove("notker-dragging");
     els.forEach((el) => el.classList.remove("is-dragging"));
@@ -262,6 +263,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
   }
   function onDragMove(e: MouseEvent): void {
     if (!drag || !project) return;
+    if (e.buttons === 0) { endDrag(false); return; } // pointerup perdido (soltou fora, RDP, foco)
     if (!drag.active) {
       if (Math.abs(e.clientX - drag.x) < 4 && Math.abs(e.clientY - drag.y) < 4) return;
       drag.active = true;
@@ -276,6 +278,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     drag.drop = node ? computeDrop(geometry(), e.clientY, (pid) => pid !== null && subtreeHas(node, pid)) : null;
     showDrop(drag.drop);
   }
+  function onDragBlur(): void { endDrag(false); }
   function onDragUp(): void { endDrag(true); }
   function onDragCancel(): void { endDrag(false); }
   function onDragKey(e: KeyboardEvent): void {
@@ -285,13 +288,15 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     endDrag(false);
   }
   list.addEventListener("pointerdown", (e: MouseEvent) => {
-    if (e.button !== 0 || !project || drag || e.target instanceof HTMLInputElement) return;
+    if (e.button !== 0 || !project || e.target instanceof HTMLInputElement) return;
+    if (drag) endDrag(false); // arrasto antigo pendurado (pointerup perdido): descarta
     const row = rowOf(e.target);
     if (!row?.dataset.id) return;
     drag = { id: row.dataset.id, x: e.clientX, y: e.clientY, active: false, drop: null };
     window.addEventListener("pointermove", onDragMove);
     window.addEventListener("pointerup", onDragUp);
     window.addEventListener("pointercancel", onDragCancel);
+    window.addEventListener("blur", onDragBlur);
     document.addEventListener("keydown", onDragKey, true);
   });
 
@@ -334,7 +339,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     const k = e.key;
     let handled = true;
     if (e.altKey && (k === "ArrowUp" || k === "ArrowDown")) opts.onMoveBy(n.id, k === "ArrowUp" ? -1 : 1);
-    else if (e.altKey && k.startsWith("Arrow")) { /* Alt+←/→: consumido (é do editor) */ }
+    else if (e.altKey && (k.startsWith("Arrow") || k === "0")) { /* Alt+←/→/0: consumido (é do editor) */ }
     else if (e.ctrlKey || e.metaKey) {
       if (k.toLowerCase() === "d" && !e.shiftKey && !e.altKey) opts.onDuplicate(n.id);
       else handled = false;

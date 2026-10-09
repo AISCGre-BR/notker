@@ -224,6 +224,12 @@ describe("removeNode / restoreRemoved", () => {
     const edited = updateChant(r.project, r.createdId!, { content: "name: Meu;\n%%\n(c4) a" });
     expect(flattenChants(restoreRemoved(edited, r)).map((x) => x.title)).toEqual(["Único", "Novo"]);
   });
+  it("restoreRemoved: só o título renomeado já conta como mexido", () => {
+    const p = newProject({ family: "stgall", name: "Único" });
+    const r = removeNode(p, p.activeId)!;
+    const renamed = renameNode(r.project, r.createdId!, "Meu");
+    expect(flattenChants(restoreRemoved(renamed, r)).map((x) => x.title)).toEqual(["Único", "Meu"]);
+  });
 });
 
 describe("invariantes", () => {

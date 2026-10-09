@@ -151,6 +151,13 @@ describe("árvore: mouse e teclado", () => {
   });
 });
 
+describe("árvore: Alt+0", () => {
+  it("é consumido na linha (não move neuma no editor)", () => {
+    createTreePanel(host, opts()).render(proj());
+    expect(key(row("a"), "0", { altKey: true }).defaultPrevented).toBe(true);
+  });
+});
+
 describe("árvore: renomear inline", () => {
   it("F2 abre o campo com o título; Enter grava aparado e devolve o foco à linha", () => {
     const o = opts();
@@ -284,7 +291,7 @@ describe("árvore: arrastar e soltar (Pointer Events)", () => {
   const rect = (i: number) => ({ top: i * 30, bottom: i * 30 + 30, height: 30, left: 0, right: 240, width: 240, x: 0, y: i * 30, toJSON() { return this; } }) as DOMRect;
   const layout = () => rows().forEach((r, i) => { r.getBoundingClientRect = () => rect(i); });
   const down = (id: string, y: number) => row(id).dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 20, clientY: y }));
-  const move = (y: number) => window.dispatchEvent(new MouseEvent("pointermove", { clientX: 20, clientY: y }));
+  const move = (y: number) => window.dispatchEvent(new MouseEvent("pointermove", { clientX: 20, clientY: y, buttons: 1 }));
   const up = (y: number) => window.dispatchEvent(new MouseEvent("pointerup", { clientX: 20, clientY: y }));
 
   it("soltar no meio de um grupo põe dentro dele; o clique seguinte não abre canto", () => {
@@ -345,6 +352,42 @@ describe("árvore: arrastar e soltar (Pointer Events)", () => {
     up(105);
     expect(o.onMove).not.toHaveBeenCalled();
     expect(host.querySelector(".is-drop-inside")).toBeNull();
+  });
+  it("pointerup perdido: mover sem botão pressionado encerra o arrasto e nunca chama onMove", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("a", 10);
+    move(105);                                   // arrasto ativo
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 20, clientY: 105, buttons: 0 }));
+    expect(document.body.classList.contains("notker-dragging")).toBe(false);
+    move(105);
+    up(105);
+    row("d").click();
+    expect(o.onMove).not.toHaveBeenCalled();
+  });
+  it("perder o foco da janela (blur) encerra o arrasto sem mover", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("a", 10);
+    move(105);
+    window.dispatchEvent(new Event("blur"));
+    expect(document.body.classList.contains("notker-dragging")).toBe(false);
+    up(105);
+    expect(o.onMove).not.toHaveBeenCalled();
+  });
+  it("novo pointerdown com arrasto antigo pendurado encerra o velho e funciona", () => {
+    const o = opts();
+    createTreePanel(host, o).render(proj());
+    layout();
+    down("a", 10);
+    move(105);                                   // pendurado (pointerup perdido)
+    down("d", 130);
+    move(75);                                    // topo de "n"... qualquer alvo válido
+    up(75);
+    expect(o.onMove).toHaveBeenCalledTimes(1);
+    expect((o.onMove as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe("d");
   });
   it("o painel não usa a API HTML5 de arrastar", () => {
     createTreePanel(host, opts()).render(proj());
