@@ -53,7 +53,9 @@ export function buildEntryRow(
             const n = f.value.trim();
             if (!n) return;
             void onName([entry.id], n);
-            names.textContent = `${entry.displayNames[0]} · ${n}`;
+            if (!entry.displayNames.some((d) => d.toLowerCase() === n.toLowerCase())) {
+              names.textContent = `${entry.displayNames[0]} · ${n}`;
+            }
             f.replaceWith(showButton());
           }
         });
@@ -192,8 +194,8 @@ export function nabcHover(
         if (rawParts.length >= 2) {
           const sep = document.createElement("div");
           sep.style.cssText =
-            "margin-top:6px;padding-top:4px;border-top:1px solid #ccc;" +
-            "font-size:0.85em;color:#666;";
+            "margin-top:6px;padding-top:4px;border-top:1px solid var(--rule);" +
+            "font-size:0.85em;color:var(--ink-muted);";
           sep.textContent = "partes:";
           dom.appendChild(sep);
 

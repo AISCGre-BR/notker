@@ -1,4 +1,5 @@
 // test/hover-name.test.ts
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi } from "vitest";
 import { buildEntryRow, buildPartLabel, buildUnknownInfo } from "../src/neume/hover-nabc";
 import type { EffectiveEntry } from "../src/neume/types";
@@ -31,6 +32,21 @@ describe("hover — Nomear…", () => {
     expect(onName).toHaveBeenCalledWith(["stgall:cl"], "flexa");
     expect(row.textContent).toContain("flexa");
     expect(row.querySelector(".neume-name-input")).toBeNull();
+  });
+  it("nome duplicado (sem caixa) não é acrescentado ao rótulo", () => {
+    const onName = vi.fn();
+    const row = buildEntryRow(e, true, onName);
+    document.body.appendChild(row);
+    row.querySelector<HTMLButtonElement>(".neume-name-btn")!.click();
+    const f = row.querySelector<HTMLInputElement>(".neume-name-input")!;
+    f.value = "CLIVIS";
+    kd(f, "Enter");
+    expect(onName).toHaveBeenCalled();
+    expect(row.querySelector("strong")!.textContent).toBe("clivis");
+  });
+  it("separador de partes usa tokens, não cores fixas", () => {
+    const src = readFileSync("src/neume/hover-nabc.ts", "utf8");
+    expect(src).not.toMatch(/#ccc|#666/);
   });
   it("Esc cancela; vazio não grava", () => {
     const onName = vi.fn();
