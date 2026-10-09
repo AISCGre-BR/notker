@@ -23,13 +23,13 @@ describe("overlay", () => {
     expect(eff.hidden).toBe(false);
   });
   it("mergeOverlays é não-destrutivo (une nomes de ambos)", () => {
-    const a: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["a"] } } };
-    const b: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["b"] } } };
+    const a: Overlay = { schema: 2, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["a"] } }, sequences: {} };
+    const b: Overlay = { schema: 2, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["b"] } }, sequences: {} };
     const m = mergeOverlays(a, b);
     expect(m.entries["stgall:cl"].names).toEqual(["a", "b"]);
   });
   it("round-trip serialize/parse", () => {
-    const o: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["x"] } } };
+    const o: Overlay = { schema: 2, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["x"] } }, sequences: {} };
     expect(parseOverlay(serializeOverlay(o))).toEqual(o);
   });
   it("parse rejeita kind errado", () => {
@@ -37,9 +37,9 @@ describe("overlay", () => {
   });
 });
 
-import { addNameToEntries } from "../src/neume/overlay";
+import { addNameToEntries, emptyOverlay } from "../src/neume/overlay";
 describe("addNameToEntries", () => {
-  const empty = { schema: 1 as const, kind: "notker-neume-overlay" as const, entries: {} };
+  const empty = emptyOverlay();
   const es = [{ id: "a", displayNames: ["pes"] }, { id: "b", displayNames: ["clivis"] }];
   it("vazio/espaços não muda", () => {
     expect(addNameToEntries(empty, es, "   ").changed).toBe(false);

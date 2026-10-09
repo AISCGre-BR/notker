@@ -21,7 +21,7 @@ import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
 import { loadNeumeDb } from "./neume/db-load";
 import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
-import { mergeEntry, addNameToEntries, mergeOverlays, cloneOverlay } from "./neume/overlay";
+import { mergeEntry, addNameToEntries, mergeOverlays, cloneOverlay, emptyOverlay } from "./neume/overlay";
 import { createAutosave } from "./neume/autosave";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
@@ -164,7 +164,14 @@ async function boot() {
   let effectiveRef: () => EffectiveEntry[] = () => [];
 
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
-  let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
+  let overlay: Overlay = emptyOverlay();
+  /** O arquivo de nomes existe mas não pôde ser lido (corrompido, versão mais nova, sem
+   *  permissão): NADA é gravado nesta sessão, para não sobrescrevê-lo com um overlay vazio. */
+  let overlayBlocked: string | null = null;
+  async function writeOverlay(): Promise<void> {
+    if (overlayBlocked) throw new Error("os nomes salvos não puderam ser lidos (" + overlayBlocked + "); nada foi gravado");
+    await saveUserOverlay(overlay);
+  }
   let reindex = () => {};
   let paletteRef: { open(v: EditorView): void } | null = null;
   // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora pelo
@@ -172,7 +179,7 @@ async function boot() {
   // confirma (indicador "salvo ✓" verdadeiro); flush() antes de import/export/fechar.
   const overlayAutosave = createAutosave(async () => {
     try {
-      await saveUserOverlay(overlay);
+      await writeOverlay();
       reindex();
     } catch (e) {
       toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" });
@@ -199,7 +206,11 @@ async function boot() {
     // Overlay é OPCIONAL: uma falha (ex.: permissão de fs ausente) não pode
     // impedir a injeção das extensões F2 (paleta/hover/completion/régua).
     try { overlay = await loadUserOverlay(); }
-    catch (e) { console.warn("[notker] overlay de nomes indisponível (usando vazio):", e); }
+    catch (e) {
+      console.warn("[notker] overlay de nomes indisponível (usando vazio):", e);
+      overlayBlocked = e instanceof Error ? e.message : String(e);
+      toaster.show("Os nomes de neumas salvos não puderam ser lidos. Novos nomes não serão gravados nesta sessão. " + overlayBlocked, { kind: "error" });
+    }
     const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
     effectiveRef = effective;
     let searchInst = new NeumeSearch(effective(), currentFamily());
@@ -665,7 +676,7 @@ async function boot() {
         }
         await overlayAutosave.flush();
         overlay = mergeOverlays(overlay, imported);
-        await saveUserOverlay(overlay);
+        await writeOverlay();
         reindex();
         overlayPanel?.refresh();
         toaster.show(`${n} nomes importados.`);

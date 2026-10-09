@@ -114,8 +114,9 @@ describe("painel de overlay", () => {
     const host = document.createElement("div");
     const onChange = vi.fn();
     const initial: Overlay = {
-      schema: 1, kind: "notker-neume-overlay",
+      schema: 2, kind: "notker-neume-overlay",
       entries: { "stgall:cl": { names: ["clive longo"] } },
+      sequences: {},
     };
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clive longo", "clivis"])],
@@ -132,8 +133,7 @@ describe("painel de overlay", () => {
 
   it("refresh re-lê o overlay (após importar) e mostra as novas glosas", () => {
     const host = document.createElement("div");
-    let ov: { schema: 1; kind: "notker-neume-overlay"; entries: Record<string, { names?: string[] }> } =
-      { schema: 1, kind: "notker-neume-overlay", entries: {} };
+    let ov: Overlay = { schema: 2, kind: "notker-neume-overlay", entries: {}, sequences: {} };
     const panel = createOverlayPanel(host, {
       entries: () => [eff("stgall:cl", "clivis", ["clivis"])],
       onChange: vi.fn(),
@@ -142,7 +142,7 @@ describe("painel de overlay", () => {
     panel.open();
     expect(host.querySelector(".overlay-gloss")).toBeNull();
     // simula um import que alterou o overlay em memória
-    ov = { schema: 1, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["importado"] } } };
+    ov = { schema: 2, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["importado"] } }, sequences: {} };
     panel.refresh();
     expect(host.querySelector(".overlay-gloss")).not.toBeNull();
     expect(host.textContent).toContain("importado");

@@ -42,7 +42,15 @@ export interface NeumeDb {
 }
 
 export interface OverlayEntry { names?: string[]; note?: string; hidden?: boolean; }
-export interface Overlay { schema: 1; kind: "notker-neume-overlay"; entries: Record<string, OverlayEntry>; }
+/** Cadeia nabc criada e nomeada pelo usuário (id `seq:<família>:<nabc normalizado>`). */
+export interface UserSequence extends OverlayEntry { family: Family; nabc: string; created: string /* ISO */ }
+/** Overlay de nomes do usuário (schema 2). O schema 1 (sem `sequences`) é lido e migrado. */
+export interface Overlay {
+  schema: 2;
+  kind: "notker-neume-overlay";
+  entries: Record<string, OverlayEntry>;
+  sequences: Record<string, UserSequence>;
+}
 
 export interface EffectiveEntry extends NeumeEntry {
   displayNames: string[]; // overlay.names ++ [name]

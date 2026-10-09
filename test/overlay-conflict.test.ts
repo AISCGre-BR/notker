@@ -15,7 +15,7 @@ describe("overlay conflito + promoção", () => {
     expect(hasConflict(base, undefined)).toBe(false);
   });
   it("promoteToDefault põe o nome escolhido como primeiro da lista do overlay", () => {
-    const ov: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["a", "b"] } } };
+    const ov: Overlay = { schema: 2, kind: "notker-neume-overlay", entries: { "stgall:cl": { names: ["a", "b"] } }, sequences: {} };
     const out = promoteToDefault(ov, "stgall:cl", "b");
     expect(out.entries["stgall:cl"].names).toEqual(["b", "a"]);
   });
