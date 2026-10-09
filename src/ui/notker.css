@@ -386,3 +386,32 @@ body:not([data-view="neumas"]) #neumas-view { display: none; }
 body[data-view="neumas"] .sc-toolbar [data-view="edicao"],
 body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none; }
 #neumas-view { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; gap: var(--space-3); padding: var(--space-3); }
+
+
+/* ── Vista Neumas: cartão Catálogo ─────────────────────────────────────────── */
+.neumas-catalog { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.neumas-catalog__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-2); }
+.neumas-search { flex: 1 1 auto; min-width: 0; }
+.neumas-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 var(--space-3) var(--space-2); }
+.neumas-filters__label { font: 500 12px/16px var(--font-sans); color: var(--ink-muted); }
+.neumas-filter.sc-chip { font: 500 13px/1 var(--font-sans); font-style: normal; height: 26px; cursor: pointer; border: 0; }
+.neumas-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 var(--space-3) var(--space-3); }
+.neumas-section + .neumas-section { margin-top: var(--space-3); }
+.neumas-section__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--rule-soft); margin-bottom: var(--space-2); }
+.neumas-section__title { font: 600 12px/16px var(--font-sans); color: var(--ink-muted); letter-spacing: 0.02em; }
+.neumas-new.sc-btn { height: 26px; }
+.neumas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-2); }
+.neumas-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 8px; border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 0 0 1px var(--rule-soft); cursor: pointer; color: var(--ink); min-width: 0; }
+.neumas-card:hover { background: var(--ink-wash); }
+.neumas-card[aria-selected="true"] { background: var(--rubric-wash); box-shadow: 0 0 0 1px var(--rubric-soft); }
+.neumas-card:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.neumas-card.is-hidden { opacity: 0.5; }
+.neumas-catalog.is-composing .neumas-card { cursor: copy; }
+.neumas-card__fig { height: 44px; width: 100%; display: flex; align-items: center; justify-content: center; color: var(--ink); overflow: hidden; }
+.neumas-card__fig > * { max-width: 100%; }
+.neumas-card__fig svg { max-height: 40px; min-width: 0; flex: 0 1 auto; }
+.neumas-card__name { font: 500 14px/18px var(--font-serif); text-align: center; overflow-wrap: anywhere; }
+.neumas-card__name.is-mine { color: var(--rubric); }
+.neumas-card__code { font: 11px/14px var(--font-mono); color: var(--ink-muted); overflow-wrap: anywhere; text-align: center; }
+.neumas-card__mine { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 3px; background: var(--rubric); }
+.neumas-more { margin-top: var(--space-2); color: var(--ink-muted); font-size: 12px; }
