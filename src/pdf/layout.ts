@@ -15,7 +15,7 @@ export const MARGIN_PT = (2 / 2.54) * 72;
 /** 1 px CSS (96 dpi) em pt (72 dpi). */
 export const PX_TO_PT = 72 / 96;
 /** Título da peça: corpo, espaço até a 1ª pauta. */
-export const TITLE_SIZE_PT = 14;
+export const TITLE_SIZE_PT = 17;
 export const TITLE_HEIGHT_PT = TITLE_SIZE_PT * 1.25;
 export const TITLE_GAP_PT = 6;
 /** Espaço entre pautas da mesma peça e entre peças (fluxo contínuo). */
