@@ -1,7 +1,8 @@
 /** Onde gravar o PDF e a gravação. O diálogo de salvar (plugin-dialog) põe o caminho
  *  escolhido no escopo do plugin-fs — SÓ esse caminho, exato. Por isso o arquivo é gravado
  *  no caminho devolvido, sem acrescentar ".pdf" (outro caminho seria recusado pelo escopo);
- *  o nome sugerido já termina em .pdf. Permissão: `fs:allow-write-file` (bytes). */
+ *  o nome sugerido já termina em .pdf. Permissão: `fs:allow-write-file` (bytes) — listada de forma explícita por clareza;
+ *  o `write_file` também vem do `write-all` dos conjuntos app/appdata. */
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 

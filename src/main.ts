@@ -978,21 +978,23 @@ async function boot() {
     },
     // Arquivo ▸ Exportar PDF… (sub-projeto 3): diálogo → salvar como → desenhar → gravar.
     exportPdf: async () => {
-      if (exportingPdf) return;
-      captureEditorIntoProject();
-      const group = exportableGroup(project, treePanel.focusedId());
-      const opts = await exportPdfDialog(dialogHost, {
-        chantHasMusic: hasMusic(getActiveChant(project).content), group, last: lastPdfOptions,
-      });
-      if (!opts) return;
-      lastPdfOptions = opts;
-      captureEditorIntoProject();
-      const groupId = group?.id ?? null;
-      const pieces = selectPieces(project, opts.scope, groupId);
-      exportingPdf = true;
+      if (exportingPdf) { toaster.show("Já há um PDF sendo gerado.", { kind: "warn" }); return; }
       try {
+        captureEditorIntoProject();
+        const group = exportableGroup(project, treePanel.focusedId());
+        const opts = await exportPdfDialog(dialogHost, {
+          chantHasMusic: hasMusic(getActiveChant(project).content), group, last: lastPdfOptions,
+        });
+        if (!opts) return;
+        lastPdfOptions = opts;
+        captureEditorIntoProject();
+        const groupId = group?.id ?? null;
+        const pieces = selectPieces(project, opts.scope, groupId);
+        exportingPdf = true;
         const [{ exportPdf }, { pdfBrowserDeps }] = await Promise.all([import("./pdf/export-pdf"), import("./pdf/browser")]);
-        const deps = pdfBrowserDeps(document.querySelector<HTMLElement>("#measure-host")!, () => toaster.show("Gerando o PDF…"));
+        const deps = pdfBrowserDeps(document.querySelector<HTMLElement>("#measure-host")!, {
+          onProgress: (i, n) => toaster.show(n > 1 ? `Gerando o PDF… ${i}/${n}` : "Gerando o PDF…"),
+        });
         const r = await exportPdf(deps, pieces, scopeTitle(project, opts.scope, groupId), opts);
         if (!r) return;
         const file = r.path.split(/[\\/]/).pop() ?? r.path;

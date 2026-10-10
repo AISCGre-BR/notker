@@ -9,7 +9,7 @@ import { pageGeometry } from "../src/pdf/layout";
 const pc = (id: string, family: "stgall" | "laon" = "stgall"): PdfPiece => ({ id, title: `T-${id}`, content: `(c4) ${id}(f)`, family });
 const OPTS: PdfOptions = { scope: "project", page: "a4", red: true, newPagePerPiece: false };
 
-function deps(over: Partial<PdfExportDeps> = {}) {
+function deps(over: Partial<PdfExportDeps> = {}): PdfExportDeps & { log: string[]; disposed: string[] } {
   const log: string[] = [];
   const disposed: string[] = [];
   const sink: PdfSink = {
@@ -33,6 +33,20 @@ function deps(over: Partial<PdfExportDeps> = {}) {
   };
   return d;
 }
+
+describe("exportPdf: interface não congela", () => {
+  it("cede um quadro depois de onStart e antes de cada peça; progresso (i, n) na ordem", async () => {
+    const d = deps({
+      yieldFrame: vi.fn(async () => { d.log.push("yield"); }),
+      onProgress: vi.fn((i: number, n: number) => { d.log.push(`prog:${i}/${n}`); }),
+    });
+    await exportPdf(d, [pc("a"), pc("b")], "x", OPTS);
+    expect(d.log).toEqual([
+      "start", "prog:1/2", "yield", "prog:2/2", "yield", "yield", // o último yield: antes de compor
+      "title:T-a", "svg:a-0", "title:T-b", "svg:b-0",
+    ]);
+  });
+});
 
 describe("exportPdf", () => {
   it("caminho com o nome sugerido → aviso → desenha na largura da página → compõe → grava; libera os SVGs", async () => {

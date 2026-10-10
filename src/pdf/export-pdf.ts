@@ -13,6 +13,11 @@ export interface PdfExportDeps {
   pickPath(defaultName: string): Promise<string | null>;
   /** Chamado depois de escolhido o caminho, antes de desenhar (aviso "Gerando…"). */
   onStart?(): void;
+  /** Peça `i` de `n` (1-based) prestes a ser desenhada (aviso "Gerando… 3/40"). */
+  onProgress?(i: number, n: number): void;
+  /** Cede um quadro ao navegador (pintar o aviso, atender cliques). Sem isto o desenho
+   *  síncrono das peças congela a interface sem retorno. */
+  yieldFrame?(): Promise<void>;
   render(piece: PdfPiece, o: { widthPx: number; red: boolean }): Promise<RenderedPiece>;
   createSink(page: PageSize, families: Family[]): Promise<PdfSink>;
   write(path: string, bytes: Uint8Array): Promise<void>;
@@ -28,13 +33,16 @@ export async function exportPdf(
   const path = await deps.pickPath(pdfFileName(fileTitle));
   if (!path) return null;
   deps.onStart?.();
+  const yieldFrame = deps.yieldFrame ?? (async () => {});
   const g = pageGeometry(o.page);
   const rendered: RenderedPiece[] = [];
   const ok: ComposePiece[] = [];
   const families = new Set<Family>();
   const failed: string[] = [];
   try {
-    for (const p of pieces) {
+    for (const [i, p] of pieces.entries()) {
+      deps.onProgress?.(i + 1, pieces.length);
+      await yieldFrame();
       let r: RenderedPiece;
       try {
         r = await deps.render(p, { widthPx: g.lineWidthPx, red: o.red });
@@ -49,6 +57,7 @@ export async function exportPdf(
       families.add(p.family);
     }
     if (ok.length === 0) throw new Error("nenhum canto pôde ser desenhado.");
+    await yieldFrame();
     const pages = layoutPages(ok, g, o.newPagePerPiece);
     const sink = await deps.createSink(o.page, [...families]);
     await composePages(sink, ok, pages, g);

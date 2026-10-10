@@ -38,6 +38,8 @@ export function pdfFontFaces(families: Iterable<Family>): PdfFontFace[] {
     { family: TEXT_FONT, style: "normal", file: "serif-regular" },
     { family: TEXT_FONT, style: "italic", file: "serif-italic" },
     { family: TEXT_FONT, style: "bold", file: "serif-semibold" },
+    // Negrito-itálico: o pacote não traz Semibold Italic; cai no itálico (aceito — o
+    // Notker não gera negrito-itálico em letra de canto).
     { family: TEXT_FONT, style: "bolditalic", file: "serif-italic" },
   );
   return faces;

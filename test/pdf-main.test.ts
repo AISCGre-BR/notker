@@ -27,3 +27,15 @@ describe("Exportar PDF no app", () => {
     expect(code).toMatch(/thumbs\.remember\(path, content, family\)/);
   });
 });
+
+describe("Exportar PDF: robustez do comando", () => {
+  it("2º Ctrl+P durante a geração avisa; captura e diálogo ficam dentro do try", () => {
+    const body = code.slice(code.indexOf("exportPdf: async () => {"), code.indexOf("format: async () => {"));
+    expect(body).toContain('if (exportingPdf) { toaster.show("Já há um PDF sendo gerado."');
+    expect(body.indexOf("try {")).toBeLessThan(body.indexOf("captureEditorIntoProject()"));
+    expect(body.indexOf("try {")).toBeLessThan(body.indexOf("await exportPdfDialog"));
+  });
+  it("progresso por peça no toast", () => {
+    expect(code).toMatch(/onProgress: \(i, n\) => toaster\.show\(/);
+  });
+});
