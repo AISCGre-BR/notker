@@ -2,6 +2,8 @@
  *  WebKitGTK: monta num host PRÉ-EXISTENTE alternando display e NÃO usa o véu de
  *  tela cheia (sc-backdrop) — um elemento inset:0 não repinta no RDP/llvmpipe.
  *  Escolhas são segmentados (botões), nunca radio/select nativos. */
+import { isPrintKey } from "../../app/commands";
+
 export interface DialogField { key: string; label: string; value?: string; placeholder?: string; serif?: boolean }
 export interface DialogSeg { key: string; label: string; options: { value: string; label: string; disabled?: boolean }[]; value: string }
 export interface DialogAction { id: string; label: string; kind?: "filled" | "elevated" | "danger" | "text" }
@@ -107,6 +109,7 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
     function onKey(e: KeyboardEvent): void {
       // Nenhuma tecla vaza para os atalhos globais (registro escuta em window).
       e.stopPropagation();
+      if (isPrintKey(e)) e.preventDefault(); // nada de impressão nativa por cima do diálogo
       if (e.key === "Tab") {
         const items = [...box.querySelectorAll<HTMLElement>("input, button:not(:disabled)")];
         const first = items[0], last = items[items.length - 1];

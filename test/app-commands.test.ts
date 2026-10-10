@@ -147,3 +147,47 @@ describe("gateCommands", () => {
     expect(() => gateCommands(createRegistry(), ["nada"], () => true)).toThrow("comando desconhecido: nada");
   });
 });
+
+describe("Ctrl+P nunca abre a impressão nativa", () => {
+  const ctrlP = (mods: Partial<KeyboardEventInit> = {}) => key("p", { ctrlKey: true, code: "KeyP", ...mods });
+  const setup = (enabled: () => boolean = () => true) => {
+    const r = createRegistry();
+    const run = vi.fn();
+    r.register([{ id: "file.exportPdf", label: "PDF", run, keys: ["Ctrl+P"], enabled }]);
+    return { r, run };
+  };
+  it("comando desabilitado: previne e não executa", () => {
+    const { r, run } = setup(() => false);
+    const e = ctrlP();
+    expect(r.handleKey(e)).toBe(false);
+    expect(e.defaultPrevented).toBe(true);
+    expect(run).not.toHaveBeenCalled();
+  });
+  it("menu aberto: previne e não executa", () => {
+    const { r, run } = setup();
+    document.body.innerHTML = '<div role="menu"></div>';
+    const e = ctrlP();
+    expect(r.handleKey(e)).toBe(false);
+    expect(e.defaultPrevented).toBe(true);
+    expect(run).not.toHaveBeenCalled();
+    document.body.innerHTML = "";
+  });
+  it("repeat (tecla segurada): previne e não executa de novo", () => {
+    const { r, run } = setup();
+    const e = ctrlP({ repeat: true });
+    expect(r.handleKey(e)).toBe(false);
+    expect(e.defaultPrevented).toBe(true);
+    expect(run).not.toHaveBeenCalled();
+  });
+  it("habilitado: executa e previne; Ctrl+Shift+P e Ctrl+Alt+P não são tocados", () => {
+    const { r, run } = setup();
+    const e = ctrlP();
+    expect(r.handleKey(e)).toBe(true);
+    expect(e.defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(r.handleKey(ctrlP({ shiftKey: true }))).toBe(false);
+    const e2 = ctrlP({ altKey: true });
+    r.handleKey(e2);
+    expect(e2.defaultPrevented).toBe(false);
+  });
+});

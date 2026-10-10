@@ -39,6 +39,13 @@ export function keyOf(e: KeyboardEvent): string {
   return parts.join("+");
 }
 
+/** Ctrl+P (ou Cmd+P) puro, pela tecla física. O Notker usa esse atalho para Exportar PDF…:
+ *  em NENHUM caso (comando desabilitado, menu ou diálogo aberto, tecla segurada) a janela
+ *  pode abrir a impressão nativa do navegador. */
+export function isPrintKey(e: KeyboardEvent): boolean {
+  return (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
+}
+
 const ARROWS: Record<string, string> = { ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→" };
 export function displayKey(k: string): string {
   return k.split("+").map((p) => ARROWS[p] ?? p.replace(/^Digit(\d)$/, "$1")).join("+");
@@ -92,6 +99,7 @@ export function createRegistry(): CommandRegistry {
     },
     handleKey(e) {
       if (e.defaultPrevented) return false;
+      if (isPrintKey(e)) e.preventDefault(); // vale para todos os `return false` abaixo
       if (document.querySelector('[role="menu"]')) return false; // menu aberto: teclas são do menu
       const k = keyOf(e);
       const id = byKey.get(k);
