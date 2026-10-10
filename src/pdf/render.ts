@@ -31,15 +31,36 @@ export function gabcBody(doc: string): string {
   return sep >= 0 ? doc.slice(sep + 2) : doc;
 }
 
-export interface LineBox { top: number; height: number }
+/** `left`/`right`: extensão horizontal da tinta (px do SVG, x = 0 na margem esquerda da
+ *  pauta). Opcionais: sem eles, vale só a largura da linha. */
+export interface LineBox { top: number; height: number; left?: number; right?: number }
+
+/** x e largura do recorte (px): a pauta toda + folga, alargado para a tinta que passa da
+ *  largura da linha (o nabc-lib desenha o custos depois de `lineWidthPx`). */
+export function lineExtent(box: LineBox, widthPx: number): { x: number; width: number } {
+  const x = Math.min(-SIDE_BLEED_PX, (box.left ?? 0) - SIDE_BLEED_PX);
+  const r = Math.max(widthPx + SIDE_BLEED_PX, (box.right ?? 0) + SIDE_BLEED_PX);
+  return { x, width: r - x };
+}
+
+/** Letras latinas que o nabc-lib escreve (℣ ℟ A/) num tspan filho, dentro de um tspan
+ *  `greextra` — fonte que NÃO tem V/R/A; o PDF não tem fonte de reserva. */
+function fixGreextraLetters(root: Element): void {
+  for (const el of root.querySelectorAll("tspan")) {
+    if (el.hasAttribute("font-family")) continue;
+    const parent = el.parentElement;
+    if (!parent || parent.getAttribute("font-family") !== "greextra") continue;
+    if (/[A-Za-z]/.test(el.textContent ?? "")) el.setAttribute("font-family", TEXT_FONT);
+  }
+}
 
 /** Caixa vertical de cada `g.ChantLine`, em px do SVG (topo = 0 do SVG). Pauta sem altura
  *  (vazia) sai com height 0 — o paginador a pula. */
 export function measureLines(svg: SVGSVGElement): LineBox[] {
-  const origin = svg.getBoundingClientRect().top;
+  const o = svg.getBoundingClientRect();
   return [...svg.querySelectorAll<SVGGElement>("g.ChantLine")].map((g) => {
     const r = g.getBoundingClientRect();
-    return { top: r.top - origin, height: Math.max(0, r.bottom - r.top) };
+    return { top: r.top - o.top, height: Math.max(0, r.bottom - r.top), left: r.left - o.left, right: r.right - o.left };
   });
 }
 
@@ -52,14 +73,16 @@ export function isolateLine(svg: SVGSVGElement, index: number, box: LineBox, wid
   for (const el of [...clone.children]) {
     if (el.tagName.toLowerCase() === "rect" || el.classList.contains("commentary")) el.remove();
   }
-  const w = widthPx + 2 * SIDE_BLEED_PX;
-  clone.setAttribute("viewBox", `${-SIDE_BLEED_PX} ${box.top} ${w} ${box.height}`);
+  fixGreextraLetters(clone);
+  const { x, width: w } = lineExtent(box, widthPx);
+  clone.setAttribute("viewBox", `${x} ${box.top} ${w} ${box.height}`);
   clone.setAttribute("width", String(w));
   clone.setAttribute("height", String(box.height));
   return clone;
 }
 
-export interface RenderedLine { heightPx: number; svg: SVGSVGElement }
+/** `x`/`widthPx`: recorte horizontal (px); sem eles, a largura da linha + folga. */
+export interface RenderedLine { heightPx: number; svg: SVGSVGElement; x?: number; widthPx?: number }
 export interface RenderedPiece { lines: RenderedLine[]; dispose(): void }
 
 /** Renderiza e corta a peça (navegador). Os clones ficam no `host` até `dispose()`.
@@ -86,7 +109,10 @@ export async function renderPiece(
     new lib.GregorianChantSVGRenderer(box).renderSvg(score);
     const svg = box.querySelector("svg");
     if (!svg) return { lines: [], dispose: () => box.remove() };
-    const lines = measureLines(svg).map((b, i) => ({ heightPx: b.height, svg: isolateLine(svg, i, b, o.widthPx) }));
+    const lines = measureLines(svg).map((b, i) => {
+      const e = lineExtent(b, o.widthPx);
+      return { heightPx: b.height, svg: isolateLine(svg, i, b, o.widthPx), x: e.x, widthPx: e.width };
+    });
     svg.remove();
     for (const l of lines) box.appendChild(l.svg); // o svg2pdf.js lê estilos de elementos no documento
     return { lines, dispose: () => box.remove() };

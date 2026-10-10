@@ -49,9 +49,13 @@ export async function composePages(
         continue;
       }
       const line = pieces[b.piece].lines[b.index];
-      const width = fullW * b.scale;
-      const x = g.margin - SIDE_BLEED_PX * PX_TO_PT + (fullW - width) / 2;
-      await sink.svg(line.svg, { x, y: top, width, height: b.height * b.scale });
+      // Recorte horizontal (px): normal = a linha + folga; o custos alarga para a direita.
+      const vbX = line.x ?? -SIDE_BLEED_PX;
+      const vbW = (line.widthPx ?? g.lineWidthPx + 2 * SIDE_BLEED_PX) * PX_TO_PT;
+      const scale = b.scale * Math.min(1, fullW / vbW); // a pauta com o custos cabe na área útil
+      const width = vbW * scale;
+      const x = g.margin - SIDE_BLEED_PX * PX_TO_PT + (fullW - width) / 2 - (vbX + SIDE_BLEED_PX) * PX_TO_PT * scale;
+      await sink.svg(line.svg, { x, y: top, width, height: b.height * scale });
     }
   }
 }

@@ -66,4 +66,26 @@ describe("composição", () => {
     expect(boxes[0].width).toBeCloseTo(fullW / 2, 3);
     expect(boxes[0].x + boxes[0].width / 2).toBeCloseTo(g.margin - SIDE_BLEED_PX * PX_TO_PT + fullW / 2, 3);
   });
+  it("pauta com tinta além da largura (custos): encolhe para a pauta toda caber na área útil", async () => {
+    const g = pageGeometry("a4");
+    const wide = g.lineWidthPx + 40;
+    const x = -SIDE_BLEED_PX, vbw = wide + 2 * SIDE_BLEED_PX;
+    const pieces: ComposePiece[] = [{ title: "", lines: [{ heightPx: 100, svg: svgEl("w"), x, widthPx: vbw }] }];
+    const { sink, boxes } = fakeSink();
+    await composePages(sink, pieces, layoutPages(pieces, g, false), g);
+    const avail = (g.lineWidthPx + 2 * SIDE_BLEED_PX) * PX_TO_PT;
+    expect(boxes[0].width).toBeCloseTo(avail, 3);
+    expect(boxes[0].x).toBeGreaterThanOrEqual(g.margin - SIDE_BLEED_PX * PX_TO_PT - 0.01);
+    expect(boxes[0].x + boxes[0].width).toBeLessThanOrEqual(g.pageW - g.margin + SIDE_BLEED_PX * PX_TO_PT + 0.01);
+    expect(boxes[0].height).toBeCloseTo(100 * PX_TO_PT * (avail / (vbw * PX_TO_PT)), 3);
+  });
+  it("pauta com folga à esquerda: a origem da pauta (x = 0) continua na margem", async () => {
+    const g = pageGeometry("a4");
+    const vbx = -12, vbw = g.lineWidthPx + 2 * SIDE_BLEED_PX + 10; // cabe: só 10 px a mais, sobra dentro da folga? não: encolhe
+    const pieces: ComposePiece[] = [{ title: "", lines: [{ heightPx: 100, svg: svgEl("l"), x: vbx, widthPx: vbw }] }];
+    const { sink, boxes } = fakeSink();
+    await composePages(sink, pieces, layoutPages(pieces, g, false), g);
+    const s = boxes[0].width / (vbw * PX_TO_PT);
+    expect(boxes[0].x + -vbx * PX_TO_PT * s).toBeGreaterThanOrEqual(g.margin - SIDE_BLEED_PX * PX_TO_PT - 0.01);
+  });
 });
