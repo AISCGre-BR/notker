@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pdfContextSettings, gabcBody, measureLines, isolateLine, lineExtent, SIDE_BLEED_PX } from "../src/pdf/render";
+import { pdfContextSettings, gabcBody, measureLines, isolateLine, lineExtent, glyphInkRight, SIDE_BLEED_PX } from "../src/pdf/render";
 import { TEXT_FONT } from "../src/pdf/fonts";
 
 /** SVG no formato do nabc-lib: fundo, root-group com 3 ChantLine, comentário. */
@@ -78,6 +78,11 @@ describe("corte em pautas", () => {
     expect(b.right).toBe(680);
     expect(lineExtent(b, 642)).toEqual({ x: -SIDE_BLEED_PX, width: 680 + 2 * SIDE_BLEED_PX });
     expect(lineExtent({ top: 0, height: 1 }, 642)).toEqual({ x: -SIDE_BLEED_PX, width: 642 + 2 * SIDE_BLEED_PX });
+  });
+  it("glyphInkRight: a tinta da glifo (canvas) pode passar do avanço — custos —, conforme o text-anchor", () => {
+    expect(glyphInkRight("start", 100, 104, 9)).toBe(109);
+    expect(glyphInkRight("end", 96, 104, 3)).toBe(107);
+    expect(glyphInkRight("middle", 100, 104, 7)).toBe(109);
   });
   it("isolateLine: letra do ℣/℟/A/ (tspan filho sem fonte dentro de greextra) ganha a serifa embutida", () => {
     const svg = chantSvg();

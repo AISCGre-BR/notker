@@ -43,6 +43,34 @@ export function lineExtent(box: LineBox, widthPx: number): { x: number; width: n
   return { x, width: r - x };
 }
 
+/** Borda direita da TINTA de um glifo (px, mesma origem de `left`/`right`): o avanço do
+ *  glifo (a caixa que o navegador mede) pode ser menor que a tinta — é o caso do custos.
+ *  `inkRight` = `actualBoundingBoxRight` do canvas, a partir da origem do texto. */
+export function glyphInkRight(anchor: string, left: number, right: number, inkRight: number): number {
+  const origin = anchor === "end" ? right : anchor === "middle" ? (left + right) / 2 : left;
+  return origin + inkRight;
+}
+
+let inkCtx: CanvasRenderingContext2D | null | undefined;
+/** Maior borda direita da tinta dos glifos de canto (fontes gre*) de `g`; -Infinity se não der para medir. */
+function chantInkRight(g: Element, originLeft: number): number {
+  if (inkCtx === undefined) inkCtx = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+  if (!inkCtx) return -Infinity;
+  let max = -Infinity;
+  for (const t of g.querySelectorAll("text")) {
+    const fam = t.getAttribute("font-family") ?? "";
+    const txt = t.textContent ?? "";
+    if (!/^gre/.test(fam) || !txt) continue;
+    const size = parseFloat(t.getAttribute("font-size") ?? "") || 0;
+    if (!size) continue;
+    inkCtx.font = `${size}px ${fam}`;
+    const m = inkCtx.measureText(txt);
+    const r = t.getBoundingClientRect();
+    max = Math.max(max, glyphInkRight(t.getAttribute("text-anchor") ?? "start", r.left - originLeft, r.right - originLeft, m.actualBoundingBoxRight));
+  }
+  return max;
+}
+
 /** Letras latinas que o nabc-lib escreve (℣ ℟ A/) num tspan filho, dentro de um tspan
  *  `greextra` — fonte que NÃO tem V/R/A; o PDF não tem fonte de reserva. */
 function fixGreextraLetters(root: Element): void {
@@ -60,7 +88,8 @@ export function measureLines(svg: SVGSVGElement): LineBox[] {
   const o = svg.getBoundingClientRect();
   return [...svg.querySelectorAll<SVGGElement>("g.ChantLine")].map((g) => {
     const r = g.getBoundingClientRect();
-    return { top: r.top - o.top, height: Math.max(0, r.bottom - r.top), left: r.left - o.left, right: r.right - o.left };
+    const ink = chantInkRight(g, o.left);
+    return { top: r.top - o.top, height: Math.max(0, r.bottom - r.top), left: r.left - o.left, right: Math.max(r.right - o.left, ink) };
   });
 }
 

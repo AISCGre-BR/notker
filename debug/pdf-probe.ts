@@ -14,6 +14,10 @@ const qs = new URLSearchParams(location.search);
 const LAON = "name: Puer (Laon);\n%%\n(c4) Pu(g|un)er(gh|pe) na(h|un)tus(hg|cl) est(g|vi) no(h|un)bis(g|un) (;) " +
   "<i>et</i> fí(g|un)li(hi|pe)us(h|un) <b>da</b>(g|vi)tus(gh|pe) est(h|un) no(hg|cl)bis(g|un) (::)";
 
+/** ℣/℟/A/ (greextra) com a letra latina + um canto longo (custos no fim das pautas). */
+const VR = "name: Versículo;\n%%\n(c4) <sp>V/</sp>Di(f)xit(g) Dó(h)mi(g)nus(f) Dó(g)mi(h)no(g) me(f)o:(f.) (;) " +
+  "<sp>R/</sp>Sé(g)de(h) a(g) dex(f)tris(g) me(h)is.(g.) (::) <sp>A/</sp>Ál(h)le(g)lú(f)ia.(f.) (::)";
+
 async function sample(n: string): Promise<string> {
   return (await fetch(`/samples/${n}.gabc`)).text();
 }
@@ -26,6 +30,7 @@ async function pieces(kind: string): Promise<PdfPiece[]> {
     piece("3", "Factus est", s[2]), piece("4", "Dies sanctificatus", s[3]),
   ];
   if (kind === "stgall-1") return [all[3]];
+  if (kind === "vr") return [piece("v", "Versículo e resposta", VR), all[1], all[3]];
   if (kind === "laon-1") return [piece("l", "Puer natus est (Laon)", LAON, "laon")];
   if (kind === "mixed-newpage") return [...all, piece("l", "Puer natus est (Laon)", LAON, "laon")];
   return [...all, piece("5", "Dies sanctificatus (de novo)", s[3]), piece("6", "Factus est (de novo)", s[2])];
