@@ -39,6 +39,10 @@ npm run neume                      # extrai glifos + gera o db (precisa do wasm:
 
 Atalhos: F2 ou Ctrl+K: buscar neuma (Ctrl+Enter num resultado: cadastrar nome) · `Ctrl+Alt+L` régua de altura na pauta · `Ctrl+Alt+E`/`Ctrl+Alt+I` exportar/importar nomes.
 
+Árvore de cantos: ↑↓ navegar, ←→ recolher/expandir, Enter abrir, F2 renomear, Del excluir, Alt+↑/↓ mover, Ctrl+D duplicar, Shift+F10 menu; arrastar para reordenar ou soltar dentro de um grupo.
+
+`Ctrl+Shift+S` — Salvar como…
+
 ### Créditos adicionais (F2)
 
 - Fontes `gregall`/`grelaon` e a referência NABC (`GregorioNabcRef`, `gregoriotex-nabc.lua`): **The Gregorio Project** — GPLv3 com exceção de fonte.

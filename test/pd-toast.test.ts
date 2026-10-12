@@ -45,4 +45,12 @@ describe("toast", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(host.style.display).toBe("none");
   });
+  it("toast com ação (Desfazer) dura 10 s; sem ação, 4 s", () => {
+    const t = createToaster(host);
+    t.show("Canto excluído.", { action: { label: "Desfazer", run: () => {} } });
+    vi.advanceTimersByTime(9000);
+    expect(host.querySelector(".sc-toast")).not.toBeNull();
+    vi.advanceTimersByTime(1000);
+    expect(host.querySelector(".sc-toast")).toBeNull();
+  });
 });

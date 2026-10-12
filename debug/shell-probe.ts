@@ -19,8 +19,8 @@ import { createMenubar, type MenuItem } from "../src/ui/menubar";
 import { createToolbar } from "../src/ui/toolbar";
 import { installTooltips } from "../src/ui/pd/tooltip";
 import { createToaster } from "../src/ui/pd/toast";
-import { createDocList } from "../src/project/doc-list";
-import { newProject, addDoc, setDocFamily, setActive } from "../src/project/model";
+import { createTreePanel } from "../src/project/tree-panel";
+import { newProject, newChant, insertNode, setActive, flattenChants, newGroup } from "../src/project/tree";
 import { NabcLibEngine } from "../src/preview/nabc-lib";
 import { loadNeumeDb } from "../src/neume/db-load";
 import { NeumeSearch } from "../src/neume/search";
@@ -79,7 +79,7 @@ const menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, 
   { label: "Interpretação", items: [menuItem("play.toggle"), menuItem("play.mode"), "---", menuItem("wave.toggle"), menuItem("wave.reset")] },
   { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
 ]);
-menubar.setTitle("Kyrie — Missa de teste");
+menubar.setTitle("Kyrie — Missa de teste", !!qs.get("edited"));
 
 createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
   { group: ["edit.undo", "edit.redo"] },
@@ -94,14 +94,19 @@ installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
 const toaster = createToaster(document.querySelector<HTMLElement>("#toast-host")!);
 
 let project = newProject({ family: "stgall", name: "Kyrie" });
-project = addDoc(project, { title: "Factus est", content: "name: Factus est;\n%%\n(c4) Fac(f)tus(g) est(h)(::)" });
-project = addDoc(project, { title: "Dies sanctificatus (Laon)", content: "name: Dies;\n%%\n(c4) Di(f)es(g)(::)", family: "laon" });
-project = setDocFamily(project, project.docs[2].id, "laon");
-project = setActive(project, project.docs[0].id);
-const docList = createDocList(document.querySelector<HTMLElement>("#doc-list")!, {
-  onSelect: noop, onAdd: noop, onImport: noop, onRemove: noop, onSetFamily: noop, onMove: noop,
+const natal = newGroup("Natal");
+project = insertNode(project, null, Infinity, natal);
+project = insertNode(project, natal.id, Infinity, newChant({ title: "Puer natus", content: "name: Puer natus;\n%%\n(c4) Pu(g)er(h)(::)" }));
+project = insertNode(project, natal.id, Infinity, newChant({ title: "Dies sanctificatus (Laon)", content: "name: Dies;\n%%\n(c4) Di(f)es(g)(::)", family: "laon" }));
+const oitava = newGroup("Oitava");
+project = insertNode(project, natal.id, Infinity, oitava);
+project = insertNode(project, oitava.id, 0, newChant({ title: "Factus est", content: "name: Factus est;\n%%\n(c4) Fac(f)tus(g) est(h)(::)" }));
+project = setActive(project, flattenChants(project)[0].id);
+const treePanel = createTreePanel(document.querySelector<HTMLElement>("#doc-list")!, {
+  onSelect: noop, onToggle: noop, onRename: noop, onMoveBy: noop, onMove: noop, onDuplicate: noop,
+  onRemove: noop, onSetFamily: noop, onNewChant: noop, onNewGroup: noop, onImport: noop,
 });
-docList.render(project);
+treePanel.render(project);
 
 const hex = (n: number) => n.toString(16).padStart(2, "0");
 async function main(): Promise<void> {
@@ -185,12 +190,15 @@ async function main(): Promise<void> {
   const tops = document.querySelectorAll(".sc-menubar__top");
   check("menubar: rótulo (1º)", tops[0]);
   check("menubar: título", q(".sc-menubar__title"));
-  const rowsEls = document.querySelectorAll(".notker-row");
-  check("lista: nome (normal)", rowsEls[1]?.querySelector(".notker-row__name") ?? null);
-  check("lista: meta (normal)", rowsEls[1]?.querySelector(".notker-row__meta") ?? null);
+  const rowsEls = document.querySelectorAll('.notker-row:not(.notker-row--group):not([aria-selected="true"])');
+  check("lista: nome (normal)", rowsEls[0]?.querySelector(".notker-row__name") ?? null);
+  check("lista: meta (normal)", rowsEls[0]?.querySelector(".notker-row__meta") ?? null);
   const act = document.querySelector('.notker-row[aria-selected="true"]');
   check("lista: nome (ativa)", act?.querySelector(".notker-row__name") ?? null);
   check("lista: meta (ativa)", act?.querySelector(".notker-row__meta") ?? null);
+  check("árvore: cabeçalho de grupo", q(".notker-row--group .notker-row__name"));
+  if (qs.get("rename")) { treePanel.startRename(flattenChants(project)[1].id); check("árvore: campo de renomear", q(".notker-tree__rename")); }
+  check("menubar: — Editado", q(".sc-menubar__state"));
   check("tooltip neuma: nome", synth.querySelector(".neume-tip-name"));
   check(".neume-tip-fam", synth.querySelector(".neume-tip-fam"));
   const toolBtn = q(".sc-toolbar .sc-seg button");
@@ -257,6 +265,18 @@ async function main(): Promise<void> {
     row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: b.left + 30, clientY: b.top + 10 }));
   }
 
+  if (qs.get("treectx")) {
+    const r = document.querySelectorAll<HTMLElement>(".notker-row:not(.notker-row--group)")[1];
+    const b = r.getBoundingClientRect();
+    r.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: b.left + 30, clientY: b.top + 10 }));
+  }
+  if (qs.get("drop")) {
+    const all = document.querySelectorAll<HTMLElement>(".notker-row");
+    const from = all[all.length - 1].getBoundingClientRect();
+    const to = all[1].getBoundingClientRect();
+    all[all.length - 1].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, clientX: from.left + 20, clientY: from.top + 5 }));
+    window.dispatchEvent(new PointerEvent("pointermove", { clientX: to.left + 20, clientY: to.top + 2 }));
+  }
   if (qs.get("cm")) {
     const { setDiagnostics } = await import("@codemirror/lint");
     view.dispatch(setDiagnostics(view.state, [{ from: 5, to: 9, severity: "error", message: "Erro de exemplo: sílaba sem notas." }, { from: 12, to: 16, severity: "warning", message: "Aviso de exemplo." }]));

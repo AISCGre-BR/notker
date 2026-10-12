@@ -31,7 +31,7 @@ describe("sync preview→editor", () => {
       svgEl: () => svg,
     } as unknown as PreviewPanel;
     const dispatched: unknown[] = [];
-    const view = { dispatch: (t: unknown) => dispatched.push(t), focus: vi.fn() } as never;
+    const view = { dispatch: (t: unknown) => dispatched.push(t), focus: vi.fn(), state: { doc: { length: 100 } } } as never;
 
     installSync(view, panel);
     cb(2); // simula clique na sílaba 2
@@ -39,5 +39,17 @@ describe("sync preview→editor", () => {
     expect(dispatched[0]).toEqual({ selection: { anchor: 5, head: 7 } });
     expect(svg.querySelector(".syllable-2")!.classList.contains("hl-strong")).toBe(true);
     expect(svg.querySelector(".syllable-1")!.classList.contains("hl-strong")).toBe(false);
+  });
+  it("mapa velho (canto trocado, doc menor): a seleção é limitada ao tamanho do doc", () => {
+    let cb: (n: number) => void = () => {};
+    const panel = {
+      onSyllable: (f: (n: number) => void) => { cb = f; },
+      sourceMap: () => map, svgEl: () => null,
+    } as unknown as PreviewPanel;
+    const dispatched: unknown[] = [];
+    const view = { dispatch: (t: unknown) => dispatched.push(t), focus: vi.fn(), state: { doc: { length: 6 } } } as never;
+    installSync(view, panel);
+    cb(2); // sílaba 2 = 5..7, mas o doc só tem 6
+    expect(dispatched[0]).toEqual({ selection: { anchor: 5, head: 6 } });
   });
 });

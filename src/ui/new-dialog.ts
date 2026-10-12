@@ -7,11 +7,10 @@ export interface NewDocResult { family: Family; name?: string; office?: string }
  *  pré-existente, segmentado em vez de radio — ver pd/dialog.ts). */
 export async function newDocumentDialog(
   host: HTMLElement,
-  opts: { title: string; warning?: string; okLabel?: string; family?: Family },
+  opts: { title: string; okLabel?: string; family?: Family },
 ): Promise<NewDocResult | null> {
   const r = await openDialog(host, {
     title: opts.title,
-    body: opts.warning,
     fields: [
       { key: "name", label: "Nome", placeholder: "Puer natus est", serif: true },
       { key: "office", label: "Ofício (opcional)", placeholder: "Intróito" },

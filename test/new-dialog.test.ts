@@ -49,20 +49,18 @@ describe("diálogo Novo", () => {
     expect(await p).toBeNull();
   });
 
-  it("com warning e okLabel, mostra o aviso e o botão com rótulo customizado", async () => {
+  it("com okLabel, o botão tem o rótulo customizado", async () => {
     const host = mk();
     const p = newDocumentDialog(host, {
       title: "Substituir projeto",
-      warning: "O projeto atual será fechado.",
       okLabel: "Substituir",
     });
-    expect(host.querySelector(".sc-dialog__body")!.textContent).toContain("O projeto atual será fechado.");
     expect(okBtn(host).textContent).toBe("Substituir");
     cancelBtn(host).click();
     await p;
   });
 
-  it("sem warning/okLabel, não há corpo e o botão diz 'Criar'", async () => {
+  it("sem okLabel, não há corpo e o botão diz 'Criar'", async () => {
     const host = mk();
     const p = newDocumentDialog(host, { title: "Adicionar canto" });
     expect(host.querySelector(".sc-dialog__body")).toBeNull();
