@@ -192,7 +192,9 @@ describe("guia — idiomas", () => {
     setLocale("it");
     g = mountNewProjectGuide(host, deps);
     expect([...host.querySelectorAll(".notker-step__label")].map((e) => e.textContent)).toEqual(["Progetto", "Famiglia predefinita", "Primo canto"]);
-    expect(cur().querySelector("input")!.getAttribute("aria-label") ?? cur().querySelector("input")!.placeholder).toMatch(/Titolo del progetto|Messa di Natale/);
+    const input = cur().querySelector("input")!;
+    expect(input.getAttribute("aria-label")).toBe("Titolo del progetto");
+    expect(input.placeholder).toBe("Messa di Natale");
     expect(host.querySelector(".notker-guide__cancel")!.textContent).toBe("Annulla");
     const p = projectFromDraft(emptyDraft());
     expect(p.title).toBe("Senza titolo");

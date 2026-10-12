@@ -122,6 +122,14 @@ describe("exportação e slug", () => {
       { path: "02-natal/01-puer-natus.gabc", content: "name: Puer natus;\n%%\n(c4) c2(f)" },
     ]);
   });
+  it("toBundle e gabcExportPlan não dependem do idioma (o ZIP é o mesmo)", () => {
+    const pt = { b: toBundle(sample()), plan: gabcExportPlan(sample()) };
+    try {
+      setLocale("it");
+      expect(toBundle(sample())).toEqual(pt.b);
+      expect(gabcExportPlan(sample())).toEqual(pt.plan);
+    } finally { setLocale("pt-BR"); }
+  });
   it("slug translitera ligaduras e acentos; vazio cai no fallback", () => {
     expect(slug("Rorate Cæli")).toBe("rorate-caeli");
     expect(slug("Ofício de Nossa Senhora")).toBe("oficio-de-nossa-senhora");
