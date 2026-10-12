@@ -21,6 +21,10 @@ describe("main.ts: remover episemas e puncta mora", () => {
     expect(main).toMatch(/if \(id === shownId && epoch === projectEpoch\) void runStrip/);
     expect(main).toContain("Não há episemas nem puncta mora aqui.");
   });
+  it("trecho colado que some durante o diálogo também avisa com o toast", () => {
+    const after = main.slice(main.indexOf("await openStripDialog("));
+    expect(after).toMatch(/^[\s\S]*?if \(scope === "pasted" && !area\(\)\) \{ toaster\.show\("O trecho colado não existe mais\.", \{ kind: "warn" \}\); return; \}/);
+  });
   it("preserva o comando Letras na pauta", () => {
     expect(main).toContain('id: "view.staffLetters"');
   });

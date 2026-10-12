@@ -647,7 +647,7 @@ async function boot() {
     if (counts.vertical + counts.horizontal + counts.mora === 0) { toaster.show("Não há episemas nem puncta mora aqui."); return; }
     const kinds = await openStripDialog(dialogHost, counts, lastStrip, scope);
     if (!kinds || id !== shownId || epoch !== projectEpoch) return;
-    if (scope === "pasted" && !area()) return;
+    if (scope === "pasted" && !area()) { toaster.show("O trecho colado não existe mais.", { kind: "warn" }); return; }
     lastStrip = kinds;
     const n = applyStrip(view, kinds, area());
     toaster.show(n === 0 ? "Nada a remover." : n === 1 ? "Removido: 1 sinal." : `Removidos: ${n} sinais.`);
