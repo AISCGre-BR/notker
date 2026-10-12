@@ -26,8 +26,8 @@ export async function openStripDialog(host: HTMLElement, counts: MarkCounts, las
     title: "Remover episemas e puncta mora",
     body: `Escolha o que tirar das notas ${SCOPE_TEXT[scope]}. O nabc, as letras e as divisões não são alterados.`,
     segs: [{
-      key: "kinds", label: "Remover", value: "",
-      options: KINDS.map((k) => ({ value: k.key, label: `${k.label} (${counts[k.key]})`, disabled: counts[k.key] === 0 })),
+      key: "kinds", label: "Sinais a remover", value: "",
+      options: KINDS.map((k) => ({ value: k.key, label: `${k.label} (${counts[k.key]})` })),
     }],
     actions: [
       { id: "cancel", label: "Cancelar", kind: "elevated" },
@@ -42,9 +42,12 @@ export async function openStripDialog(host: HTMLElement, counts: MarkCounts, las
     btns.forEach((b, i) => b.setAttribute("aria-pressed", String(on[KINDS[i].key])));
     if (action) action.disabled = !anyOn();
   };
+  // Contagem 0: aria-disabled (continua focável e é lido com "(0)"), nunca liga.
+  const off = (i: number): boolean => counts[KINDS[i].key] === 0;
+  btns.forEach((b, i) => { if (off(i)) b.setAttribute("aria-disabled", "true"); });
   btns.forEach((b, i) => b.addEventListener("click", () => {
     const k = KINDS[i].key;
-    if (!b.disabled) on[k] = !on[k];
+    if (!off(i)) on[k] = !on[k];
     sync();
   }));
   sync();

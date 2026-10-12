@@ -32,9 +32,13 @@ describe("diálogo Remover episemas e puncta mora", () => {
     btn("Remover").click();
     await expect(p).resolves.toEqual({ vertical: true, horizontal: true, mora: false });
   });
-  it("tipo com contagem 0 fica desabilitado e desligado, e não liga ao clicar", async () => {
+  it("tipo com contagem 0 fica aria-disabled (focável, lido com (0)) e desligado, e não liga ao clicar", async () => {
     const p = openStripDialog(host, { vertical: 0, horizontal: 2, mora: 0 });
-    expect(toggles().map((b) => b.disabled)).toEqual([true, false, true]);
+    expect(toggles().map((b) => b.disabled)).toEqual([false, false, false]);
+    expect(toggles().map((b) => b.getAttribute("aria-disabled"))).toEqual(["true", null, "true"]);
+    expect(toggles()[0].textContent).toBe("Episemas verticais (0)");
+    toggles()[0].focus();
+    expect(document.activeElement).toBe(toggles()[0]);
     expect(state()).toEqual(["false", "true", "false"]);
     toggles()[0].click();
     expect(state()).toEqual(["false", "true", "false"]);
@@ -118,6 +122,21 @@ describe("diálogo Remover — foco e teclado (correção)", () => {
     const q = openStripDialog(host, counts);
     key(host.querySelector(".sc-dialog")!, "Enter");
     await expect(q).resolves.toEqual({ vertical: true, horizontal: true, mora: true });
+  });
+});
+
+describe("acessibilidade do diálogo", () => {
+  it("segmentado é um grupo rotulado \"Sinais a remover\"; o corpo descreve o diálogo", async () => {
+    const p = openStripDialog(host, counts);
+    const seg = host.querySelector(".sc-seg")!;
+    expect(seg.getAttribute("role")).toBe("group");
+    const lab = document.getElementById(seg.getAttribute("aria-labelledby")!)!;
+    expect(lab.textContent).toBe("Sinais a remover");
+    const dlg = host.querySelector(".sc-dialog")!;
+    const desc = document.getElementById(dlg.getAttribute("aria-describedby")!)!;
+    expect(desc.textContent).toContain("Escolha o que tirar");
+    btn("Cancelar").click();
+    await p;
   });
 });
 

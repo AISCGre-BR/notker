@@ -38,6 +38,8 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
       const p = document.createElement("p");
       p.className = "sc-dialog__body";
       p.textContent = spec.body;
+      p.id = `sc-dialog-body-${seq}`;
+      box.setAttribute("aria-describedby", p.id);
       box.appendChild(p);
     }
     const inputs: HTMLInputElement[] = [];
@@ -62,8 +64,11 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
       wrap.className = "sc-field";
       const cap = document.createElement("span");
       cap.textContent = s.label;
+      cap.id = `sc-dialog-seg-${seq}-${s.key}`;
       const seg = document.createElement("div");
       seg.className = "sc-seg";
+      seg.setAttribute("role", "group");
+      seg.setAttribute("aria-labelledby", cap.id);
       const btns: HTMLButtonElement[] = [];
       for (const o of s.options) {
         const b = document.createElement("button");

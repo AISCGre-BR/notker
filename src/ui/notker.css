@@ -565,6 +565,8 @@ body[data-screen="welcome"] #wave-bar-host, body[data-screen="guide"] #wave-bar-
 body[data-screen="welcome"] #body-row, body[data-screen="guide"] #body-row,
 body[data-screen="welcome"] #overlay-host, body[data-screen="guide"] #overlay-host { display: none !important; }
 
-/* ── Opção de segmentado indisponível (diálogo Exportar PDF: "Grupo" sem grupo) ── */
+/* ── Opção de segmentado indisponível (diálogo Exportar PDF: "Grupo" sem grupo; tipo com 0 sinais) ── */
 .sc-seg > button:disabled,
-.sc-seg > button:disabled:hover { color: var(--ink-muted); opacity: 0.55; cursor: default; }
+.sc-seg > button:disabled:hover,
+.sc-seg > button[aria-disabled="true"],
+.sc-seg > button[aria-disabled="true"]:hover { color: var(--ink-muted); opacity: 0.55; cursor: default; }
