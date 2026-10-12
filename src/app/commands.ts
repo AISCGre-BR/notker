@@ -43,7 +43,13 @@ export function keyOf(e: KeyboardEvent): string {
  *  em NENHUM caso (comando desabilitado, menu ou diálogo aberto, tecla segurada) a janela
  *  pode abrir a impressão nativa do navegador. */
 export function isPrintKey(e: KeyboardEvent): boolean {
-  return (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
+  // No macOS a impressão é Cmd+P; Ctrl+P é do CodeMirror (emacs cursorLineUp).
+  const mod = isMac() ? e.metaKey : (e.ctrlKey || e.metaKey);
+  return mod && !e.shiftKey && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
+}
+
+function isMac(): boolean {
+  return typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent || "");
 }
 
 /** Eventos de Ctrl+P que a guarda de janela (captura) já preveniu: o registro os trata

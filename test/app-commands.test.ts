@@ -221,3 +221,26 @@ describe("guarda de janela do Ctrl+P (campos que fazem stopPropagation)", () => 
     off();
   });
 });
+
+describe("Ctrl+P no macOS", () => {
+  const ev = (mods: Partial<KeyboardEventInit>) => new KeyboardEvent("keydown", { key: "p", code: "KeyP", bubbles: true, cancelable: true, ...mods });
+  it("Mac: só Cmd+P é impressão; Ctrl+P fica para o CodeMirror", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    const off = installPrintGuard(window);
+    const c = ev({ ctrlKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(false);
+    const m = ev({ metaKey: true });
+    window.dispatchEvent(m);
+    expect(m.defaultPrevented).toBe(true);
+    off(); spy.mockRestore();
+  });
+  it("fora do Mac: Ctrl+P é impressão", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const off = installPrintGuard(window);
+    const c = ev({ ctrlKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(true);
+    off(); spy.mockRestore();
+  });
+});
