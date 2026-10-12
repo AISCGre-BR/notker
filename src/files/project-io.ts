@@ -15,14 +15,18 @@ function baseName(path: string): string {
 export async function openProject(): Promise<NotkerProject | null> {
   const path = await open({ multiple: false, filters: [NOTKER_FILTER, GABC_FILTER] });
   if (typeof path !== "string") return null;
-  if (/\.notker$/i.test(path)) {
-    const bundle = await invoke<{ project_json: string; files: Record<string, string> }>(
-      "read_project", { path },
-    );
-    return fromBundle(bundle.project_json, bundle.files, path);
-  }
+  if (/\.notker$/i.test(path)) return openProjectAt(path);
   const content = await readTextFile(path);
   return ephemeralFromGabc(content, baseName(path));
+}
+
+/** Abre um `.notker` pelo caminho (Recentes). Quem lê é o Rust (`read_project`), então não
+ *  depende do escopo do plugin-fs (que só conhece arquivos escolhidos NESTA sessão). LANÇA. */
+export async function openProjectAt(path: string): Promise<NotkerProject> {
+  const bundle = await invoke<{ project_json: string; files: Record<string, string> }>(
+    "read_project", { path },
+  );
+  return fromBundle(bundle.project_json, bundle.files, path);
 }
 
 /** Escolhe um `.gabc` e devolve nome (sem extensão) e conteúdo. */

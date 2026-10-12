@@ -29,6 +29,23 @@ const key = (t: HTMLElement, k: string, init: KeyboardEventInit = {}) => {
   return ev;
 };
 
+describe("bancada: desenho que falha", () => {
+  it("desenho que rejeita (ou lança) não gera rejeição não tratada e a bancada segue", async () => {
+    const unhandled: unknown[] = [];
+    const on = (e: unknown) => { unhandled.push(e); };
+    process.on("unhandledRejection", on);
+    try {
+      const draw = vi.fn(async () => { throw new Error("desenho grande falhou"); });
+      const b = createBench(host, cbs(), draw);
+      b.render({ kind: "entry", entry: glyph }, st());
+      await new Promise((r) => setTimeout(r, 20));
+      expect(draw).toHaveBeenCalled();
+      expect(q(".neumas-chain__input")).not.toBeNull();
+      expect(unhandled).toEqual([]);
+    } finally { process.off("unhandledRejection", on); }
+  });
+});
+
 describe("bancada: glifo do catálogo", () => {
   it("cadeia só leitura, criar a partir deste, fichas com ★/× (texto puro), referência com proveniência, nota", async () => {
     const cb = cbs();

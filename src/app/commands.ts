@@ -106,3 +106,14 @@ export function createRegistry(): CommandRegistry {
     },
   };
 }
+
+/** Prende comandos a uma condição (ex.: só com a mesa do projeto à vista), mantendo o
+ *  enabled() original. Chamar ANTES de montar menubar/toolbar: eles leem o def na montagem. */
+export function gateCommands(reg: CommandRegistry, ids: string[], when: () => boolean): void {
+  for (const id of ids) {
+    const d = reg.get(id);
+    if (!d) throw new Error("comando desconhecido: " + id);
+    const inner = d.enabled;
+    reg.register([{ ...d, enabled: () => when() && (inner ? inner() : true) }]);
+  }
+}

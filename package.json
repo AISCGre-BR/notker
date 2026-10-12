@@ -15,7 +15,8 @@
     "typecheck:test": "tsc -p tsconfig.test.json",
     "neume:glyphs": "python3 scripts/extract-glyph-paths.py",
     "neume:db": "tsx scripts/build-neume-db.ts",
-    "neume": "npm run neume:glyphs && npm run neume:db"
+    "neume": "npm run neume:glyphs && npm run neume:db",
+    "example": "tsx scripts/build-example.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.1",

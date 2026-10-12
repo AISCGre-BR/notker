@@ -52,6 +52,13 @@ pub fn write_project(
     Ok(())
 }
 
+/// Para cada caminho, se ainda é um ARQUIVO (Recentes: some o que foi apagado/movido).
+/// Não lê conteúdo e não depende do escopo do plugin-fs.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn existing_paths(paths: Vec<String>) -> Vec<bool> {
+    paths.iter().map(|p| std::path::Path::new(p).is_file()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +75,18 @@ mod tests {
         assert_eq!(b.project_json, "{\"schema\":1}");
         assert_eq!(b.files.get("gabc/001-a.gabc").unwrap(), "name: A;\n%%\n(c4) a");
         std::fs::remove_file(&path).ok();
+    }
+    #[test]
+    fn existing_paths_marca_so_arquivos() {
+        let dir = std::env::temp_dir();
+        let file = dir.join(format!("notker-exists-{}.notker", std::process::id()));
+        std::fs::write(&file, b"x").unwrap();
+        let r = tauri::async_runtime::block_on(existing_paths(vec![
+            file.to_string_lossy().to_string(),
+            dir.to_string_lossy().to_string(),
+            dir.join("notker-nao-existe.notker").to_string_lossy().to_string(),
+        ]));
+        assert_eq!(r, vec![true, false, false]);
+        std::fs::remove_file(&file).ok();
     }
 }

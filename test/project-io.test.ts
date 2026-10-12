@@ -12,13 +12,28 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   writeTextFile: vi.fn(async () => {}),
 }));
 
-import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "../src/files/project-io";
+import { openProject, openProjectAt, saveProject, exportCurrentGabc, exportAllGabc } from "../src/files/project-io";
 import { newProject, getActiveChant, newGroup, newChant, insertNode } from "../src/project/tree";
 import { writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import { save, open } from "@tauri-apps/plugin-dialog";
 
 describe("project-io", () => {
   beforeEach(() => { vi.clearAllMocks(); });
+  it("openProjectAt lê o .notker pelo caminho (sem diálogo) e guarda o caminho", async () => {
+    invoke.mockResolvedValueOnce({
+      project_json: JSON.stringify({ schema: 2, kind: "notker-project", title: "Natal", family: "stgall", tree: [{ chant: "c1" }], chants: [{ id: "c1", file: "gabc/a-c1.gabc", title: "A" }] }),
+      files: { "gabc/a-c1.gabc": "name: A;\n%%\n(c4) a" },
+    });
+    const p = await openProjectAt("/m/Natal.notker");
+    expect(open).not.toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith("read_project", { path: "/m/Natal.notker" });
+    expect(p.path).toBe("/m/Natal.notker");
+    expect(p.title).toBe("Natal");
+  });
+  it("openProjectAt propaga o erro do Rust (arquivo sumiu)", async () => {
+    invoke.mockRejectedValueOnce("No such file or directory (os error 2)");
+    await expect(openProjectAt("/sumiu.notker")).rejects.toBe("No such file or directory (os error 2)");
+  });
   it("openProject abre um .notker via comando read_project", async () => {
     invoke.mockResolvedValueOnce({
       project_json: JSON.stringify({

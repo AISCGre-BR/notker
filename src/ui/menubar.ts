@@ -3,7 +3,7 @@ import type { Commands } from "../app/commands";
 /** Barra de menus estilo MuseScore/Office (spec B). Rótulos e checks são
  *  FUNÇÕES reavaliadas a cada abertura — o dropdown é reconstruído na hora,
  *  então o estado exibido é sempre o atual, sem eventos de sincronização. */
-export type MenuEntry = MenuItem | "---";
+export type MenuEntry = MenuItem | SubmenuSpec | "---";
 export interface MenuItem {
   cmd: string;
   label: string | (() => string);
@@ -11,6 +11,10 @@ export interface MenuItem {
   checked?: () => boolean;
   enabled?: () => boolean;
 }
+/** Item de submenu montado na hora (ex.: um projeto recente): roda direto, sem registro. */
+export interface SubmenuEntry { label: string; caption?: string; run: () => void; enabled?: boolean }
+/** Item que abre um submenu à direita ("Abrir recente ▸"); itens reavaliados a cada abertura. */
+export interface SubmenuSpec { label: string; submenu: () => (SubmenuEntry | "---")[] }
 export interface MenuSpec { label: string; items: MenuEntry[]; }
 
 export function createMenubar(
@@ -57,7 +61,80 @@ export function createMenubar(
   const slots: HTMLElement[] = [];
   const tops: HTMLButtonElement[] = [];
 
+  // Submenu aberto (filho do dropdown, removido junto com ele) e o item que o abriu.
+  let sub: HTMLElement | null = null;
+  let subParent: HTMLButtonElement | null = null;
+  const firstItem = (m: HTMLElement) => m.querySelector<HTMLButtonElement>(".sc-menu__item:not(:disabled)");
+  function closeSub(focusParent = false): void {
+    sub?.remove();
+    sub = null;
+    if (subParent) {
+      subParent.setAttribute("aria-expanded", "false");
+      if (focusParent) subParent.focus();
+    }
+    subParent = null;
+  }
+  function openSub(parent: HTMLButtonElement, spec: SubmenuSpec, focusFirst: boolean): void {
+    if (subParent === parent && sub) { if (focusFirst) firstItem(sub)?.focus(); return; }
+    closeSub();
+    const m = document.createElement("div");
+    m.className = "sc-menu notker-submenu";
+    m.setAttribute("role", "menu");
+    m.setAttribute("aria-label", spec.label);
+    m.style.position = "absolute";
+    m.style.left = "100%";
+    m.style.top = `${parent.offsetTop - 5}px`;
+    for (const it of spec.submenu()) {
+      if (it === "---") {
+        const sep = document.createElement("div");
+        sep.className = "sc-menu__sep";
+        sep.setAttribute("role", "separator");
+        m.appendChild(sep);
+        continue;
+      }
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "sc-menu__item";
+      b.setAttribute("role", "menuitem");
+      b.disabled = it.enabled === false;
+      const check = document.createElement("span");
+      check.className = "sc-menu__check";
+      const label = document.createElement("span");
+      label.textContent = it.label;
+      const cap = document.createElement("span");
+      cap.className = "sc-menu__kbd";
+      cap.textContent = it.caption ?? "";
+      b.append(check, label, cap);
+      b.addEventListener("click", () => { if (b.disabled) return; closeAll(true); it.run(); });
+      m.appendChild(b);
+    }
+    parent.parentElement!.appendChild(m);
+    sub = m;
+    subParent = parent;
+    parent.setAttribute("aria-expanded", "true");
+    if (focusFirst) firstItem(m)?.focus();
+  }
+  function buildSubParent(spec: SubmenuSpec): HTMLButtonElement {
+    const b = document.createElement("button");
+    b.className = "sc-menu__item";
+    b.setAttribute("role", "menuitem");
+    b.setAttribute("aria-haspopup", "menu");
+    b.setAttribute("aria-expanded", "false");
+    const check = document.createElement("span");
+    check.className = "sc-menu__check";
+    const label = document.createElement("span");
+    label.textContent = spec.label;
+    const arrow = document.createElement("span");
+    arrow.className = "sc-menu__kbd";
+    arrow.textContent = "▸";
+    b.append(check, label, arrow);
+    b.addEventListener("click", () => openSub(b, spec, true));
+    b.addEventListener("mouseenter", () => openSub(b, spec, false));
+    return b;
+  }
+
   function closeAll(restore = false): void {
+    closeSub();
     pop?.remove();
     pop = null;
     if (openIdx !== null) {
@@ -91,6 +168,7 @@ export function createMenubar(
         p.appendChild(sep);
         continue;
       }
+      if ("submenu" in entry) { p.appendChild(buildSubParent(entry)); continue; }
       const b = document.createElement("button");
       b.className = "sc-menu__item";
       b.disabled = entry.enabled ? !entry.enabled() : false;
@@ -113,12 +191,14 @@ export function createMenubar(
 
       b.append(check, label, shortcut);
       b.addEventListener("click", () => runItem(entry));
+      b.addEventListener("mouseenter", () => closeSub());
       p.appendChild(b);
     }
     return p;
   }
 
   function openMenu(i: number): void {
+    closeSub();
     const wasOpen = openIdx !== null;
     pop?.remove();
     if (openIdx !== null) tops[openIdx].setAttribute("aria-expanded", "false");
@@ -137,13 +217,28 @@ export function createMenubar(
     if (!(e.target instanceof Node) || !bar.contains(e.target)) closeAll();
   }
 
+  /** Itens do nível com o foco: o submenu, se o foco está nele; senão o dropdown. */
   function enabledItems(): HTMLButtonElement[] {
-    return pop ? [...pop.querySelectorAll<HTMLButtonElement>(".sc-menu__item:not(:disabled)")] : [];
+    const scope = sub && sub.contains(document.activeElement) ? sub : pop;
+    return scope ? [...scope.querySelectorAll<HTMLButtonElement>(":scope > .sc-menu__item:not(:disabled)")] : [];
   }
 
   function onDocKeyDown(e: KeyboardEvent): void {
     if (openIdx === null) return;
-    if (e.key === "Escape") { closeAll(true); return; }
+    const active = document.activeElement;
+    const inSub = !!sub && sub.contains(active);
+    if (e.key === "Escape") {
+      if (sub) { e.preventDefault(); closeSub(true); return; } // 1º Esc fecha só o submenu
+      closeAll(true);
+      return;
+    }
+    if (e.key === "ArrowRight" && !inSub && active instanceof HTMLButtonElement
+      && active.getAttribute("aria-haspopup") === "menu" && pop?.contains(active)) {
+      e.preventDefault();
+      active.click(); // abre o submenu e foca o 1º item
+      return;
+    }
+    if (e.key === "ArrowLeft" && inSub) { e.preventDefault(); closeSub(true); return; }
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       const delta = e.key === "ArrowRight" ? 1 : -1;
       openMenu((openIdx + delta + menus.length) % menus.length);

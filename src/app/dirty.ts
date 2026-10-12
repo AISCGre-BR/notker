@@ -31,12 +31,23 @@ export function projectFingerprint(p: NotkerProject): string {
   return cyrb53(JSON.stringify([p.title, p.family, p.root.map(canon)]));
 }
 
-export interface DirtyTracker { markSaved(p: NotkerProject): void; isDirty(p: NotkerProject): boolean }
+export interface DirtyTracker {
+  markSaved(p: NotkerProject): void;
+  isDirty(p: NotkerProject): boolean;
+  /** Editado até o próximo markSaved (projeto recuperado de uma sessão que caiu). */
+  markDirty(): void;
+  /** Linha de base atual (null = nunca salvo/aberto), para devolvê-la se abrir outro falhar. */
+  baseline(): string | null;
+  restoreBaseline(b: string | null): void;
+}
 
 export function createDirtyTracker(): DirtyTracker {
   let saved: string | null = null;
   return {
     markSaved(p) { saved = projectFingerprint(p); },
     isDirty(p) { return saved === null || projectFingerprint(p) !== saved; },
+    markDirty() { saved = null; },
+    baseline: () => saved,
+    restoreBaseline(b) { saved = b; },
   };
 }

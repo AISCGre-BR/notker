@@ -38,11 +38,11 @@ import { nabcMoveKeymap, runMove } from "./neume/nabc-move";
 import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
-import { createRegistry } from "./app/commands";
+import { createRegistry, gateCommands } from "./app/commands";
 import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
-import { createMenubar, type MenuItem } from "./ui/menubar";
+import { createMenubar, type MenuItem, type SubmenuEntry } from "./ui/menubar";
 import { createDirtyTracker } from "./app/dirty";
 import { createViews } from "./app/views";
 import { chantCapture } from "./app/chant-capture";
@@ -52,6 +52,19 @@ import { debounce } from "./preview/debounce";
 import { newDocumentDialog } from "./ui/new-dialog";
 import { openDialog } from "./ui/pd/dialog";
 import { askSaveChanges, resolveUnsaved, type UnsavedGuard } from "./app/session";
+import { setScreen, type Screen } from "./app/screen";
+import { createWelcome } from "./app/welcome";
+import { mountNewProjectGuide, projectFromDraft, hasDraft, type GuideHandle } from "./app/new-project-guide";
+import { runCloseSequence } from "./app/close-sequence";
+import { createThumbTracker } from "./app/thumb-tracker";
+import { loadExampleProject } from "./project/example";
+import {
+  createRecentStore, pushRecent, setRecentThumb, removeRecent, buildRecentMeta, recentTitle, parentFolder,
+  type RecentEntry,
+} from "./app/recent";
+import { appDataSlot, existingPaths, rotateSlot, RECENT_FILE, RECOVERY_FILE, RECOVERY_PREV_FILE } from "./app/appdata-io";
+import { createRecoveryWriter, parseSnapshot, projectFromSnapshot, type RecoverySnapshot } from "./app/recovery";
+import { scoreThumbnail } from "./app/thumbnail";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
@@ -67,11 +80,11 @@ import { installSync, syncFromCursor } from "./preview/sync";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
-import { openProject, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
+import { openProject, openProjectAt, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveChant, effectiveFamily, updateChant, setActive,
   setChantFamily, insertNode, removeNode, restoreRemoved, moveSibling, newChant, gabcName, gabcSkeleton,
-  findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode,
+  findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode, flattenChants,
 } from "./project/tree";
 import { createTreePanel } from "./project/tree-panel";
 // PLAYBACK-OFF (2026-10-09): faixas da onda.
@@ -142,10 +155,16 @@ async function boot() {
   const dirty = createDirtyTracker();
   /** Só depois do boot o título reage (captureEditorIntoProject lê `wave`, criada adiante). */
   let booted = false;
+  /** Tela atual (src/app/screen.ts): tela inicial, guia de novo projeto ou mesa. */
+  let screen: Screen = "welcome";
+  /** Há um projeto do usuário carregado (pode estar escondido atrás do guia). */
+  let projectOpen = false;
   let menubar: ReturnType<typeof createMenubar> | undefined;
   /** Título na menubar com "— Editado" quando o projeto difere do último salvo/aberto. */
   function updateTitle(): void {
     if (!booted) return;
+    if (screen === "welcome") { menubar?.setTitle("Notker"); return; }
+    if (screen === "guide") { menubar?.setTitle("Novo projeto"); return; }
     captureEditorIntoProject();
     menubar?.setTitle(project.title, dirty.isDirty(project));
   }
@@ -511,10 +530,11 @@ async function boot() {
     applyTree((p) => setActive(p, id));
   }
   /** Troca o projeto inteiro (novo/abrir): nada do editor antigo vai para o novo. */
-  function loadProject(p: NotkerProject): void {
+  function loadProject(p: NotkerProject): boolean {
     captureEditorIntoProject(); // se falhar, o projeto anterior (com o texto atual) é restaurado
     const prev = project;
     const prevEpoch = projectEpoch;
+    const prevBaseline = dirty.baseline(); // e o "— Editado" dele volta igual (resíduo 1b-1)
     shownId = null;      // o texto no editor é do projeto antigo: não capturar
     chantStates.clear();
     projectEpoch++;
@@ -528,13 +548,19 @@ async function boot() {
       captureEditorIntoProject();
       dirty.markSaved(project); // recém-aberto/criado = sem alterações
       updateTitle();
+      return true;
     } catch (err) {
       console.error(err);
       project = prev;
       projectEpoch = prevEpoch;
       shownId = null;
       try { syncFromProject(); } catch (e2) { console.error(e2); }
+      // O markSaved(p) lá em cima trocou a linha de base: o anterior volta com a DELE
+      // (senão aparece "— Editado" sem ter mudado, ou perde o aviso e a pergunta de salvar).
+      dirty.restoreBaseline(prevBaseline);
+      updateTitle();
       toaster.show("Não foi possível abrir o projeto. " + String(err), { kind: "error" });
+      return false;
     }
   }
   /** Pai ainda válido depois de um diálogo assíncrono; senão a raiz. */
@@ -623,6 +649,8 @@ async function boot() {
       project = { ...project, path };
       updateTitle();
       toaster.show("Projeto salvo.");
+      void recovery.clear();              // salvo: o retrato desta sessão não serve mais
+      void rememberRecent(project, "save"); // entra/sobe nos recentes, com miniatura nova
       return true;
     })();
     saving = run;
@@ -635,7 +663,11 @@ async function boot() {
   };
 
   const unsaved: UnsavedGuard = {
-    isDirty: () => { captureEditorIntoProject(); return dirty.isDirty(project); },
+    isDirty: () => {
+      if (!projectOpen) return false; // tela inicial: nada a perder
+      captureEditorIntoProject();
+      return dirty.isDirty(project);
+    },
     title: () => project.title,
     save: () => doSave(false),
     ask: (title, error) => askSaveChanges(dialogHost, title, error),
@@ -667,26 +699,256 @@ async function boot() {
     [c.named ? `${c.named} ${c.named === 1 ? "neuma com nome" : "neumas com nome"}` : "",
      c.sequences ? `${c.sequences} ${c.sequences === 1 ? "sequência" : "sequências"}` : ""].filter(Boolean).join(" e ");
 
+  // ── Telas (1b-2): tela inicial, guia de novo projeto e mesa ─────────────────
+  // (PLAYBACK-OFF: não há player a parar ao sair da mesa.)
+  const welcomeHost = document.querySelector<HTMLElement>("#welcome-host")!;
+  const guideHost = document.querySelector<HTMLElement>("#guide-host")!;
+  let guide: GuideHandle | null = null;
+  function showScreen(s: Screen): void {
+    screen = s;
+    setScreen(s);
+    if (s === "project") view.requestMeasure(); // o editor estava em display:none
+    toolbarHandle?.refresh();
+    updateTitle();
+  }
+  /** Vista Edição sem roubar o foco: grava antes o pendente da vista Neumas (nota em
+   *  debounce, nome digitado). Um projeto sempre abre (e a mesa sempre fecha) na Edição. */
+  function toEditView(): void {
+    if (views.current() === "edicao") return;
+    neumasView?.flush();
+    views.set("edicao");
+  }
+  /** Foco de volta à mesa na vista em que ela está. */
+  function focusDesk(): void {
+    if (views.current() === "neumas") neumasView?.focusSearch(); else view.focus();
+  }
+  function closeGuide(): void { guide?.destroy(); guide = null; }
+  /** Mostra um projeto (aberto, criado, exemplo, recuperado) na mesa. false = não abriu
+   *  (o loadProject já avisou e restaurou o anterior): a tela não muda. */
+  function enterProject(p: NotkerProject): boolean {
+    if (!loadProject(p)) return false;
+    closeGuide();
+    toEditView();
+    projectOpen = true;
+    showScreen("project");
+    view.focus();
+    return true;
+  }
+  // ── Recentes e recuperação de sessão (spec §4.6) ───────────────────────────
+  const recentStore = createRecentStore(appDataSlot(RECENT_FILE), existingPaths);
+  const recoverySlot = appDataSlot(RECOVERY_FILE);
+  const recoveryPrevSlot = appDataSlot(RECOVERY_PREV_FILE);
+  let recents: RecentEntry[] = [];
+  /** Retrato de uma sessão anterior que não foi salva (aviso na tela inicial). */
+  let pendingRecovery: RecoverySnapshot | null = null;
+  /** Um segundo retrato mais antigo (empurrado para `session.prev.json` quando esta sessão
+   *  gravou o primeiro dela sem que o anterior tivesse sido resolvido). */
+  let pendingPrev: RecoverySnapshot | null = null;
+  const thumbs = createThumbTracker();
+  const recovery = createRecoveryWriter({
+    slot: recoverySlot,
+    current: () => {
+      if (!projectOpen) return null;
+      captureEditorIntoProject();
+      return dirty.isDirty(project) ? project : null;
+    },
+    // Vaga única: o retrato pendente de outra sessão vai para `.prev` antes do 1º desta.
+    foreign: {
+      has: () => pendingRecovery !== null,
+      rotate: async () => {
+        await rotateSlot(RECOVERY_FILE, RECOVERY_PREV_FILE);
+        pendingPrev = pendingRecovery; // só depois de renomear: falha = nada muda
+        pendingRecovery = null;
+      },
+    },
+  });
+  function renderWelcome(): void {
+    const recoveries: { id: string; title: string }[] = [];
+    if (pendingRecovery) recoveries.push({ id: "current", title: pendingRecovery.title });
+    if (pendingPrev) recoveries.push({ id: "prev", title: pendingPrev.title });
+    welcome.render({ recents, recoveries });
+  }
+  async function setRecents(list: RecentEntry[]): Promise<void> {
+    recents = list;
+    try { await recentStore.save(list); } catch (e) { console.warn("[notker] recentes não gravados:", e); }
+    if (screen === "welcome") renderWelcome();
+  }
+  const hasThumb = (path: string | undefined): boolean =>
+    !!path && !!recents.find((e) => e.path === path)?.meta?.thumb;
+  /** Entra (ou sobe) nos recentes — só .notker com caminho. Miniatura do 1º canto: ao
+   *  salvar, ou ao abrir quando ainda não há. Falha na miniatura = cartão sem imagem. */
+  async function rememberRecent(p: NotkerProject, when: "open" | "save"): Promise<void> {
+    const path = p.path;
+    if (!path) return;
+    await setRecents(pushRecent(recents, { path, meta: buildRecentMeta(p, new Date()) }));
+    const first = flattenChants(p)[0];
+    if (!first) return;
+    // Abrir: só se ainda não há miniatura. Salvar: só se o 1º canto mudou desde a última.
+    const content = first.content;
+    if (hasThumb(path) && (when === "open" || !thumbs.changed(path, content))) return;
+    // Nunca prende quem chamou: img.decode pode ficar pendente para sempre (timeout de 8 s).
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let thumb: string | undefined;
+    try {
+      thumb = await Promise.race([
+        scoreThumbnail(content).catch(() => undefined),
+        new Promise<undefined>((r) => { timer = setTimeout(() => r(undefined), 8000); }),
+      ]);
+    } finally { clearTimeout(timer); }
+    if (thumb) {
+      thumbs.remember(path, content);
+      await setRecents(setRecentThumb(recents, path, thumb));
+    }
+  }
+  /** Sair do projeto atual (abrir/criar/fechar): pergunta se há alterações; seguindo, o
+   *  retrato de recuperação desta sessão deixa de valer. */
+  async function leaveProject(): Promise<boolean> {
+    if (!(await resolveUnsaved(unsaved))) return false;
+    await recovery.clear();
+    return true;
+  }
+  async function openRecent(path: string): Promise<void> {
+    const isGone = (): Promise<boolean> => existingPaths([path]).then((r) => r[0] === false).catch(() => false);
+    const dropGone = async (): Promise<void> => {
+      await setRecents(removeRecent(recents, path));
+      toaster.show("O arquivo não existe mais e saiu dos recentes.", { kind: "warn" });
+    };
+    try {
+      // Sumiu? Avisa e tira só este recente, sem perguntar "Salvar alterações?".
+      if (await isGone()) { await dropGone(); return; }
+      if (!(await leaveProject())) return;
+      if (enterProject(await openProjectAt(path))) void rememberRecent(project, "open");
+    } catch (err) {
+      if (await isGone()) await dropGone();
+      else {
+        toaster.show("Abrir falhou. " + String(err), { kind: "error" });
+        console.error(err);
+      }
+    }
+  }
+  async function recoverSession(id: string): Promise<void> {
+    const fromPrev = id === "prev";
+    const snap = fromPrev ? pendingPrev : pendingRecovery;
+    if (!snap || !(await resolveUnsaved(unsaved))) return;
+    let p: NotkerProject;
+    try { p = projectFromSnapshot(snap); }
+    catch (err) { toaster.show("Não foi possível recuperar. " + String(err), { kind: "error" }); return; }
+    if (!enterProject(p)) return;
+    dirty.markDirty();   // abre como projeto editado (spec §4.6)
+    updateTitle();
+    if (!fromPrev) {
+      pendingRecovery = null;
+      recovery.adopt();  // salvar/descartar/fechar agora apagam este retrato
+      return;
+    }
+    // Do `.prev`: o trabalho passa para a vaga atual (gravado já, não daqui a 30 s) e só
+    // então o arquivo `.prev` sai — a menos que a gravação tenha empurrado outro retrato para ele.
+    pendingPrev = null;
+    await recovery.tick();
+    if (recovery.owns() && pendingPrev === null) {
+      try { await recoveryPrevSlot.remove(); } catch (e) { console.warn("[notker] recuperação:", e); }
+    } else if (!recovery.owns()) {
+      pendingPrev = snap; // não gravou: o retrato continua valendo
+    }
+  }
+  async function discardRecovery(id: string): Promise<void> {
+    const fromPrev = id === "prev";
+    const snap = fromPrev ? pendingPrev : pendingRecovery;
+    if (!snap) return;
+    const r = await openDialog(dialogHost, {
+      title: `Descartar o trabalho não salvo de “${snap.title}”?`,
+      body: "Não dá para desfazer.",
+      actions: [
+        { id: "discard", label: "Descartar", kind: "danger" },
+        { id: "keep", label: "Manter", kind: "filled" },
+      ],
+      defaultAction: "keep",
+    });
+    if (r.action !== "discard") return;
+    if ((fromPrev ? pendingPrev : pendingRecovery) !== snap) return; // mudou durante a pergunta
+    try { await (fromPrev ? recoveryPrevSlot : recoverySlot).remove(); }
+    catch (e) { console.warn("[notker] recuperação:", e); toaster.show("Não foi possível descartar. " + String(e), { kind: "error" }); return; }
+    if (fromPrev) pendingPrev = null; else pendingRecovery = null;
+    renderWelcome();
+  }
+  /** Itens de Arquivo ▸ Abrir recente (montados a cada abertura do menu). */
+  const recentMenu = (): (SubmenuEntry | "---")[] => (recents.length === 0
+    ? [{ label: "Nenhum recente", run: () => {}, enabled: false }]
+    : [
+      ...recents.map((e): SubmenuEntry => ({ label: recentTitle(e), caption: parentFolder(e.path), run: () => { void openRecent(e.path); } })),
+      "---",
+      { label: "Limpar recentes", run: () => { void commands.run("file.clearRecents"); } },
+    ]);
+  function showWelcome(): void {
+    closeGuide();
+    renderWelcome();
+    showScreen("welcome");
+    welcome.focus();
+  }
+  const confirmDiscardGuide = async (): Promise<boolean> => (await openDialog(dialogHost, {
+    title: "Descartar o novo projeto?",
+    body: "O que foi preenchido no guia será perdido.",
+    actions: [
+      { id: "discard", label: "Descartar", kind: "danger" },
+      { id: "keep", label: "Continuar editando", kind: "filled" },
+    ],
+  })).action === "discard";
+  /** Guia de novo projeto. Cancelar volta para onde estava (projeto intacto ou tela inicial). */
+  function openGuide(): void {
+    const back: Screen = screen === "guide" ? (projectOpen ? "project" : "welcome") : screen;
+    closeGuide();
+    guide = mountNewProjectGuide(guideHost, {
+      pickGabc: async () => {
+        try { return await pickGabcFile(); }
+        catch (e) { toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" }); return null; }
+      },
+      confirmDiscard: confirmDiscardGuide,
+      onCancel: () => {
+        closeGuide();
+        if (back === "project" && projectOpen) { showScreen("project"); focusDesk(); }
+        else showWelcome();
+      },
+      onCreate: (draft) => {
+        if (!enterProject(projectFromDraft(draft))) return;
+        // Projeto novo, sem caminho e com conteúdo: NÃO está salvo (aparece "— Editado",
+        // fechar pergunta e o retrato de recuperação passa a ser gravado).
+        dirty.markDirty();
+        updateTitle();
+      },
+    });
+    showScreen("guide");
+    guide.focus();
+  }
+  /** Arquivo ▸ Fechar projeto: pergunta se há alterações e volta à tela inicial. */
+  async function closeProjectCmd(): Promise<void> {
+    if (!projectOpen) return;
+    if (!(await leaveProject())) return;
+    toEditView(); // nota pendente da vista Neumas gravada; a mesa volta (depois) na Edição
+    if (!loadProject(newProject({ family: "stgall", name: "Novo" }))) return; // solta o projeto da memória; falhou = continua com o atual
+    projectOpen = false;
+    showWelcome();
+  }
+
   const commands = createRegistry();
   const h = {
-    // Novo projeto via popup (família por botões-toggle, sem radio nativo que
-    // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
-    // Primeiro decide as alterações do atual; depois o diálogo (sem o aviso antigo
-    // de "alterações serão perdidas" — a pergunta já cuidou disso).
+    // Novo projeto: primeiro decide as alterações do atual; depois o guia em passos
+    // (adendo §11). Já no guia, só devolve o foco a ele.
     newProjectCmd: async () => {
-      if (!(await resolveUnsaved(unsaved))) return;
-      const r = await newDocumentDialog(dialogHost, { title: "Novo projeto", okLabel: "Criar" });
-      if (!r) return;
-      loadProject(newProject({ family: r.family, name: r.name, office: r.office }));
-      view.focus();
+      if (screen === "guide") { guide?.focus(); return; }
+      if (!(await leaveProject())) return;
+      openGuide();
     },
     openFile: async () => {
       try {
-        if (!(await resolveUnsaved(unsaved))) return;
+        if (!(await leaveProject())) return;
         const p = await openProject();
         if (!p) return;
-        loadProject(p);
+        if (enterProject(p)) void rememberRecent(project, "open");
       } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
+    },
+    openExample: async () => {
+      if (!(await leaveProject())) return;
+      enterProject(loadExampleProject());
     },
     exportGabc: async () => {
       try {
@@ -855,10 +1117,13 @@ async function boot() {
   };
 
   commands.register([
-    { id: "file.newProject", label: "Novo projeto…", run: h.newProjectCmd },
+    { id: "file.newProject", label: "Novo projeto…", run: h.newProjectCmd, keys: ["Ctrl+N"] },
     { id: "file.open", label: "Abrir…", run: h.openFile, keys: ["Ctrl+O"] },
     { id: "file.save", label: "Salvar", run: saveCmd(false), keys: ["Ctrl+S"] },
     { id: "file.saveAs", label: "Salvar como…", run: saveCmd(true), keys: ["Ctrl+Shift+S"] },
+    { id: "file.openExample", label: "Abrir projeto de exemplo", run: h.openExample },
+    { id: "file.clearRecents", label: "Limpar recentes", run: () => setRecents([]) },
+    { id: "file.close", label: "Fechar projeto", run: closeProjectCmd, keys: ["Ctrl+W"] },
     { id: "project.newChant", label: "Novo canto…", run: () => newChantAt(null, Infinity) },
     { id: "project.newGroup", label: "Novo grupo", run: () => newGroupAt(null, Infinity) },
     { id: "project.importGabc", label: "Importar .gabc…", run: importGabcAsChant },
@@ -916,6 +1181,28 @@ async function boot() {
     { id: "help.about", label: "Sobre o Notker…", run: showAbout },
   ]);
 
+  // Fora da mesa (tela inicial/guia) só valem Novo projeto, Abrir, Nomes (importar/
+  // exportar), tema e ajuda. Vistas (Edição/Neumas) só existem dentro da mesa. Compõe com
+  // o `enabled: inEdit` dos comandos do editor. ANTES de montar menubar e toolbar: elas
+  // leem o enabled() do def na montagem. (PLAYBACK-OFF: play.*/wave.* não existem;
+  // gateCommands lança para id desconhecido.)
+  gateCommands(commands, [
+    "file.save", "file.saveAs", "file.close", "project.newChant", "project.newGroup", "project.importGabc",
+    "file.exportGabc", "file.exportAllGabc", "edit.undo", "edit.redo", "edit.format",
+    "neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset",
+    "neume.palette", "neume.name", "neumas.search", "view.edicao", "view.neumas",
+    "doc.toggleFamily", "view.preview", "view.split", "view.legend",
+  ], () => screen === "project");
+
+  const welcome = createWelcome(welcomeHost, {
+    onNew: () => { void commands.run("file.newProject"); },
+    onOpen: () => { void commands.run("file.open"); },
+    onOpenExample: () => { void commands.run("file.openExample"); },
+    onOpenRecent: (path) => { void openRecent(path); },
+    onRecover: (id) => { void recoverSession(id); },
+    onDiscardRecovery: (id) => { void discardRecovery(id); },
+  });
+
   // ── Menubar: menus montados a partir do registro único de comandos ──
   const menuItem = (id: string): MenuItem => {
     const def = commands.get(id);
@@ -931,13 +1218,17 @@ async function boot() {
     {
       label: "Arquivo",
       items: [
-        menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"), menuItem("file.saveAs"),
+        menuItem("file.newProject"), menuItem("file.open"),
+        { label: "Abrir recente", submenu: recentMenu },
+        menuItem("file.save"), menuItem("file.saveAs"),
         "---",
         menuItem("project.newChant"), menuItem("project.newGroup"), menuItem("project.importGabc"),
         "---",
         menuItem("file.exportGabc"), menuItem("file.exportAllGabc"),
         "---",
         menuItem("names.import"), menuItem("names.export"),
+        "---",
+        menuItem("file.close"),
       ],
     },
     {
@@ -973,7 +1264,7 @@ async function boot() {
     //     menuItem("wave.toggle"), menuItem("wave.reset"),
     //   ],
     // },
-    { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
+    { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("file.openExample"), "---", menuItem("help.about")] },
   ]);
   menubar.setTitle(project.title);
 
@@ -1019,24 +1310,39 @@ async function boot() {
   booted = true;
   captureEditorIntoProject();
   dirty.markSaved(project);
-  updateTitle();
+  // Recentes (some o que não existe mais) e o retrato de uma sessão que caiu.
+  try { recents = await recentStore.load(); } catch { recents = []; }
+  try { pendingRecovery = parseSnapshot(await recoverySlot.read()); } catch { pendingRecovery = null; }
+  try { pendingPrev = parseSnapshot(await recoveryPrevSlot.read()); } catch { pendingPrev = null; }
+  showWelcome(); // sem projeto aberto: tela inicial
+  recovery.start();
 
   // Fechar a janela: com alterações, pergunta; grava os nomes pendentes; NUNCA prende a
   // janela (falha inesperada na guarda → fecha). O wrapper do Tauri só chama destroy()
   // se o preventDefault não foi chamado.
   try {
     void getCurrentWindow().onCloseRequested(async (ev) => {
-      let proceed = true;
-      // Gravação em andamento: espera terminar (ok ou erro) antes de decidir; nunca prende a janela.
-      if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } }
-      try { proceed = await resolveUnsaved(unsaved); } catch (e) { console.error("[notker] fechar:", e); }
-      if (!proceed) { ev.preventDefault(); return; }
-      try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
+      // Nunca rejeita (o wrapper do Tauri só fecha se o handler não lançar): cada passo
+      // da sequência tem o seu try/catch e, no pior caso, a janela fecha.
+      try {
+        const { prevent } = await runCloseSequence({
+          awaitSaving: async () => { if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } } },
+          // Guia com algo digitado: pergunta antes de fechar (o rascunho não tem outra rede).
+          confirmGuide: screen === "guide" && guide && hasDraft(guide.draft()) ? confirmDiscardGuide : undefined,
+          resolveUnsaved: () => resolveUnsaved(unsaved),
+          flushView: () => neumasView?.flush(), // nota em debounce / nome digitado entram no autosave
+          flushNames: () => overlayAutosave.flush(), // erro: o autosave já o mostrou
+          stopRecovery: () => recovery.stop(),
+          clearRecovery: () => recovery.clear(),
+        });
+        if (prevent) ev.preventDefault();
+      } catch (e) { console.error("[notker] fechar:", e); }
     }).catch(() => { /* sem permissão/evento: segue sem guarda */ });
   } catch { /* fora do Tauri (testes/probe) */ }
 }
 
 boot().catch((err) => {
+  document.body.dataset.screen = "project"; // a mensagem fica no #app, que a tela inicial esconde
   const app = document.querySelector("#app");
   if (app) app.textContent = "Falha ao iniciar o Notker: " + String(err);
   console.error(err);

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>Notker</title>
   </head>
-  <body data-view="edicao">
+  <body data-view="edicao" data-screen="welcome">
     <div id="menubar"></div>
     <div id="toolbar"></div>
     <div id="wave-bar-host"></div>
@@ -17,6 +17,9 @@
       <!-- Vista Neumas: host PRÉ-EXISTENTE; body[data-view] alterna o display. -->
       <main id="neumas-view" class="sc-workspace notker-neumas" aria-label="Neumas"></main>
     </div>
+    <!-- Telas sem mesa (1b-2): tela inicial e criação guiada; body[data-screen] escolhe. -->
+    <section id="welcome-host" class="notker-welcome sc-workspace" aria-label="Início"></section>
+    <section id="guide-host" class="notker-guide sc-workspace" aria-label="Novo projeto"></section>
     <!-- Hosts PRÉ-EXISTENTES (WebKitGTK só repinta popup alternando display de um
          elemento que já existe; véu de tela cheia não repinta no RDP/llvmpipe). -->
     <div id="overlay-host"></div>
