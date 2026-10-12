@@ -4,6 +4,7 @@
 import { openDialog } from "../ui/pd/dialog";
 import type { PdfScope } from "./scope";
 import type { PageSize } from "./layout";
+import { t } from "../i18n";
 
 export interface PdfOptions { scope: PdfScope; page: PageSize; red: boolean; newPagePerPiece: boolean }
 export const DEFAULT_PDF_OPTIONS: Omit<PdfOptions, "scope"> = { page: "a4", red: true, newPagePerPiece: false };
@@ -25,23 +26,23 @@ export async function exportPdfDialog(host: HTMLElement, ctx: PdfDialogContext):
   const scope: PdfScope = want && can(want) ? want : ctx.chantHasMusic ? "chant" : "project";
   const o = { ...DEFAULT_PDF_OPTIONS, ...ctx.last };
   const r = await openDialog(host, {
-    title: "Exportar PDF",
-    body: "Partitura em folha branca, margens de 2 cm, com o título de cada peça.",
+    title: t("pdf.title"),
+    body: t("pdf.body"),
     segs: [
-      { key: "scope", label: "O que exportar", value: scope, options: [
-        { value: "chant", label: "Canto atual", disabled: !can("chant") },
-        { value: "group", label: ctx.group ? `Grupo “${ctx.group.title}”` : "Grupo selecionado", disabled: !can("group") },
-        { value: "project", label: "Projeto inteiro" },
+      { key: "scope", label: t("pdf.scope"), value: scope, options: [
+        { value: "chant", label: t("pdf.scope.chant"), disabled: !can("chant") },
+        { value: "group", label: ctx.group ? t("pdf.scope.group", { title: ctx.group.title }) : t("pdf.scope.groupNone"), disabled: !can("group") },
+        { value: "project", label: t("pdf.scope.project") },
       ] },
-      { key: "page", label: "Página", value: o.page, options: [{ value: "a4", label: "A4" }, { value: "letter", label: "Carta" }] },
-      { key: "color", label: "Neumas St. Gall/Laon", value: o.red ? "red" : "black",
-        options: [{ value: "red", label: "Em vermelho" }, { value: "black", label: "Em preto" }] },
-      { key: "flow", label: "Peças", value: o.newPagePerPiece ? "page" : "flow",
-        options: [{ value: "flow", label: "Uma após a outra" }, { value: "page", label: "Cada uma em nova página" }] },
+      { key: "page", label: t("pdf.page"), value: o.page, options: [{ value: "a4", label: "A4" }, { value: "letter", label: t("pdf.page.letter") }] },
+      { key: "color", label: t("pdf.color"), value: o.red ? "red" : "black",
+        options: [{ value: "red", label: t("pdf.color.red") }, { value: "black", label: t("pdf.color.black") }] },
+      { key: "flow", label: t("pdf.flow"), value: o.newPagePerPiece ? "page" : "flow",
+        options: [{ value: "flow", label: t("pdf.flow.flow") }, { value: "page", label: t("pdf.flow.page") }] },
     ],
     actions: [
-      { id: "cancel", label: "Cancelar", kind: "elevated" },
-      { id: "export", label: "Exportar…", kind: "filled" },
+      { id: "cancel", label: t("common.cancel"), kind: "elevated" },
+      { id: "export", label: t("pdf.export"), kind: "filled" },
     ],
   });
   if (r.action !== "export") return null;

@@ -9,6 +9,7 @@ import type { PdfSink } from "./compose";
 import { pdfFontFaces, TEXT_FONT, type FontFile, type FontUrls } from "./fonts";
 import type { PageSize } from "./layout";
 import type { Family } from "../neume/types";
+import { t } from "../i18n";
 
 const base64Cache = new Map<string, Promise<string>>();
 
@@ -18,7 +19,7 @@ function fontBase64(url: string): Promise<string> {
   if (!p) {
     p = (async () => {
       const r = await fetch(url);
-      if (!r.ok) throw new Error(`fonte ${url}: HTTP ${r.status}`);
+      if (!r.ok) throw new Error(t("pdf.error.font", { url, status: String(r.status) }));
       const bytes = new Uint8Array(await r.arrayBuffer());
       let bin = "";
       for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
