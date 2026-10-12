@@ -48,7 +48,8 @@ describe("família na partitura", () => {
   it("main.ts: o painel lê a família do canto ativo e é redesenhado ao trocá-la", () => {
     const code = readFileSync("src/main.ts", "utf8").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
     expect(code).toContain("createPreviewPanel(previewHost, engine, { debounceMs: 150, family: currentFamily })");
-    // Ctrl+Shift+G (toggleFamily) e o menu de contexto da árvore (onSetFamily do ativo)
-    expect(code.match(/panel\?\.update\(view\.state\.doc\.toString\(\)\)/g)).toHaveLength(2);
+    // Ctrl+Shift+G (toggleFamily) e o menu de contexto da árvore (onSetFamily do ativo),
+    // + Letras na pauta (o gutter muda a largura útil do #preview → re-render)
+    expect(code.match(/panel\?\.update\(view\.state\.doc\.toString\(\)\)/g)).toHaveLength(3);
   });
 });

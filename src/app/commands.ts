@@ -26,24 +26,49 @@ export interface CommandRegistry extends Commands {
   onDidRun(listener: (id: string) => void): () => void;
 }
 
+/** No macOS só Cmd (meta) vale "Ctrl" nos atalhos do registro; o Ctrl físico fica com o
+ *  CodeMirror (emacs) e vira "MacCtrl", que nenhum atalho usa. Fora do Mac, Ctrl ou Meta. */
 export function keyOf(e: KeyboardEvent): string {
   const parts: string[] = [];
-  if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
+  const mac = isMac();
+  const mod = mac ? e.metaKey : (e.ctrlKey || e.metaKey);
+  if (mac && e.ctrlKey) parts.push("MacCtrl");
+  if (mod) parts.push("Ctrl");
   if (e.altKey) parts.push("Alt");
   if (e.shiftKey) parts.push("Shift");
   let k = e.key;
-  if (/^Digit\d$/.test(e.code) && (e.ctrlKey || e.metaKey)) k = e.code; // tecla física (AZERTY)
+  if (/^Digit\d$/.test(e.code) && mod) k = e.code; // tecla física (AZERTY)
   else if (k === " ") k = "Space";
   else if (k.length === 1) k = k.toUpperCase();
   parts.push(k);
   return parts.join("+");
 }
 
-/** Ctrl+P (ou Cmd+P) puro, pela tecla física. O Notker usa esse atalho para Exportar PDF…:
- *  em NENHUM caso (comando desabilitado, menu ou diálogo aberto, tecla segurada) a janela
- *  pode abrir a impressão nativa do navegador. */
+/** Ctrl+P ou Ctrl+Shift+P (Cmd no Mac), pela tecla física. O Notker usa Ctrl+P para Exportar
+ *  PDF… (o atalho é decidido por keyOf; aqui é só a guarda): em NENHUM caso (comando desabilitado,
+ *  menu ou diálogo aberto, tecla segurada) a janela pode abrir a impressão nativa do navegador. */
 export function isPrintKey(e: KeyboardEvent): boolean {
-  return (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
+  // No macOS a impressão é Cmd+P; Ctrl+P é do CodeMirror (emacs cursorLineUp).
+  const mod = isMac() ? e.metaKey : (e.ctrlKey || e.metaKey);
+  return mod && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
+}
+
+function isMac(): boolean {
+  return typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent || "");
+}
+
+/** Eventos de Ctrl+P que a guarda de janela (captura) já preveniu: o registro os trata
+ *  como não tratados, para que o comando habilitado ainda rode. */
+const printGuarded = new WeakSet<Event>();
+
+/** Listener de janela em CAPTURA: previne a impressão nativa mesmo quando um campo
+ *  inline faz stopPropagation e o evento nunca chegaria à fase de bolha. Devolve o desfazer. */
+export function installPrintGuard(win: Window): () => void {
+  const onKey = (e: KeyboardEvent): void => {
+    if (isPrintKey(e) && !e.defaultPrevented) { printGuarded.add(e); e.preventDefault(); }
+  };
+  win.addEventListener("keydown", onKey, true);
+  return () => win.removeEventListener("keydown", onKey, true);
 }
 
 const ARROWS: Record<string, string> = { ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→" };
@@ -98,7 +123,7 @@ export function createRegistry(): CommandRegistry {
       return s ? `${label(id)} (${s})` : label(id);
     },
     handleKey(e) {
-      if (e.defaultPrevented) return false;
+      if (e.defaultPrevented && !printGuarded.has(e)) return false;
       if (isPrintKey(e)) e.preventDefault(); // vale para todos os `return false` abaixo
       if (document.querySelector('[role="menu"]')) return false; // menu aberto: teclas são do menu
       const k = keyOf(e);

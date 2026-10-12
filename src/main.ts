@@ -38,7 +38,7 @@ import { nabcMoveKeymap, runMove } from "./neume/nabc-move";
 import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
-import { createRegistry, gateCommands } from "./app/commands";
+import { createRegistry, gateCommands, installPrintGuard } from "./app/commands";
 import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
@@ -79,7 +79,12 @@ import { installSync, syncFromCursor } from "./preview/sync";
 // import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
-import { toggleLegend, legendVisible } from "./gabc/staff-legend";
+import { pasteMarksWatcher, pastedRange, applyStrip, marksIn, type Range } from "./gabc/strip-apply";
+import { openStripDialog, type StripScope } from "./gabc/strip-dialog";
+import { detectMarks, type MarkKinds } from "./gabc/strip-marks";
+import { toggleLegend, legendVisible, setLegendLetters } from "./gabc/staff-legend";
+import { clefsBySyllable } from "./gabc/staff-letters";
+import { drawStaffLetters, clearStaffLetters } from "./preview/staff-letters";
 import { openProject, openProjectAt, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveChant, effectiveFamily, updateChant, setActive,
@@ -133,6 +138,8 @@ async function boot() {
 
   extraExtensions.push(
     externalLinter(() => diagnostics),
+    // Colou gabc com episemas/puncta mora: oferece removê-los (toast com ação).
+    pasteMarksWatcher(() => offerStrip("O gabc colado tem episemas ou puncta mora.", "pasted")),
     EditorView.updateListener.of((u) => { if (u.docChanged) onDocChange(); }),
     // F4: Alt+setas movem o neuma sob o cursor (altura/horizontal). O thunk lê o
     // getTree atual (reatribuído quando o highlighter WASM carrega).
@@ -422,11 +429,32 @@ async function boot() {
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   // panel é declarado fora do try (PLAYBACK-OFF: o playToggle, comentado, o usava em runtime).
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
+  // Letras na pauta (Task 4): preferência de vista da sessão, desligada por padrão. Só a
+  // partitura da MESA (este painel) as recebe — PDF e miniatura renderizam pelo motor direto.
+  let staffLettersOn = false;
+  function refreshStaffLetters(): void {
+    const svg = panel?.svgEl() ?? null;
+    if (!staffLettersOn) { clearStaffLetters(svg); return; }
+    const clefs = clefsBySyllable(view.state.doc.toString());
+    drawStaffLetters(svg, (first) => (first == null ? null : clefs[Math.min(first, clefs.length - 1)]));
+  }
+  function toggleStaffLetters(): void {
+    staffLettersOn = !staffLettersOn;
+    previewHost.classList.toggle("staff-letters-on", staffLettersOn);
+    refreshStaffLetters();
+    // O gutter muda o padding do #preview → re-render na nova largura útil (o panel lê o
+    // padding real); o onRender redesenha as letras no SVG novo.
+    panel?.update(view.state.doc.toString());
+    view.dispatch({}); // o painel da régua reflete o estado no botão
+  }
+  setLegendLetters({ on: () => staffLettersOn, toggle: toggleStaffLetters });
   try {
     const engine = new NabcLibEngine();
     panel = createPreviewPanel(previewHost, engine, { debounceMs: 150, family: currentFamily });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
+    // Letras na pauta: o SVG é trocado a cada render (innerHTML) → redesenha depois de cada um.
+    panel.onRender(refreshStaffLetters);
     // PLAYBACK-OFF (2026-10-09): faixas da onda na partitura.
     // // Re-injeta as wave lanes após cada render (sobrevive a debounce e resize).
     // panel.onRender(() => { if (waveLanes.enabled()) rebuildWave(); });
@@ -596,9 +624,34 @@ async function boot() {
       const chant = newChant({ title: gabcName(f.content, f.name), content: f.content });
       applyTree((p) => setActive(insertNode(p, null, Infinity, chant), chant.id));
       view.focus();
+      const c = detectMarks(f.content);
+      if (c.vertical + c.horizontal + c.mora > 0) offerStrip("O gabc importado tem episemas ou puncta mora.", "imported");
     } catch (e) {
       toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" });
     }
+  }
+  /** Remover episemas e puncta mora: escolha anterior da sessão e oferta em toast. Nada age se o
+   *  canto exibido ou o projeto mudou desde a oferta. */
+  let lastStrip: MarkKinds | undefined;
+  function offerStrip(msg: string, scope: StripScope): void {
+    const id = shownId, epoch = projectEpoch;
+    toaster.show(msg, { action: { label: "Remover…", run: () => { if (id === shownId && epoch === projectEpoch) void runStrip(scope); } } });
+  }
+  async function runStrip(scope: StripScope): Promise<void> {
+    const id = shownId, epoch = projectEpoch;
+    const sel = view.state.selection.main;
+    const area = (): Range | undefined => scope === "pasted" ? view.state.field(pastedRange, false) ?? undefined
+      : scope === "selection" ? { from: sel.from, to: sel.to } : undefined;
+    if (scope === "pasted" && !area()) { toaster.show("O trecho colado não existe mais.", { kind: "warn" }); return; }
+    const counts = marksIn(view.state, area());
+    if (counts.vertical + counts.horizontal + counts.mora === 0) { toaster.show("Não há episemas nem puncta mora aqui."); return; }
+    const kinds = await openStripDialog(dialogHost, counts, lastStrip, scope);
+    if (!kinds || id !== shownId || epoch !== projectEpoch) return;
+    if (scope === "pasted" && !area()) { toaster.show("O trecho colado não existe mais.", { kind: "warn" }); return; }
+    lastStrip = kinds;
+    const n = applyStrip(view, kinds, area());
+    toaster.show(n === 0 ? "Nada a remover." : n === 1 ? "Removido: 1 sinal." : `Removidos: ${n} sinais.`);
+    view.focus();
   }
   /** Excluir: grupo com cantos pede confirmação (perigo à esquerda, Enter = Cancelar);
    *  todo excluir oferece Desfazer no toast (que não age se outro projeto foi aberto). */
@@ -1179,6 +1232,7 @@ async function boot() {
     { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); }, enabled: inEdit },
     { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); }, enabled: inEdit },
     { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"], enabled: inEdit },
+    { id: "edit.stripMarks", label: "Remover episemas e puncta mora…", run: () => runStrip(view.state.selection.main.empty ? "chant" : "selection"), enabled: inEdit },
     { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true, enabled: inEdit },
     { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true, enabled: inEdit },
     { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true, enabled: inEdit },
@@ -1194,6 +1248,7 @@ async function boot() {
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
     { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible, false) ?? false },
+    { id: "view.staffLetters", label: "Letras na pauta", run: toggleStaffLetters, checked: () => staffLettersOn },
     // PLAYBACK-OFF (2026-10-09): comandos de áudio e da onda.
     // { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
     // { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
@@ -1232,10 +1287,10 @@ async function boot() {
   // gateCommands lança para id desconhecido.)
   gateCommands(commands, [
     "file.save", "file.saveAs", "file.close", "project.newChant", "project.newGroup", "project.importGabc",
-    "file.exportGabc", "file.exportAllGabc", "file.exportPdf", "edit.undo", "edit.redo", "edit.format",
+    "file.exportGabc", "file.exportAllGabc", "file.exportPdf", "edit.undo", "edit.redo", "edit.format", "edit.stripMarks",
     "neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset",
     "neume.palette", "neume.name", "neumas.search", "view.edicao", "view.neumas",
-    "doc.toggleFamily", "view.preview", "view.split", "view.legend",
+    "doc.toggleFamily", "view.preview", "view.split", "view.legend", "view.staffLetters",
   ], () => screen === "project");
 
   const welcome = createWelcome(welcomeHost, {
@@ -1281,7 +1336,7 @@ async function boot() {
         { ...menuItem("edit.undo"), shortcut: "Ctrl+Z" },
         { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" },
         "---",
-        menuItem("neume.palette"), menuItem("neume.name"), menuItem("edit.format"),
+        menuItem("neume.palette"), menuItem("neume.name"), menuItem("edit.format"), menuItem("edit.stripMarks"),
         "---",
         menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"),
         menuItem("neume.moveRight"), menuItem("neume.moveReset"),
@@ -1292,7 +1347,7 @@ async function boot() {
       items: [
         menuItem("view.edicao"), menuItem("view.neumas"),
         "---",
-        menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"),
+        menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"), menuItem("view.staffLetters"),
         "---",
         menuItem("doc.toggleFamily"),
         "---",
@@ -1348,6 +1403,7 @@ async function boot() {
   // Atalhos no nível da JANELA (registro único), em fase de BOLHA: o CodeMirror
   // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com
   // preventDefault; o registro ignora eventos já tratados (sem disparo duplo).
+  installPrintGuard(window); // Ctrl+P nunca imprime, mesmo com campos que engolem a tecla
   window.addEventListener("keydown", (e) => { commands.handleKey(e); });
 
   // Boot pronto: o projeto inicial conta como "sem alterações".

@@ -1,6 +1,6 @@
 // test/app-commands.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { createRegistry, keyOf, displayKey, gateCommands } from "../src/app/commands";
+import { createRegistry, keyOf, displayKey, gateCommands, installPrintGuard } from "../src/app/commands";
 
 const key = (k: string, mods: Partial<KeyboardEventInit> = {}, target?: EventTarget) => {
   const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...mods });
@@ -179,15 +179,114 @@ describe("Ctrl+P nunca abre a impressão nativa", () => {
     expect(e.defaultPrevented).toBe(true);
     expect(run).not.toHaveBeenCalled();
   });
-  it("habilitado: executa e previne; Ctrl+Shift+P e Ctrl+Alt+P não são tocados", () => {
+  it("habilitado: executa e previne; Ctrl+Shift+P não exporta mas não imprime; Ctrl+Alt+P não é tocado", () => {
     const { r, run } = setup();
     const e = ctrlP();
     expect(r.handleKey(e)).toBe(true);
     expect(e.defaultPrevented).toBe(true);
     expect(run).toHaveBeenCalledTimes(1);
-    expect(r.handleKey(ctrlP({ shiftKey: true }))).toBe(false);
+    const es = ctrlP({ shiftKey: true });
+    expect(r.handleKey(es)).toBe(false);
+    expect(es.defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
     const e2 = ctrlP({ altKey: true });
     r.handleKey(e2);
     expect(e2.defaultPrevented).toBe(false);
+  });
+});
+
+describe("guarda de janela do Ctrl+P (campos que fazem stopPropagation)", () => {
+  const ctrlP = () => new KeyboardEvent("keydown", { key: "p", code: "KeyP", ctrlKey: true, bubbles: true, cancelable: true });
+  it("input que engole o evento: defaultPrevented true mesmo assim", () => {
+    const off = installPrintGuard(window);
+    const inp = document.createElement("input");
+    inp.addEventListener("keydown", (ev) => ev.stopPropagation());
+    document.body.append(inp);
+    const e = ctrlP();
+    inp.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    inp.remove();
+    off();
+  });
+  it("não toca em outras teclas; habilitado na mesa, o comando roda uma vez", () => {
+    const off = installPrintGuard(window);
+    const r = createRegistry();
+    const run = vi.fn();
+    r.register([{ id: "file.exportPdf", label: "PDF", run, keys: ["Ctrl+P"] }]);
+    window.addEventListener("keydown", (ev) => { r.handleKey(ev); }, { once: true });
+    const e = ctrlP();
+    window.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    const other = new KeyboardEvent("keydown", { key: "o", code: "KeyO", ctrlKey: true, cancelable: true });
+    window.dispatchEvent(other);
+    expect(other.defaultPrevented).toBe(false);
+    off();
+  });
+});
+
+describe("Ctrl+P no macOS", () => {
+  const ev = (mods: Partial<KeyboardEventInit>) => new KeyboardEvent("keydown", { key: "p", code: "KeyP", bubbles: true, cancelable: true, ...mods });
+  it("Mac: só Cmd+P é impressão; Ctrl+P fica para o CodeMirror", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    const off = installPrintGuard(window);
+    const c = ev({ ctrlKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(false);
+    const m = ev({ metaKey: true });
+    window.dispatchEvent(m);
+    expect(m.defaultPrevented).toBe(true);
+    off(); spy.mockRestore();
+  });
+  it("fora do Mac: Ctrl+P é impressão", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const off = installPrintGuard(window);
+    const c = ev({ ctrlKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(true);
+    off(); spy.mockRestore();
+  });
+});
+
+describe("Ctrl+Shift+P e Ctrl físico no macOS (onda final)", () => {
+  const ev = (mods: Partial<KeyboardEventInit>) => new KeyboardEvent("keydown", { key: "P", code: "KeyP", bubbles: true, cancelable: true, ...mods });
+  it("fora do Mac: a guarda previne Ctrl+Shift+P", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const off = installPrintGuard(window);
+    const c = ev({ ctrlKey: true, shiftKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(true);
+    off(); spy.mockRestore();
+  });
+  it("Mac: a guarda previne Cmd+Shift+P e deixa Ctrl+Shift+P", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    const off = installPrintGuard(window);
+    const m = ev({ metaKey: true, shiftKey: true });
+    window.dispatchEvent(m);
+    expect(m.defaultPrevented).toBe(true);
+    const c = ev({ ctrlKey: true, shiftKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(false);
+    off(); spy.mockRestore();
+  });
+  it("Mac: só Cmd vira Ctrl em keyOf; Ctrl físico não dispara atalhos do registro", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    expect(keyOf(key("s", { metaKey: true }))).toBe("Ctrl+S");
+    expect(keyOf(key("s", { ctrlKey: true }))).not.toBe("Ctrl+S");
+    expect(keyOf(key("s", { ctrlKey: true }))).not.toBe("S");
+    expect(keyOf(key("&", { metaKey: true, code: "Digit1" }))).toBe("Ctrl+Digit1");
+    const r = createRegistry();
+    const run = vi.fn();
+    r.register([{ id: "x", label: "x", run, keys: ["Ctrl+S"] }]);
+    expect(r.handleKey(key("s", { ctrlKey: true, cancelable: true }))).toBe(false);
+    expect(r.handleKey(key("s", { metaKey: true, cancelable: true }))).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+  it("fora do Mac: Ctrl e Cmd continuam sendo Ctrl", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    expect(keyOf(key("s", { ctrlKey: true }))).toBe("Ctrl+S");
+    expect(keyOf(key("s", { metaKey: true }))).toBe("Ctrl+S");
+    spy.mockRestore();
   });
 });
