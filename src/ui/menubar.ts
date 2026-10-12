@@ -1,4 +1,4 @@
-import type { Commands } from "./commands";
+import type { Commands } from "../app/commands";
 
 /** Barra de menus estilo MuseScore/Office (spec B). Rótulos e checks são
  *  FUNÇÕES reavaliadas a cada abertura — o dropdown é reconstruído na hora,
@@ -14,55 +14,85 @@ export interface MenuItem {
 export interface MenuSpec { label: string; items: MenuEntry[]; }
 
 export function createMenubar(
-  host: HTMLElement, commands: Commands, menus: MenuSpec[],
-): { closeAll(): void } {
+  host: HTMLElement, commands: Commands, menus: MenuSpec[], opts?: { brand?: string },
+): { closeAll(): void; setTitle(title: string, edited?: boolean): void; destroy(): void } {
   const bar = document.createElement("div");
-  bar.className = "menubar";
-  // Marca na linha do menubar (wireframe da spec B): "Notker Arquivo Editar…".
+  bar.className = "sc-menubar";
+  bar.setAttribute("role", "menubar");
   const brand = document.createElement("span");
-  brand.className = "toolbar-brand menubar-brand";
-  brand.textContent = "Notker";
-  brand.title = "Notker — editor de canto gregoriano";
+  brand.className = "sc-menubar__brand";
+  brand.textContent = opts?.brand ?? "N";
+  brand.setAttribute("aria-hidden", "true");
   bar.appendChild(brand);
   host.appendChild(bar);
+
+  const title = document.createElement("span");
+  title.className = "sc-menubar__title";
+  bar.appendChild(title);
+  function setTitle(t: string, edited = false): void {
+    title.textContent = t;
+    if (edited) {
+      const s = document.createElement("span");
+      s.className = "sc-menubar__state";
+      s.textContent = "— Editado";
+      title.appendChild(s);
+    }
+  }
+
+  // Elemento com foco antes de a barra assumi-lo (Alt ou abertura de menu):
+  // recebe o foco de volta quando o menu fecha por Esc ou por escolha de item.
+  let returnFocus: HTMLElement | null = null;
+  function rememberFocus(): void {
+    const a = document.activeElement;
+    if (a instanceof HTMLElement && a !== document.body && !bar.contains(a)) returnFocus = a;
+  }
+  function restoreFocus(): void {
+    const back = returnFocus;
+    returnFocus = null;
+    if (back && back.isConnected) back.focus();
+  }
 
   let openIdx: number | null = null;
   let pop: HTMLElement | null = null;
   const slots: HTMLElement[] = [];
   const tops: HTMLButtonElement[] = [];
 
-  function closeAll(): void {
+  function closeAll(restore = false): void {
     pop?.remove();
     pop = null;
     if (openIdx !== null) {
-      tops[openIdx].classList.remove("open");
       tops[openIdx].setAttribute("aria-expanded", "false");
     }
     openIdx = null;
     document.removeEventListener("mousedown", onDocMouseDown, true);
     document.removeEventListener("keydown", onDocKeyDown, true);
+    if (restore) restoreFocus(); else returnFocus = null;
   }
 
   function runItem(item: MenuItem): void {
     if (item.enabled && !item.enabled()) return;
-    closeAll();
-    void commands.run(item.cmd);
+    closeAll(true);
+    commands.run(item.cmd).catch((e) => console.error(`[notker] comando "${item.cmd}" falhou:`, e));
   }
 
   function buildPop(i: number): HTMLElement {
     const p = document.createElement("div");
-    p.className = "menu-pop";
+    p.className = "sc-menu";
     p.setAttribute("role", "menu");
+    p.style.position = "absolute";
+    p.style.top = "100%";
+    p.style.left = "0";
+    p.style.zIndex = "1500";
     for (const entry of menus[i].items) {
       if (entry === "---") {
         const sep = document.createElement("div");
-        sep.className = "menu-sep";
+        sep.className = "sc-menu__sep";
         sep.setAttribute("role", "separator");
         p.appendChild(sep);
         continue;
       }
       const b = document.createElement("button");
-      b.className = "menu-item";
+      b.className = "sc-menu__item";
       b.disabled = entry.enabled ? !entry.enabled() : false;
       // Toggle (tem checked()) é menuitemcheckbox; ação simples é menuitem.
       if (entry.checked) {
@@ -73,13 +103,12 @@ export function createMenubar(
       }
 
       const check = document.createElement("span");
-      check.className = "menu-check";
-      check.textContent = entry.checked?.() ? "❧" : "";
+      check.className = "sc-menu__check";
+      check.textContent = entry.checked?.() ? "✓" : "";
       const label = document.createElement("span");
-      label.className = "menu-label";
       label.textContent = typeof entry.label === "function" ? entry.label() : entry.label;
       const shortcut = document.createElement("span");
-      shortcut.className = "menu-shortcut";
+      shortcut.className = "sc-menu__kbd";
       shortcut.textContent = entry.shortcut ?? "";
 
       b.append(check, label, shortcut);
@@ -92,12 +121,9 @@ export function createMenubar(
   function openMenu(i: number): void {
     const wasOpen = openIdx !== null;
     pop?.remove();
-    if (openIdx !== null) {
-      tops[openIdx].classList.remove("open");
-      tops[openIdx].setAttribute("aria-expanded", "false");
-    }
+    if (openIdx !== null) tops[openIdx].setAttribute("aria-expanded", "false");
+    if (!wasOpen) rememberFocus();
     openIdx = i;
-    tops[i].classList.add("open");
     tops[i].setAttribute("aria-expanded", "true");
     pop = buildPop(i);
     slots[i].appendChild(pop);
@@ -112,12 +138,12 @@ export function createMenubar(
   }
 
   function enabledItems(): HTMLButtonElement[] {
-    return pop ? [...pop.querySelectorAll<HTMLButtonElement>(".menu-item:not(:disabled)")] : [];
+    return pop ? [...pop.querySelectorAll<HTMLButtonElement>(".sc-menu__item:not(:disabled)")] : [];
   }
 
   function onDocKeyDown(e: KeyboardEvent): void {
     if (openIdx === null) return;
-    if (e.key === "Escape") { closeAll(); return; }
+    if (e.key === "Escape") { closeAll(true); return; }
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       const delta = e.key === "ArrowRight" ? 1 : -1;
       openMenu((openIdx + delta + menus.length) % menus.length);
@@ -137,7 +163,7 @@ export function createMenubar(
     }
     if (e.key === "Enter") {
       const active = document.activeElement;
-      if (active instanceof HTMLButtonElement && active.classList.contains("menu-item")) {
+      if (active instanceof HTMLButtonElement && active.classList.contains("sc-menu__item")) {
         active.click();
         e.preventDefault();
       }
@@ -146,14 +172,21 @@ export function createMenubar(
 
   menus.forEach((menu, i) => {
     const slot = document.createElement("span");
-    slot.className = "menubar-slot";
+    slot.style.position = "relative"; // ancora o dropdown absoluto
     const top = document.createElement("button");
-    top.className = "menubar-top";
+    top.className = "sc-menubar__top";
     top.textContent = menu.label;
     top.setAttribute("aria-haspopup", "menu");
     top.setAttribute("aria-expanded", "false");
+    // Antes de o foco mover para o botão (mouse), guarda quem o tinha.
+    top.addEventListener("mousedown", rememberFocus);
+    top.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || openIdx !== null) return;
+      e.preventDefault();
+      if (returnFocus) restoreFocus(); else top.blur();
+    });
     top.addEventListener("click", () => {
-      if (openIdx === i) closeAll();
+      if (openIdx === i) closeAll(true);
       else openMenu(i);
     });
     top.addEventListener("mouseenter", () => {
@@ -165,5 +198,32 @@ export function createMenubar(
     tops.push(top);
   });
 
-  return { closeAll };
+  // Alt sozinho (keydown+keyup sem outra tecla no meio) foca o 1º menu; com
+  // um menu aberto, fecha-o e devolve o foco.
+  const ac = new AbortController();
+  const { signal } = ac;
+  let altAlone = false;
+  const inField = (t: EventTarget | null) =>
+    t instanceof HTMLElement && (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable);
+  document.addEventListener("keydown", (e) => {
+    altAlone = e.key === "Alt" && !e.ctrlKey && !e.shiftKey && !e.metaKey && !inField(e.target);
+  }, { capture: true, signal });
+  document.addEventListener("keyup", (e) => {
+    if (e.key === "Alt" && altAlone) {
+      altAlone = false;
+      e.preventDefault();
+      if (openIdx !== null) { closeAll(true); return; }
+      rememberFocus();
+      tops[0]?.focus();
+    }
+    altAlone = false;
+  }, { capture: true, signal });
+
+  window.addEventListener("blur", () => { altAlone = false; }, { signal });
+
+  return {
+    closeAll: () => closeAll(),
+    setTitle,
+    destroy: () => { ac.abort(); closeAll(); bar.remove(); },
+  };
 }

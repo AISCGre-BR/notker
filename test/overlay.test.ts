@@ -36,3 +36,26 @@ describe("overlay", () => {
     expect(() => parseOverlay('{"schema":1,"kind":"outro","entries":{}}')).toThrow();
   });
 });
+
+import { addNameToEntries } from "../src/neume/overlay";
+describe("addNameToEntries", () => {
+  const empty = { schema: 1 as const, kind: "notker-neume-overlay" as const, entries: {} };
+  const es = [{ id: "a", displayNames: ["pes"] }, { id: "b", displayNames: ["clivis"] }];
+  it("vazio/espaços não muda", () => {
+    expect(addNameToEntries(empty, es, "   ").changed).toBe(false);
+    expect(addNameToEntries(empty, es, "").changed).toBe(false);
+  });
+  it("duplicata (caixa/trim) de nome do catálogo ou do usuário não muda", () => {
+    expect(addNameToEntries(empty, [es[0]], " PES ").changed).toBe(false);
+    const r = addNameToEntries(empty, [es[0]], "podatus");
+    const r2 = addNameToEntries(r.overlay, [{ id: "a", displayNames: ["podatus", "pes"] }], "Podatus");
+    expect(r2.changed).toBe(false);
+    expect(addNameToEntries(empty, [es[0]], "Pés").changed).toBe(true); // acento preservado
+  });
+  it("nome novo entra em todos os ids sem duplicata", () => {
+    const r = addNameToEntries(empty, es, " novo ");
+    expect(r.changed).toBe(true);
+    expect(r.overlay.entries.a.names).toEqual(["novo"]);
+    expect(r.overlay.entries.b.names).toEqual(["novo"]);
+  });
+});

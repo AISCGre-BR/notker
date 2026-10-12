@@ -6,29 +6,29 @@
  * tokens GABC/NABC (classes `tok-*` aplicadas pelo highlighter) ficam num registro
  * quente e quase-monocromático, com rubrica reservada a clave/barra/separador.
  *
- * Usa as CSS vars de `src/ui/tokens.css` (carregadas em :root) p/ coesão com o resto.
+ * Usa as CSS vars de `src/ui/notker.css` (carregadas em :root) p/ coesão com o resto.
  */
 import { EditorView } from "@codemirror/view";
 
 export const highlightTheme = EditorView.theme(
   {
     "&": {
-      backgroundColor: "var(--cream)",
+      backgroundColor: "var(--surface)",
       color: "var(--ink)",
       height: "100%",
     },
     ".cm-scroller": {
-      fontFamily: '"Source Serif 4", "Charter", Georgia, serif',
+      fontFamily: "var(--font-mono)",
       fontSize: "15px",
       lineHeight: "1.7",
     },
     ".cm-content": { caretColor: "var(--rubric)", padding: "8px 0" },
     ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--rubric)", borderLeftWidth: "2px" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-      backgroundColor: "rgba(160, 37, 49, 0.13)",
+      backgroundColor: "var(--notker-selection)",
     },
     ".cm-gutters": {
-      backgroundColor: "var(--cream-deep)",
+      backgroundColor: "var(--parchment-deep)",
       color: "var(--ink-muted)",
       border: "none",
       borderRight: "1px solid var(--rule)",
@@ -38,37 +38,40 @@ export const highlightTheme = EditorView.theme(
       padding: "0 8px 0 12px",
       fontVariantNumeric: "tabular-nums",
     },
-    ".cm-activeLine": { backgroundColor: "rgba(120, 90, 40, 0.05)" },
-    ".cm-activeLineGutter": { backgroundColor: "var(--cream)", color: "var(--ink-soft)" },
+    ".cm-activeLine": { backgroundColor: "var(--ink-wash)" },
+    ".cm-activeLineGutter": { backgroundColor: "var(--surface)", color: "var(--ink-soft)" },
     ".cm-foldPlaceholder": {
-      backgroundColor: "var(--cream-deep)",
+      backgroundColor: "var(--parchment-deep)",
       border: "1px solid var(--rule)",
       color: "var(--ink-muted)",
     },
     ".cm-tooltip": {
       backgroundColor: "var(--surface)",
       border: "1px solid var(--rule)",
-      borderRadius: "0",
-      boxShadow: "0 6px 22px rgba(58, 46, 30, 0.16)",
-      fontFamily: '"Source Serif 4", serif',
+      borderRadius: "var(--radius-md)",
+      boxShadow: "var(--elev-3)",
+      fontFamily: "var(--font-sans)",
     },
     ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-      backgroundColor: "var(--cream-deep)",
+      backgroundColor: "var(--rubric-wash)",
       color: "var(--ink)",
     },
     // ── tokens GABC/NABC: tinta quente, quase-monocromática, rubrica nos sinais ──
-    ".tok-header-key": { color: "#6b5636", fontWeight: "600" },
-    ".tok-header-val": { color: "#8a7a5e" },
+    ".tok-header-key": { color: "var(--tok-header-key)", fontWeight: "600" },
+    ".tok-header-val": { color: "var(--tok-header-val)" },
     ".tok-separator": { color: "var(--rubric)", fontWeight: "700" },
     ".tok-lyric": { color: "var(--ink)" },
     ".tok-clef": { color: "var(--rubric)", fontWeight: "700" },
-    ".tok-note": { color: "#3f4a6b" },
-    ".tok-alteration": { color: "#6d4a86", fontWeight: "600" },
-    ".tok-rhythmic": { color: "#8a6d1f" },
-    ".tok-nabc": { color: "#9c5a2e" },
-    ".tok-neume-shape": { color: "#7a4521", fontWeight: "600" },
+    ".tok-note": { color: "var(--tok-note)" },
+    ".tok-alteration": { color: "var(--tok-alteration)", fontWeight: "600" },
+    ".tok-rhythmic": { color: "var(--tok-rhythmic)" },
+    ".tok-nabc": { color: "var(--tok-nabc)" },
+    ".tok-neume-shape": { color: "var(--tok-neume-shape)", fontWeight: "600" },
     ".tok-bar": { color: "var(--rubric)", fontWeight: "700" },
-    ".tok-comment": { color: "#9a8f7e", fontStyle: "italic" },
+    ".tok-comment": { color: "var(--ink-muted)", fontStyle: "italic" },
   },
+  // dark:false é intencional: todas as superfícies do CM (seleção, gutters, tooltips, lint,
+  // autocompletar) são sobrescritas acima com tokens do Parchment; verificado no
+  // debug/shell-probe (Vigília) em 2026-10-09 — nada fica claro/ilegível.
   { dark: false },
 );

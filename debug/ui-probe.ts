@@ -1,7 +1,9 @@
 /** ui-probe.ts — harness de diagnóstico da UI spec B (NÃO faz parte do app).
  *  Monta menubar + toolbar + wave-bar com estado falso p/ screenshot headless.
  *  Query string: ?menu=N abre o N-ésimo menu; ?wave=1 mostra a barra da onda. */
-import "../src/ui/tokens.css";
+import "parchment-design/parchment.css";
+import "parchment-design/components.css";
+import "../src/ui/notker.css";
 import { createMenubar } from "../src/ui/menubar";
 import { createToolbar } from "../src/ui/toolbar";
 import { createWaveBar } from "../src/ui/wave-bar";

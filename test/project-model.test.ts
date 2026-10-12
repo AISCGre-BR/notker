@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   newProject, ephemeralFromGabc, effectiveFamily, getActiveDoc,
-  withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
+  withActiveContent, setActive, setDocFamily, addDoc, removeDoc, moveDoc, insertDocAt,
   toBundle, fromBundle,
 } from "../src/project/model";
 
@@ -143,4 +143,42 @@ describe("interpretation (onda) no bundle", () => {
     const p3 = fromBundle(bundleWithInvalidJson.project_json, bundleWithInvalidJson.files, undefined);
     expect(getActiveDoc(p3).interpretation).toBeUndefined();
   });
+
+  it("moveDoc sobe, desce e não sai das pontas", () => {
+    let p = newProject({ family: "stgall", name: "A" });
+    p = addDoc(p, { title: "B", content: "" });
+    p = addDoc(p, { title: "C", content: "" });
+    const ids = () => p.docs.map((d) => d.title).join("");
+    const [a, , c] = p.docs.map((d) => d.id);
+    p = moveDoc(p, c, -1); expect(ids()).toBe("ACB");
+    p = moveDoc(p, c, -1); expect(ids()).toBe("CAB");
+    p = moveDoc(p, c, -1); expect(ids()).toBe("CAB");
+    p = moveDoc(p, a, 1); expect(ids()).toBe("CBA");
+    p = moveDoc(p, a, 1); expect(ids()).toBe("CBA");
+  });
 });
+
+describe("insertDocAt", () => {
+  const mk = () => {
+    let p = newProject({ family: "stgall", name: "A" });
+    p = addDoc(p, { title: "B", content: "b" });
+    p = addDoc(p, { title: "C", content: "c" });
+    return p;
+  };
+  it("reinsere no índice original, preservando o conteúdo atual dos outros", () => {
+    let p = mk();
+    const removed = p.docs[1];
+    p = removeDoc(p, removed.id);
+    p = withActiveContent(p, "editado");
+    const r = insertDocAt(p, removed, 1);
+    expect(r.docs.map((d) => d.title)).toEqual(["A", "B", "C"]);
+    expect(r.docs[0].content).toBe("editado");
+  });
+  it("índice acima do tamanho vai ao fim; abaixo de 0 ao início", () => {
+    const p = mk();
+    const d = { id: "x", title: "X", content: "" };
+    expect(insertDocAt(p, d, 99).docs.at(-1)!.id).toBe("x");
+    expect(insertDocAt(p, d, -5).docs[0].id).toBe("x");
+  });
+});
+

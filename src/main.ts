@@ -1,4 +1,11 @@
-import "./ui/tokens.css";
+import "parchment-design/parchment.css";
+import "parchment-design/components.css";
+import "@fontsource-variable/source-sans-3";
+import "@fontsource-variable/source-serif-4";
+import "@fontsource-variable/source-serif-4/wght-italic.css";
+import "./ui/notker.css";
+import { applyTheme, loadTheme, setTheme, type ThemeChoice } from "./app/theme";
+import { createToaster } from "./ui/pd/toast";
 import { EditorView } from "@codemirror/view";
 import { Compartment } from "@codemirror/state";
 import { createEditor, externalLinter } from "./editor/editor";
@@ -13,7 +20,7 @@ import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
 import { loadNeumeDb } from "./neume/db-load";
 import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
-import { mergeEntry, addName, mergeOverlays, cloneOverlay } from "./neume/overlay";
+import { mergeEntry, addNameToEntries, mergeOverlays, cloneOverlay } from "./neume/overlay";
 import { createAutosave } from "./neume/autosave";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
@@ -21,11 +28,14 @@ import { nabcMoveKeymap, runMove } from "./neume/nabc-move";
 import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
-import { createCommands } from "./ui/commands";
+import { createRegistry } from "./app/commands";
+import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
-import { createMenubar } from "./ui/menubar";
+import { installTooltips } from "./ui/pd/tooltip";
+import { createMenubar, type MenuItem } from "./ui/menubar";
 import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
+import { openDialog } from "./ui/pd/dialog";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
@@ -40,10 +50,10 @@ import { createOverlayPanel, type OverlayPanel } from "./overlay-ui/panel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
-import { openProject, saveProject, exportCurrentGabc, exportAllGabc } from "./files/project-io";
+import { openProject, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveDoc, effectiveFamily,
-  withActiveContent, setActive, setDocFamily, addDoc, removeDoc,
+  withActiveContent, setActive, setDocFamily, addDoc, removeDoc, insertDocAt, moveDoc, gabcName,
 } from "./project/model";
 import { createDocList } from "./project/doc-list";
 import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
@@ -56,13 +66,9 @@ type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
 const URI = "inmemory://notker.gabc";
 let diagnostics: Diagnostic[] = [];
 
-/** Escreve uma linha de status no rodapé (instrumentação visível de runtime). */
-function setStatus(msg: string): void {
-  const el = document.querySelector("#status");
-  if (el) el.textContent = msg;
-}
-
 async function boot() {
+  const toaster = createToaster(document.querySelector<HTMLElement>("#toast-host")!);
+  applyTheme(loadTheme());
   const app = document.querySelector<HTMLElement>("#app")!;
   app.textContent = "";
 
@@ -71,15 +77,15 @@ async function boot() {
   const extraExtensions: Parameters<typeof createEditor>[2] = [highlightTheme];
 
   // Highlighter é opcional: uma falha de carga do WASM não pode impedir o editor
-  // de montar. Reportamos o resultado no rodapé de status.
-  let highlightStatus = "realce: ativo";
+  // de montar. Falha vira aviso (toast) depois que o editor está de pé.
+  let highlightFailed = false;
   let getTree: () => Tree | null = () => null;
   try {
     const ts = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
     extraExtensions.push(ts.extension);
     getTree = ts.getTree;
   } catch (err) {
-    highlightStatus = "realce: FALHOU — " + String(err);
+    highlightFailed = true;
     console.error("[notker] falha ao carregar highlighter WASM:", err);
   }
 
@@ -121,7 +127,7 @@ async function boot() {
   });
   onDocChange = sync;
 
-  setStatus(highlightStatus + "  ·  LSP: conectado");
+  if (highlightFailed) toaster.show("O realce de sintaxe não carregou. O editor funciona sem cores.", { kind: "warn" });
 
   // effectiveRef: hoistado para fora do bloco F2 para que os comandos o alcancem.
   let effectiveRef: () => EffectiveEntry[] = () => [];
@@ -129,6 +135,7 @@ async function boot() {
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
   let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
   let reindex = () => {};
+  let paletteRef: { open(v: EditorView): void } | null = null;
   // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora pelo
   // painel); só a ESCRITA é coalescida (300 ms). schedule() resolve quando o disco
   // confirma (indicador "salvo ✓" verdadeiro); flush() antes de import/export/fechar.
@@ -136,9 +143,8 @@ async function boot() {
     try {
       await saveUserOverlay(overlay);
       reindex();
-      setStatus("nomes salvos ✓");
     } catch (e) {
-      setStatus("erro ao salvar nomes: " + String(e));
+      toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" });
       throw e;
     }
   }, 300);
@@ -155,19 +161,12 @@ async function boot() {
   const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
-  function updateFamilyIndicator(): void {
-    const el = document.querySelector("#family");
-    if (el) {
-      el.textContent = "✠ " + familyLabel(currentFamily());
-      (el as HTMLElement).title = "Família ativa (clique ou Ctrl/Cmd+Shift+G para alternar)";
-    }
-  }
   function toggleFamily(): void {
     const f: Family = currentFamily() === "stgall" ? "laon" : "stgall";
     project = setDocFamily(project, project.activeId, f);
-    updateFamilyIndicator();
+    docList.render(project);
     reindex();
-    setStatus("família do documento: " + familyLabel(f) + " — busca/hover priorizam esta notação");
+    toaster.show("Família do canto: " + familyLabel(f) + ".");
   }
 
   // Carrega db de neumas e reconfigura o compartment F2.
@@ -194,23 +193,28 @@ async function boot() {
       lookupByNabc: (nabc: string): EffectiveEntry[] =>
         (byNabc.get(nabc) ?? []).map((e) => mergeEntry(e, overlay.entries[e.id])),
       activeFamily: () => currentFamily(),
-      onAddName: async (id: string) => {
-        const name = window.prompt("Novo nome para este neuma:");
-        if (!name) return;
-        try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
-        overlay = addName(overlay, id, name);
+      onName: async (ids: string[], name: string) => {
+        const n = name.trim();
+        const targets = ids.map((id) => ({
+          id,
+          displayNames: effective().find((e) => e.id === id)?.displayNames ?? [],
+        }));
+        const r = addNameToEntries(overlay, targets, n);
+        overlay = r.overlay;
+        const changed = r.changed;
+        if (!changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
         reindex();
         overlayPanel?.refresh();
-        try { await saveUserOverlay(overlay); setStatus("nome adicionado: " + name); }
-        catch (e) { setStatus("nome adicionado (não persistido): " + String(e)); }
+        try { await overlayAutosave.schedule(); toaster.show(`Nome “${n}” cadastrado.`); }
+        catch { /* o autosave já mostrou o erro */ }
       },
     };
-    view.dispatch({ effects: neumeCompartment.reconfigure([...neumeExtensions(rt), ...gabcAssistExtensions(getTree)]) });
-    updateFamilyIndicator();
-    document.querySelector("#family")?.addEventListener("click", toggleFamily);
+    const neume = neumeExtensions(rt);
+    paletteRef = neume.palette;
+    view.dispatch({ effects: neumeCompartment.reconfigure([...neume.extensions, ...gabcAssistExtensions(getTree)]) });
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
-    setStatus("neumas: indisponível — " + String(err));
+    toaster.show("O catálogo de neumas não carregou. " + String(err), { kind: "error" });
   }
 
   /** Substitui todo o conteúdo do editor (usado ao abrir arquivo). */
@@ -242,7 +246,7 @@ async function boot() {
 
   const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
     onFactorDrag: (key, syl, note, startFactor, startClientY) => {
-      if (playbackMode !== "interpretado") { setStatus("onda: edição só no modo interpretado"); return; }
+      if (playbackMode !== "interpretado") { toaster.show("A onda só é editável no modo interpretado.", { kind: "warn" }); return; }
       dragState = { key, syl, note, startFactor, startClientY };
     },
     onHover: (syl) => {
@@ -283,6 +287,7 @@ async function boot() {
    *  o controller de lanes integrado ao SVG da partitura. */
   function rebuildWave(): void {
     waveBar?.setCount(Object.keys(wave.factors).length);
+    toolbarHandle?.refresh(); // wave.reset só habilita com fatores editados
     const map = panel?.sourceMap?.() ?? [];
     const texto = view.state.doc.toString();
     const reals = map.filter((s) => s.syllableIndex >= 1);
@@ -312,7 +317,7 @@ async function boot() {
     // Primeira vez (hash vazio): adota o hash sem marcar como stale
     if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
     if (Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h)
-      setStatus("interpretação desatualizada — o canto foi editado");
+      toaster.show("O canto mudou depois da interpretação. Revise a onda.", { kind: "warn" });
     rebuildWave();
   }
 
@@ -344,19 +349,17 @@ async function boot() {
   }
 
   // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
-  // O panel pode ser null se o preview falhou — todos os caminhos degradam com setStatus.
+  // O panel pode ser null se o preview falhou — todos os caminhos degradam com toast.
   const player = createPlayer(() => new AudioContext(), "voz");
   let playbackMode: PlaybackMode = "interpretado";
 
   /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
-  function stopPlayback(reason?: string): void {
+  function stopPlayback(): void {
     player.stop();
-    toolbarHandle?.setLabel("playToggle", "Tocar");
-    toolbarHandle?.setPressed("playToggle", false);
+    toolbarHandle?.refresh();
     const svg = panel?.svgEl?.() ?? null;
     if (svg) clearHighlight(svg);
     waveCursorClear();
-    setStatus(reason ?? "playback: parado");
   }
 
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
@@ -364,15 +367,47 @@ async function boot() {
   const docList = createDocList(docListHost, {
     onSelect: (id) => switchToDoc(id),
     onAdd: () => void addNewDoc(),
-    onRemove: (id) => { project = removeDoc(project, id); syncFromProject(); },
+    onImport: () => void importGabcAsDoc(),
+    onRemove: (id) => {
+      captureEditorIntoProject();
+      const removed = project.docs.find((d) => d.id === id);
+      const index = project.docs.findIndex((d) => d.id === id);
+      const wasActive = project.activeId === id;
+      const next = removeDoc(project, id);
+      if (next === project || !removed) return; // último canto: não remove
+      project = next;
+      syncFromProject();
+      toaster.show("Canto excluído.", {
+        action: { label: "Desfazer", run: () => {
+          captureEditorIntoProject();
+          project = insertDocAt(project, removed, index);
+          if (wasActive) project = setActive(project, removed.id);
+          syncFromProject();
+          docList.render(project);
+        } },
+      });
+    },
+    onSetFamily: (id, f) => {
+      captureEditorIntoProject();
+      project = setDocFamily(project, id, f);
+      docList.render(project);
+      if (id === project.activeId) reindex();
+      toaster.show("Família do canto: " + familyLabel(f) + ".");
+    },
+    onMove: (id, delta) => {
+      captureEditorIntoProject();
+      project = moveDoc(project, id, delta);
+      docList.render(project);
+    },
   });
 
+  let menubar: ReturnType<typeof createMenubar> | undefined;
   /** Reflete o doc ativo do projeto no editor + indicadores. */
   function syncFromProject(): void {
-    if (player.playing) stopPlayback("playback: interrompido (troca de canto)");
+    menubar?.setTitle(project.title);
+    if (player.playing) stopPlayback();
     replaceDoc(getActiveDoc(project).content);
     docList.render(project);
-    updateFamilyIndicator();
     reindex();
     // Onda: restaura a interpretação persistida, ou cria vazia para o novo canto
     wave = getActiveDoc(project).interpretation ?? emptyWave(gabcBodyHash(getActiveDoc(project).content));
@@ -388,13 +423,14 @@ async function boot() {
     project = { ...project, docs };
   }
   function switchToDoc(id: string): void {
+    if (id === project.activeId) return;
     captureEditorIntoProject();
     project = setActive(project, id);
     syncFromProject();
   }
   // Adiciona um canto novo via popup (família por botões-toggle, sem radio nativo).
   async function addNewDoc(): Promise<void> {
-    const r = await newDocumentDialog(dialogHost, { title: "Adicionar canto" });
+    const r = await newDocumentDialog(dialogHost, { title: "Novo canto", family: effectiveFamily(project, project.activeId) });
     if (!r) return;
     captureEditorIntoProject();
     const content = `name: ${r.name ?? "Novo"};\n${r.office ? `office-part: ${r.office};\n` : ""}%%\n(c4) `;
@@ -402,66 +438,76 @@ async function boot() {
     project = setActive(project, project.docs[project.docs.length - 1].id);
     syncFromProject();
     view.focus();
-    setStatus(`canto adicionado: ${r.name ?? "Novo"}`);
+  }
+  // Importa um .gabc solto como novo canto do projeto e o ativa.
+  async function importGabcAsDoc(): Promise<void> {
+    try {
+      const f = await pickGabcFile();
+      if (!f) return;
+      captureEditorIntoProject();
+      project = addDoc(project, { title: gabcName(f.content, f.name), content: f.content });
+      project = setActive(project, project.docs[project.docs.length - 1].id);
+      syncFromProject();
+      view.focus();
+    } catch (e) {
+      toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" });
+    }
   }
   docList.render(project);
 
-  const commands = createCommands({
+  const commands = createRegistry();
+  const h = {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
     // travava o WebKitGTK). O nome vira o cabeçalho name: do canto inicial.
     newProjectCmd: async () => {
       const r = await newDocumentDialog(dialogHost, {
         title: "Novo projeto",
-        warning: "substitui o projeto atual — alterações não salvas serão perdidas",
-        okLabel: "Substituir",
+        warning: "O projeto atual será fechado. Alterações não salvas serão perdidas.",
+        okLabel: "Criar",
       });
-      if (!r) { setStatus("Novo: cancelado"); return; }
+      if (!r) return;
       project = newProject({ family: r.family, name: r.name, office: r.office });
       syncFromProject();
       view.focus();
-      setStatus("novo projeto — família " + familyLabel(r.family));
     },
     openFile: async () => {
       try {
-        setStatus("abrindo…");
         const p = await openProject();
-        if (!p) { setStatus("abrir: cancelado"); return; }
+        if (!p) return;
         project = p;
         syncFromProject();
-        setStatus("aberto: " + (p.path ?? "projeto (.gabc importado)"));
-      } catch (err) { setStatus("abrir ERRO: " + String(err)); console.error(err); }
+      } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     saveFile: async () => {
       try {
         captureEditorIntoProject();
-        setStatus("salvando projeto…");
         const path = await saveProject(project);
-        if (!path) { setStatus("salvar: cancelado"); return; }
+        if (!path) return;
         project = { ...project, path };
-        setStatus("salvo: " + path);
-      } catch (err) { setStatus("salvar ERRO: " + String(err)); console.error(err); }
+        menubar?.setTitle(project.title);
+        toaster.show("Projeto salvo.");
+      } catch (err) { toaster.show("Salvar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     exportGabc: async () => {
       try {
         captureEditorIntoProject();
         const out = await exportCurrentGabc(project);
-        setStatus(out ? "exportado .gabc: " + out : "exportar: cancelado");
-      } catch (err) { setStatus("exportar ERRO: " + String(err)); console.error(err); }
+        if (out) toaster.show("Exportado.");
+      } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     exportAllGabcCmd: async () => {
       try {
         captureEditorIntoProject();
         const n = await exportAllGabc(project);
-        setStatus(n ? `exportados ${n} .gabc` : "exportar todos: cancelado");
-      } catch (err) { setStatus("exportar todos ERRO: " + String(err)); console.error(err); }
+        if (n) toaster.show(`${n} cantos exportados.`);
+      } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
     },
     format: async () => {
       try {
         const f = await formatDocument(client, URI, view.state.doc);
-        if (f != null) { replaceDoc(f); setStatus("formatado"); }
-        else setStatus("formatar: sem alterações");
+        if (f != null) replaceDoc(f);
       } catch (err) {
-        setStatus("Ctrl+Shift+F ERRO: " + String(err));
+        toaster.show("Formatar falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao formatar:", err);
       }
     },
@@ -469,19 +515,20 @@ async function boot() {
       try {
         const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
         await exportOverlay(overlay);
-        setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
+        if (n) toaster.show(`${n} nomes exportados.`);
+        else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
       } catch (err) {
-        setStatus("Ctrl+Alt+E ERRO: " + String(err));
+        toaster.show("Exportar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao exportar overlay:", err);
       }
     },
     importOverlay: async () => {
       try {
         const imported = await importOverlay();
-        if (!imported) { setStatus("importar: cancelado"); return; }
+        if (!imported) return;
         const n = Object.keys(imported.entries).length;
         if (n === 0) {
-          setStatus("importar: arquivo de nomes vazio (0 entradas) — nada a importar");
+          toaster.show("O arquivo não tem nomes para importar.", { kind: "warn" });
           return;
         }
         await overlayAutosave.flush();
@@ -489,18 +536,17 @@ async function boot() {
         await saveUserOverlay(overlay);
         reindex();
         overlayPanel?.refresh();
-        setStatus(`nomes importados: ${n} entrada(s)`);
+        toaster.show(`${n} nomes importados.`);
       } catch (err) {
-        setStatus("importar ERRO (arquivo inválido?): " + String(err));
+        toaster.show("Importar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao importar overlay:", err);
       }
     },
     toggleFamily: () => { toggleFamily(); },
-    // palette.ts não exporta função open isolada; openRun é interno ao keymap.
-    // Estratégia: focar o editor e disparar KeyboardEvent "F2" no contentDOM.
     openSearch: () => {
-      view.focus();
-      view.contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true }));
+      if (!paletteRef) return;
+      if (!document.querySelector(".neume-palette")) view.focus();
+      paletteRef.open(view);
     },
     openOverlayPanel: () => {
       const host = document.querySelector<HTMLElement>("#overlay-host")!;
@@ -520,10 +566,11 @@ async function boot() {
           try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
           const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
           await exportOverlay(overlay);
-          setStatus(n ? `nomes exportados: ${n} entrada(s)` : "exportar: nenhum nome cadastrado — arquivo vazio");
+          if (n) toaster.show(`${n} nomes exportados.`);
+          else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
         },
         onImport: async () => {
-          await commands.run("importOverlay"); // flush + merge + refresh do painel lá dentro
+          await commands.run("names.import"); // flush + merge + refresh do painel lá dentro
         },
         onClose: closePanel,
       });
@@ -547,10 +594,9 @@ async function boot() {
     // (leitura de solmização); sinais e legato só no interpretado.
     modeToggle: () => {
       playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
-      toolbarHandle?.setLabel("modeToggle", playbackMode === "interpretado" ? "Interpretado" : "Solfejo");
+      toolbarHandle?.refresh();
       waveBar?.setSolfejo(playbackMode !== "interpretado");
-      if (player.playing) stopPlayback("playback: parado (troca de modo)");
-      setStatus("modo de playback: " + playbackMode);
+      if (player.playing) stopPlayback();
     },
     // Tuotilo: alterna Tocar↔Parar no playback semiológico.
     playToggle: () => {
@@ -561,7 +607,7 @@ async function boot() {
       // Obtém mapa de sílabas do preview; sem preview → degrada com status
       const map = panel?.sourceMap?.();
       if (!map || map.length === 0) {
-        setStatus("playback indisponível (preview sem dados)");
+        toaster.show("Nada para tocar: a partitura ainda não foi desenhada.", { kind: "warn" });
         return;
       }
       const texto = view.state.doc.toString();
@@ -571,7 +617,7 @@ async function boot() {
       const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
       const syls = extractAll(texto, map);
       if (syls.length === 0) {
-        setStatus("playback: nenhuma sílaba encontrada");
+        toaster.show("Nada para tocar neste canto.", { kind: "warn" });
         return;
       }
       const tl = buildTimeline(syls);
@@ -583,13 +629,11 @@ async function boot() {
       const range = syllableRangeOfSelection(map, sel.from, sel.to);
       const toPlay = range ? sliceFromSyllable(shaped, range[0]) : shaped;
       if (toPlay.notes.length === 0) {
-        setStatus("playback: seleção sem notas");
+        toaster.show("A seleção não tem notas.", { kind: "warn" });
         return;
       }
       const svg = panel?.svgEl?.() ?? null;
-      toolbarHandle?.setLabel("playToggle", "Parar");
-      toolbarHandle?.setPressed("playToggle", true);
-      setStatus(range ? "playback: da seleção ao fim…" : "playback: tocando…");
+      toolbarHandle?.refresh();
       let lastSyl = -1;
       player.play(
         toPlay,
@@ -602,8 +646,9 @@ async function boot() {
           // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
           waveLanes.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
         },
-        () => { stopPlayback("playback: fim"); },
+        () => { stopPlayback(); },
       );
+      toolbarHandle?.refresh(); // agora player.playing já é true
     },
     toggleWave: () => {
       const on = !waveLanes.enabled();
@@ -618,124 +663,146 @@ async function boot() {
       if (on) syncWaveWithDoc();
       waveBar?.setVisible(on);
       waveBar?.setSolfejo(playbackMode !== "interpretado");
-      toolbarHandle?.setPressed("toggleWave", on);
-      setStatus(on ? "onda: visível" : "onda: oculta");
+      toolbarHandle?.refresh();
     },
     resetWave: () => {
       wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
       rebuildWave();
-      setStatus("onda: restaurada ao neumático");
     },
-  });
+  };
 
-  // ── Spec B: menubar (comandos completos) + toolbar contextual (frequentes) ──
-  // Rótulos/checks dos menus são funções — reavaliados a cada abertura.
-  createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
+  commands.register([
+    { id: "file.newProject", label: "Novo projeto…", run: h.newProjectCmd },
+    { id: "file.open", label: "Abrir…", run: h.openFile, keys: ["Ctrl+O"] },
+    { id: "file.save", label: "Salvar", run: h.saveFile, keys: ["Ctrl+S"] },
+    { id: "file.exportGabc", label: "Exportar .gabc do canto…", run: h.exportGabc },
+    { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: h.exportAllGabcCmd },
+    { id: "names.export", label: "Exportar nomes…", run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
+    { id: "names.import", label: "Importar nomes…", run: h.importOverlay, keys: ["Ctrl+Alt+I"] },
+    { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); } },
+    { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); } },
+    { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"] },
+    { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true },
+    { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true },
+    { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true },
+    { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true },
+    { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"] },
+    { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
+    { id: "names.panel", label: "Nomes dos neumas…", icon: "tag", run: h.openOverlayPanel, keys: ["Ctrl+Alt+N"] },
+    { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
+    { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
+    { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
+    { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible) },
+    { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
+    { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
+    { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },
+    { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() && Object.keys(wave.factors).length > 0 },
+  ]);
+
+  let themeChoice = loadTheme();
+  const themeCmd = (choice: ThemeChoice, label: string) => ({
+    id: `view.theme.${choice}`, label, run: () => { themeChoice = choice; setTheme(choice); },
+    checked: () => themeChoice === choice,
+  });
+  // Provisórios (toasts) até o diálogo da Task 8.
+  const showShortcuts = () => void openDialog(dialogHost, {
+    title: "Atalhos de teclado",
+    body: commands.ids().filter((id) => commands.shortcut(id)).map((id) => commands.label(id) + " — " + commands.shortcut(id)).join(" · "),
+    actions: [{ id: "ok", label: "Fechar", kind: "filled" }],
+  });
+  const showAbout = () => void openDialog(dialogHost, {
+    title: "Sobre o Notker",
+    body: "Notker " + __APP_VERSION__ + " — editor de canto gregoriano. GPL-3.",
+    actions: [{ id: "ok", label: "Fechar", kind: "filled" }],
+  });
+  commands.register([
+    themeCmd("system", "Tema: sistema"),
+    themeCmd("light", "Tema: Pergaminho"),
+    themeCmd("dark", "Tema: Vigília"),
+    { id: "help.shortcuts", label: "Atalhos de teclado…", run: showShortcuts },
+    { id: "help.about", label: "Sobre o Notker…", run: showAbout },
+  ]);
+
+  // ── Menubar: menus montados a partir do registro único de comandos ──
+  const menuItem = (id: string): MenuItem => {
+    const def = commands.get(id);
+    return {
+      cmd: id,
+      label: () => commands.label(id),
+      shortcut: commands.shortcut(id),
+      checked: def?.checked,
+      enabled: def?.enabled,
+    };
+  };
+  menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
     {
       label: "Arquivo",
       items: [
-        { cmd: "newProjectCmd", label: "Novo projeto…" },
-        { cmd: "openFile", label: "Abrir…", shortcut: "Ctrl+O" },
-        { cmd: "saveFile", label: "Salvar", shortcut: "Ctrl+S" },
+        menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"),
         "---",
-        { cmd: "exportGabc", label: "Exportar .gabc" },
-        { cmd: "exportAllGabcCmd", label: "Exportar todos os .gabc" },
+        menuItem("file.exportGabc"), menuItem("file.exportAllGabc"),
+        "---",
+        menuItem("names.import"), menuItem("names.export"),
       ],
     },
     {
       label: "Editar",
       items: [
-        { cmd: "format", label: "Formatar", shortcut: "Ctrl+Shift+F" },
+        { ...menuItem("edit.undo"), shortcut: "Ctrl+Z" },
+        { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" },
         "---",
-        { cmd: "moveLeft", label: "Mover neuma para a esquerda", shortcut: "Alt+←" },
-        { cmd: "moveDown", label: "Mover neuma para baixo", shortcut: "Alt+↓" },
-        { cmd: "moveUp", label: "Mover neuma para cima", shortcut: "Alt+↑" },
-        { cmd: "moveRight", label: "Mover neuma para a direita", shortcut: "Alt+→" },
-        { cmd: "moveReset", label: "Resetar posição do neuma", shortcut: "Alt+0" },
+        menuItem("neume.palette"), menuItem("edit.format"),
+        "---",
+        menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"),
+        menuItem("neume.moveRight"), menuItem("neume.moveReset"),
       ],
     },
     {
       label: "Exibir",
       items: [
-        { cmd: "togglePreview", label: "Partitura", checked: () => previewHost.style.display !== "none" },
-        { cmd: "toggleSplit", label: "Lado a lado", checked: () => split.orientation() === "horizontal" },
-        { cmd: "toggleLegend", label: "Régua da pauta", shortcut: "Ctrl+Alt+L", checked: () => view.state.field(legendVisible) },
+        menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"),
         "---",
-        { cmd: "openSearch", label: "Buscar neumas…", shortcut: "F2" },
-        { cmd: "openOverlayPanel", label: "Nomes dos neumas…", shortcut: "Ctrl+Alt+N" },
+        menuItem("names.panel"), menuItem("doc.toggleFamily"),
         "---",
-        { cmd: "toggleFamily", label: "Família: St. Gall ⇄ Laon", shortcut: "Ctrl+Shift+G" },
+        menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark"),
       ],
     },
     {
       label: "Interpretação",
       items: [
-        { cmd: "playToggle", label: () => (player.playing ? "Parar" : "Tocar") },
-        { cmd: "modeToggle", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo") },
+        menuItem("play.toggle"), menuItem("play.mode"),
         "---",
-        { cmd: "toggleWave", label: "Onda de interpretação", checked: () => waveLanes.enabled() },
-        { cmd: "resetWave", label: "Resetar onda", enabled: () => waveLanes.enabled() },
+        menuItem("wave.toggle"), menuItem("wave.reset"),
       ],
     },
+    { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
   ]);
+  menubar.setTitle(project.title);
 
   toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { id: "playToggle", label: "Tocar", title: "playback semiológico (Tuotilo)", primary: true },
-    { id: "modeToggle", label: "Interpretado", title: "modo de playback — interpretado/solfejo" },
-    { id: "toggleWave", label: "Onda", title: "mostrar/ocultar a onda de interpretação" },
-    "|",
-    { id: "moveLeft", label: "◀", title: "Alt+← — mover neuma para a esquerda" },
-    { id: "moveDown", label: "▼", title: "Alt+↓ — mover neuma para baixo" },
-    { id: "moveUp", label: "▲", title: "Alt+↑ — mover neuma para cima" },
-    { id: "moveRight", label: "▶", title: "Alt+→ — mover neuma para a direita" },
-    { id: "moveReset", label: "⟳", title: "Alt+0 — resetar posição do neuma" },
-    "|",
-    { id: "openSearch", label: "Buscar", title: "F2" },
-    { id: "openOverlayPanel", label: "Nomes", title: "Ctrl+Alt+N — nomes de neumas (scriptorium)" },
+    { group: ["edit.undo", "edit.redo"] },
+    { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"] },
+    { group: ["edit.format", "neume.palette", "names.panel"] },
+    { group: ["view.split", "view.legend"] },
+    "spacer",
+    { group: ["play.mode", "wave.toggle", "wave.reset"] },
+    { primary: "play.toggle" },
   ]);
 
-  // Estado inicial dos toggles da toolbar (a11y: aria-pressed desde o boot).
-  toolbarHandle.setPressed("toggleWave", false);
-
   waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
-    void commands.run("resetWave");
+    void commands.run("wave.reset");
   });
 
-  window.addEventListener("keydown", (e) => {
-    if (e.ctrlKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
-      e.preventDefault();
-      void commands.run("openFile");
-    }
-    if (e.ctrlKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
-      e.preventDefault();
-      void commands.run("saveFile");
-    }
-    if (e.ctrlKey && e.shiftKey && (e.key === "F" || e.key === "f")) {
-      e.preventDefault();
-      void commands.run("format");
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "e" || e.key === "E")) {
-      e.preventDefault();
-      void commands.run("exportOverlay");
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "i" || e.key === "I")) {
-      e.preventDefault();
-      void commands.run("importOverlay");
-    }
-    if (e.ctrlKey && e.altKey && (e.key === "n" || e.key === "N")) {
-      e.preventDefault();
-      void commands.run("openOverlayPanel");
-    }
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "g" || e.key === "G")) {
-      e.preventDefault();
-      void commands.run("toggleFamily");
-    }
-  });
+  installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
+
+  // Atalhos no nível da JANELA (registro único), em fase de BOLHA: o CodeMirror
+  // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com
+  // preventDefault; o registro ignora eventos já tratados (sem disparo duplo).
+  window.addEventListener("keydown", (e) => { commands.handleKey(e); });
 }
 
 boot().catch((err) => {
   const app = document.querySelector("#app");
   if (app) app.textContent = "Falha ao iniciar o Notker: " + String(err);
-  setStatus("BOOT ERRO: " + String(err));
   console.error(err);
 });
