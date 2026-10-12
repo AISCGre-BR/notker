@@ -122,6 +122,21 @@ body { font-family: var(--font-sans); color: var(--ink); background: var(--parch
   font-size: 10px; color: var(--ink-muted); font-style: normal;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
+.staff-legend .legend-body { display: contents; }
+.staff-legend .legend-letters {
+  margin-left: auto; flex: none; height: 24px; padding: 0 8px;
+  font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted);
+}
+.staff-legend .legend-letters[aria-pressed="true"] { color: var(--rubric); }
+
+/* ── Letras na pauta (só a partitura da mesa) ──────────────────────────────────
+   As letras ficam em x < 0, no padding do #preview, FORA da folha branca: usam as
+   cores do tema (não da folha) e não cobrem a clave nem a capitular. */
+#preview.staff-letters-on { padding-left: calc(var(--space-4) + var(--space-2)); }
+#preview.staff-letters-on svg { overflow: visible; }
+#preview .staff-letter {
+  font-family: var(--font-mono); font-size: 10px; fill: var(--ink-muted);
+}
 
 /* ── Painel de nomes (scriptorium lateral) ─────────────────────────────────── */
 .overlay-panel {

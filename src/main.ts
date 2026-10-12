@@ -79,7 +79,9 @@ import { installSync, syncFromCursor } from "./preview/sync";
 // import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
-import { toggleLegend, legendVisible } from "./gabc/staff-legend";
+import { toggleLegend, legendVisible, setLegendLetters } from "./gabc/staff-legend";
+import { clefsBySyllable } from "./gabc/staff-letters";
+import { drawStaffLetters, clearStaffLetters } from "./preview/staff-letters";
 import { openProject, openProjectAt, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveChant, effectiveFamily, updateChant, setActive,
@@ -422,11 +424,32 @@ async function boot() {
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
   // panel é declarado fora do try (PLAYBACK-OFF: o playToggle, comentado, o usava em runtime).
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
+  // Letras na pauta (Task 4): preferência de vista da sessão, desligada por padrão. Só a
+  // partitura da MESA (este painel) as recebe — PDF e miniatura renderizam pelo motor direto.
+  let staffLettersOn = false;
+  function refreshStaffLetters(): void {
+    const svg = panel?.svgEl() ?? null;
+    if (!staffLettersOn) { clearStaffLetters(svg); return; }
+    const clefs = clefsBySyllable(view.state.doc.toString());
+    drawStaffLetters(svg, (first) => (first == null ? null : clefs[Math.min(first, clefs.length - 1)]));
+  }
+  function toggleStaffLetters(): void {
+    staffLettersOn = !staffLettersOn;
+    previewHost.classList.toggle("staff-letters-on", staffLettersOn);
+    refreshStaffLetters();
+    // O gutter muda o padding do #preview → re-render na nova largura útil (o panel lê o
+    // padding real); o onRender redesenha as letras no SVG novo.
+    panel?.update(view.state.doc.toString());
+    view.dispatch({}); // o painel da régua reflete o estado no botão
+  }
+  setLegendLetters({ on: () => staffLettersOn, toggle: toggleStaffLetters });
   try {
     const engine = new NabcLibEngine();
     panel = createPreviewPanel(previewHost, engine, { debounceMs: 150, family: currentFamily });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
+    // Letras na pauta: o SVG é trocado a cada render (innerHTML) → redesenha depois de cada um.
+    panel.onRender(refreshStaffLetters);
     // PLAYBACK-OFF (2026-10-09): faixas da onda na partitura.
     // // Re-injeta as wave lanes após cada render (sobrevive a debounce e resize).
     // panel.onRender(() => { if (waveLanes.enabled()) rebuildWave(); });
@@ -1194,6 +1217,7 @@ async function boot() {
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
     { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible, false) ?? false },
+    { id: "view.staffLetters", label: "Letras na pauta", run: toggleStaffLetters, checked: () => staffLettersOn },
     // PLAYBACK-OFF (2026-10-09): comandos de áudio e da onda.
     // { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
     // { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
@@ -1235,7 +1259,7 @@ async function boot() {
     "file.exportGabc", "file.exportAllGabc", "file.exportPdf", "edit.undo", "edit.redo", "edit.format",
     "neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset",
     "neume.palette", "neume.name", "neumas.search", "view.edicao", "view.neumas",
-    "doc.toggleFamily", "view.preview", "view.split", "view.legend",
+    "doc.toggleFamily", "view.preview", "view.split", "view.legend", "view.staffLetters",
   ], () => screen === "project");
 
   const welcome = createWelcome(welcomeHost, {
@@ -1292,7 +1316,7 @@ async function boot() {
       items: [
         menuItem("view.edicao"), menuItem("view.neumas"),
         "---",
-        menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"),
+        menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"), menuItem("view.staffLetters"),
         "---",
         menuItem("doc.toggleFamily"),
         "---",
