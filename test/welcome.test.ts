@@ -1,5 +1,6 @@
 // test/welcome.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { createWelcome, type WelcomeHandlers } from "../src/app/welcome";
 import type { RecentEntry } from "../src/app/recent";
 
@@ -142,5 +143,20 @@ describe("aviso de recuperação e segurança do texto", () => {
     expect(host.querySelector(".notker-hero__chants li")!.textContent).toBe(evil);
     expect(host.querySelector(".notker-recent__title")!.textContent).toBe(evil);
     expect(host.querySelectorAll("img:not(.notker-thumb)")).toHaveLength(0);
+  });
+});
+
+describe("tela inicial — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("escolhas e aviso de recuperação em inglês; datas no idioma", () => {
+    setLocale("en");
+    mount().render({ recents: [], recoveries: [{ id: "current", title: "Missa" }], now: NOW });
+    expect(texts(".notker-choice")).toEqual(["New Project", "Open…", "Example Project"]);
+    expect(host.querySelector(".notker-recovery__text")!.textContent).toBe("“Missa” was not saved in the last session.");
+    expect(texts(".notker-recovery button")).toEqual(["Discard", "Recover"]);
+    setLocale("it");
+    mount().render({ recents: [entry(1)], recoveries: [], now: NOW });
+    expect(host.querySelector(".notker-hero .sc-btn--filled")!.textContent).toBe("Continua");
+    expect(host.querySelector(".notker-hero .notker-caption")!.textContent).toBe("21 aprile");
   });
 });

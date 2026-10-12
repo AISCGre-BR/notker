@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   mountNewProjectGuide, projectFromDraft, emptyDraft, hasDraft, type GuideDeps, type GuideHandle, type NewProjectDraft,
 } from "../src/app/new-project-guide";
+import { setLocale } from "../src/i18n";
 import { getActiveChant, effectiveFamily, invariantErrors } from "../src/project/tree";
 
 const makeDeps = () => ({
@@ -181,5 +182,20 @@ describe("projectFromDraft", () => {
   it("hasDraft ignora espaços e a família", () => {
     expect(hasDraft({ ...emptyDraft(), family: "laon", title: "  " })).toBe(false);
     expect(hasDraft({ ...emptyDraft(), gabc: "x" })).toBe(true);
+  });
+});
+
+describe("guia — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("passos, campos e botões em italiano; projeto sem título usa o padrão do idioma", () => {
+    g.destroy();
+    setLocale("it");
+    g = mountNewProjectGuide(host, deps);
+    expect([...host.querySelectorAll(".notker-step__label")].map((e) => e.textContent)).toEqual(["Progetto", "Famiglia predefinita", "Primo canto"]);
+    expect(cur().querySelector("input")!.getAttribute("aria-label") ?? cur().querySelector("input")!.placeholder).toMatch(/Titolo del progetto|Messa di Natale/);
+    expect(host.querySelector(".notker-guide__cancel")!.textContent).toBe("Annulla");
+    const p = projectFromDraft(emptyDraft());
+    expect(p.title).toBe("Senza titolo");
+    expect(getActiveChant(p).title).toBe("Nuovo");
   });
 });

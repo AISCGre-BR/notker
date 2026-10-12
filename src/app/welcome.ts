@@ -4,6 +4,7 @@
  *  (miniatura · título · data · primeiros cantos · Continuar) e até 3 cartões.
  *  Sem recentes: marca centralizada + 3 escolhas (Novo projeto com anel rubrica).
  *  Aviso de recuperação (§4.6) em `sc-note`. Texto do usuário SEMPRE por textContent. */
+import { t } from "../i18n";
 import { icon, type IconName } from "../ui/pd/icons";
 import { type RecentEntry, recentTitle, formatRecentDate } from "./recent";
 
@@ -62,9 +63,9 @@ export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHan
     const p = el("p", "sc-note notker-recovery");
     p.setAttribute("role", "status");
     p.append(
-      el("span", "notker-recovery__text", `“${r.title}” não foi salvo na última sessão.`),
-      button("Descartar", "sc-btn", () => h.onDiscardRecovery(r.id)),
-      button("Recuperar", "sc-btn notker-recovery__recover", () => h.onRecover(r.id)),
+      el("span", "notker-recovery__text", t("welcome.recovery", { title: r.title })),
+      button(t("common.discard"), "sc-btn", () => h.onDiscardRecovery(r.id)),
+      button(t("welcome.recover"), "sc-btn notker-recovery__recover", () => h.onRecover(r.id)),
     );
     return p;
   }
@@ -74,11 +75,11 @@ export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHan
     for (const r of s.recoveries) start.appendChild(note(r));
     start.appendChild(el("h1", "notker-wordmark", "Notker"));
     const choices = el("div", "notker-choices");
-    const main = button("Novo projeto", "notker-choice notker-choice--main", h.onNew, "plus");
+    const main = button(t("welcome.newProject"), "notker-choice notker-choice--main", h.onNew, "plus");
     choices.append(
       main,
-      button("Abrir…", "notker-choice", h.onOpen, "folder-open"),
-      button("Projeto de exemplo", "notker-choice", h.onOpenExample, "book-open"),
+      button(t("cmd.file.open"), "notker-choice", h.onOpen, "folder-open"),
+      button(t("welcome.example"), "notker-choice", h.onOpenExample, "book-open"),
     );
     start.appendChild(choices);
     primary = main;
@@ -100,7 +101,7 @@ export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHan
       body.appendChild(ul);
     }
     const actions = el("div", "notker-hero__actions");
-    const cont = button("Continuar", "sc-btn sc-btn--filled", () => h.onOpenRecent(e.path));
+    const cont = button(t("common.continue"), "sc-btn sc-btn--filled", () => h.onOpenRecent(e.path));
     actions.appendChild(cont);
     body.appendChild(actions);
     sec.append(thumb(e), body);
@@ -131,8 +132,8 @@ export function createWelcome(host: HTMLElement, h: WelcomeHandlers): WelcomeHan
     const head = el("div", "notker-welcome__head");
     head.append(
       el("h1", "notker-wordmark", "Notker"),
-      button("Abrir…", "sc-btn sc-btn--elevated", h.onOpen, "folder-open"),
-      button("Novo projeto", "sc-btn sc-btn--elevated", h.onNew, "plus"),
+      button(t("cmd.file.open"), "sc-btn sc-btn--elevated", h.onOpen, "folder-open"),
+      button(t("welcome.newProject"), "sc-btn sc-btn--elevated", h.onNew, "plus"),
     );
     wrap.appendChild(head);
     for (const r of s.recoveries) wrap.appendChild(note(r));

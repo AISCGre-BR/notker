@@ -1,10 +1,11 @@
 // test/recent.test.ts
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   parseRecent, serializeRecent, pushRecent, setRecentThumb, removeRecent, buildRecentMeta,
   displayName, parentFolder, recentTitle, formatRecentDate, createRecentStore, MAX_RECENT,
   type RecentEntry, type RecentMeta,
 } from "../src/app/recent";
+import { setLocale } from "../src/i18n";
 import { newProject, newChant, newGroup, insertNode } from "../src/project/tree";
 
 const e = (path: string, title = path, extra: Partial<RecentMeta> = {}): RecentEntry =>
@@ -125,5 +126,17 @@ describe("createRecentStore", () => {
     const slot = memSlot();
     await createRecentStore(slot, async () => []).save([e("/a.notker")]);
     expect(parseRecent(slot.text)[0].path).toBe("/a.notker");
+  });
+});
+
+describe("data dos recentes — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("pt, en e it; ano só fora do ano corrente", () => {
+    const now = new Date(2026, 9, 12);
+    expect(formatRecentDate(new Date(2026, 3, 27).toISOString(), now)).toBe("27 de abril");
+    setLocale("en");
+    expect(formatRecentDate(new Date(2026, 3, 27).toISOString(), now)).toBe("April 27");
+    setLocale("it");
+    expect(formatRecentDate(new Date(2025, 3, 27).toISOString(), now)).toBe("27 aprile 2025");
   });
 });

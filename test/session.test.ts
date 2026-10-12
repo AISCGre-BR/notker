@@ -1,5 +1,6 @@
 // test/session.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { resolveUnsaved, askSaveChanges, type UnsavedGuard, type SaveChoice } from "../src/app/session";
 
 function guard(answers: SaveChoice[], over: Partial<UnsavedGuard> = {}) {
@@ -78,5 +79,21 @@ describe("askSaveChanges", () => {
     expect(host.querySelector(".sc-dialog__body")!.textContent).toBe("Não foi possível salvar: disco cheio.");
     host.querySelector<HTMLElement>(".sc-dialog")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(await pr).toBe("cancel");
+  });
+});
+
+describe("Salvar alterações? — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("título, corpo e botões em inglês; erro de gravação no idioma", async () => {
+    setLocale("en");
+    const host = document.createElement("div"); document.body.appendChild(host);
+    const p = askSaveChanges(host, "Mass");
+    expect(host.querySelector(".sc-dialog__title")!.textContent).toBe("Save changes to “Mass”?");
+    expect([...host.querySelectorAll(".sc-dialog__actions button")].map((b) => b.textContent)).toEqual(["Don't Save", "Cancel", "Save"]);
+    host.querySelector<HTMLButtonElement>(".sc-dialog__actions .sc-btn--filled")!.click();
+    expect(await p).toBe("save");
+    const { g, errors } = guard(["save", "cancel"], { save: vi.fn(async () => { throw new Error("disk full."); }) });
+    await resolveUnsaved(g);
+    expect(errors[1]).toBe("Could not save: disk full. Choose “Don't Save” to continue without saving.");
   });
 });
