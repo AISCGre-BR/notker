@@ -73,3 +73,11 @@ describe("achados da revisão final (beta 1a)", () => {
   });
 });
 
+
+describe("Letras na pauta no WebKitGTK", () => {
+  it("o <svg> perde o border-radius com as letras ligadas (no WebKit o raio recorta o conteúdo em x<0 mesmo com overflow visível)", () => {
+    const rule = /#preview\.staff-letters-on svg\s*{([^}]*)}/.exec(css)?.[1] ?? "";
+    expect(rule).toMatch(/overflow:\s*visible/);
+    expect(rule).toMatch(/border-radius:\s*0/);
+  });
+});

@@ -133,7 +133,10 @@ body { font-family: var(--font-sans); color: var(--ink); background: var(--parch
    As letras ficam em x < 0, no padding do #preview, FORA da folha branca: usam as
    cores do tema (não da folha) e não cobrem a clave nem a capitular. */
 #preview.staff-letters-on { padding-left: calc(var(--space-4) + var(--space-2)); }
-#preview.staff-letters-on svg { overflow: visible; }
+/* border-radius: 0 — no WebKit (WebKitGTK do app) o raio de um elemento substituído
+   recorta o conteúdo à caixa mesmo com overflow visível: as letras em x<0 sumiam
+   (o Chromium não recorta, por isso o probe headless passava). */
+#preview.staff-letters-on svg { overflow: visible; border-radius: 0; }
 #preview .staff-letter {
   font-family: var(--font-mono); font-size: 10px; fill: var(--ink-muted);
 }
