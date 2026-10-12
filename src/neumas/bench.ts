@@ -20,7 +20,7 @@ export interface BenchStatus {
   /** Outro item que já representa esta cadeia (deduplicação). */
   duplicate: { id: string; label: string } | null;
   composing: boolean;
-  /** Texto já traduzido (vem de `t("neumas.saving|saved|saveError")`) ou "". */
+  /** Texto já traduzido (vem de `neumas.saving|saved|saveError`) ou "". */
   saveState: string;
 }
 export type NameCommit = "enter" | "blur" | "flush";

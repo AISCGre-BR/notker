@@ -15,7 +15,7 @@ export const legendVisible = StateField.define<boolean>({
 let treeGetter: () => Tree | null = () => null;
 export function setLegendTreeGetter(g: () => Tree | null) { treeGetter = g; }
 
-/** Liga/desliga t("cmd.view.staffLetters") (estado mora no main, como o comando view.staffLetters). */
+/** Liga/desliga "Letras na pauta" (estado mora no main, como o comando view.staffLetters). */
 export interface LegendLettersHook { on: () => boolean; toggle: () => void }
 let lettersHook: LegendLettersHook = { on: () => false, toggle: () => {} };
 export function setLegendLetters(h: LegendLettersHook) { lettersHook = h; }

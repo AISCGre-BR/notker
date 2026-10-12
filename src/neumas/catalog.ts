@@ -15,7 +15,7 @@ export interface CatalogCallbacks {
   /** Clique ou Enter num cartão (selecionar, ou acrescentar à cadeia ao compor). */
   onActivate(id: string): void;
   onNewSequence(): void;
-  /** "Mostrar mais" (150 a mais) ou t("catalog.all") (`all`) numa seção cortada. */
+  /** "Mostrar mais" (150 a mais) ou "Mostrar todos" (`all`) numa seção cortada. */
   onMore(section: SectionId, all: boolean): void;
   /** Esc no campo de busca: devolve o foco à grade. */
   onSearchEscape(): void;
@@ -164,7 +164,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
       for (const s of sections) {
         if (s.total === 0) {
           // "Minhas sequências" vazia só aparece sem busca e com filtro Todos/Sequências
-          // (é onde t("catalog.new") e a frase de ajuda fazem sentido); fora disso, some.
+          // (é onde "+ Nova" e a frase de ajuda fazem sentido); fora disso, some.
           const plain = !st.query.trim() && (st.filter === "todos" || st.filter === "sequencias");
           if (s.id !== "minhas" || !plain) continue;
         }
