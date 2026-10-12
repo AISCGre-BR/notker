@@ -28,6 +28,9 @@ export interface TreePanel {
   render(p: NotkerProject): void;
   startRename(id: string): void;
   focusNode(id: string): void;
+  /** Id da linha com o foco itinerante (a última focada na árvore; senão a do canto
+   *  ativo) — é a "seleção da árvore" do Exportar PDF (Grupo selecionado). */
+  focusedId(): string | null;
 }
 
 const FAMILY_LABEL: Record<Family, string> = { stgall: "St. Gall", laon: "Laon" };
@@ -367,5 +370,6 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     if (handled) e.preventDefault();
   });
 
-  return { render, startRename, focusNode };
+  const focusedId = (): string | null => els.find((el) => el.tabIndex === 0)?.dataset.id ?? null;
+  return { render, startRename, focusNode, focusedId };
 }

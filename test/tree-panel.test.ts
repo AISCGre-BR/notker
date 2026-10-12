@@ -394,3 +394,16 @@ describe("árvore: arrastar e soltar (Pointer Events)", () => {
     expect(host.querySelector("[draggable]")).toBeNull();
   });
 });
+
+describe("árvore: seleção para o Exportar PDF", () => {
+  it("focusedId: a linha do canto ativo até o usuário focar outra; depois, a última focada (grupo inclusive)", () => {
+    const panel = createTreePanel(host, opts());
+    panel.render(proj());
+    expect(panel.focusedId()).toBe("b");
+    row("n").focus();
+    expect(panel.focusedId()).toBe("n");
+    (document.activeElement as HTMLElement).blur(); // foco foi para o editor: a seleção fica
+    panel.render(proj());
+    expect(panel.focusedId()).toBe("n");
+  });
+});

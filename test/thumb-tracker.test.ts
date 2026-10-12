@@ -22,4 +22,10 @@ describe("createThumbTracker", () => {
     t.forget("/a.notker");
     expect(t.changed("/a.notker", "x")).toBe(true);
   });
+  it("mudar a família (mesmo conteúdo) conta como mudança", () => {
+    const t = createThumbTracker();
+    t.remember("/a.notker", "x", "gall");
+    expect(t.changed("/a.notker", "x", "gall")).toBe(false);
+    expect(t.changed("/a.notker", "x", "laon")).toBe(true);
+  });
 });

@@ -1,3 +1,5 @@
+import type { Family } from "../neume/types";
+
 export interface SyllableSource {
   syllableIndex: number;  // 0 = clave (sem syllable-N); 1..M = sílabas reais
   from: number;           // offset inicial no doc
@@ -14,6 +16,9 @@ export interface NoteAnchor {
 export interface RenderResult { svg: string; sourceMap: SyllableSource[]; noteAnchors?: NoteAnchor[]; }
 export interface RenderOptions {
   widthPx?: number;
+  /** Família do nabc (St. Gall/Laon): escolhe o parser e a fonte dos neumas. Sem ela,
+   *  o nabc-lib usa St. Gall. */
+  family?: Family;
   /** Espaçamento EXTRA (px) acima de cada sistema — usado p/ abrir vão p/ as lanes
    *  da onda quando ela está ativa. Some-se ao chantLineTopPaddingPx padrão. */
   extraLineSpacingPx?: number;

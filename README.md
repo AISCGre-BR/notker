@@ -50,6 +50,8 @@ O playback (Tocar, modos e onda de interpretação) está desligado nesta versã
 
 Tela inicial: o projeto mais recente em destaque (Continuar), os anteriores em cartões, ou Novo projeto / Abrir… / Projeto de exemplo. `Ctrl+N` — Novo projeto · Arquivo ▸ Abrir recente ▸ (até 10; Limpar recentes) · `Ctrl+W` — Fechar projeto · Ajuda ▸ Abrir projeto de exemplo. Novo projeto é guiado em passos (Esc cancela). Com alterações não salvas, o Notker guarda um retrato a cada 30 s; se o app fechar sem salvar, a tela inicial oferece **Recuperar**.
 
+`Ctrl+P` — Arquivo ▸ Exportar PDF…: canto atual, grupo selecionado na árvore (com subgrupos) ou projeto inteiro, em A4 ou Carta (retrato, margens de 2 cm), neumas St. Gall/Laon em vermelho ou preto, peças uma após a outra ou cada uma em nova página. O PDF é vetorial (texto selecionável) e leva as fontes embutidas; cada peça leva só o título.
+
 ### Créditos adicionais (F2)
 
 - Fontes `gregall`/`grelaon` e a referência NABC (`GregorioNabcRef`, `gregoriotex-nabc.lua`): **The Gregorio Project** — GPLv3 com exceção de fonte.
@@ -62,6 +64,8 @@ Tela inicial: o projeto mais recente em destaque (Continuar), os anteriores em c
 - Linguagem visual: [Parchment Design](https://github.com/AISCGre-BR/parchment-design) (AISCGre-BR, MIT).
 - Tela inicial e criação guiada de projeto: desenho do [Mocquereau](https://github.com/AISCGre-BR/mocquereau) (AISCGre-BR), adaptado.
 - Projeto de exemplo: os `.gabc` de `samples/` (transcrições creditadas no cabeçalho de cada arquivo — Andrew Hinkley, Jakub Jelínek, Marek Klein).
+- Exportar PDF: [jsPDF](https://github.com/parallax/jsPDF) e [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) (MIT).
+- Letra e títulos do PDF: [Source Serif 4](https://github.com/adobe-fonts/source-serif) 4.005 (Adobe, SIL Open Font License 1.1), TTFs com a licença em `src/assets/fonts/source-serif-4/`.
 
 ## Instalação (builds não assinadas)
 

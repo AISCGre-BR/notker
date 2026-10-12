@@ -67,6 +67,12 @@ describe("diálogo Parchment", () => {
       expect(ev2.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(last);
     });
+    it("Ctrl+P com o diálogo aberto nunca abre a impressão nativa (evento com defaultPrevented)", () => {
+      void openDialog(host, spec);
+      const ev = new KeyboardEvent("keydown", { key: "p", code: "KeyP", ctrlKey: true, bubbles: true, cancelable: true });
+      host.querySelector("input")!.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    });
     it("Tab no meio não é interceptado", () => {
       void openDialog(host, spec);
       host.querySelector<HTMLElement>("input")!.focus();

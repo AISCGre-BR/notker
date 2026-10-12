@@ -1,4 +1,5 @@
 import type { NoteAnchor, PreviewEngine, SyllableSource } from "./engine";
+import type { Family } from "../neume/types";
 import { debounce } from "./debounce";
 
 /** Extrai N de um elemento com classe `syllable-N`, ou null. */
@@ -25,7 +26,7 @@ export interface PreviewPanel {
 export function createPreviewPanel(
   host: HTMLElement,
   engine: PreviewEngine,
-  opts: { debounceMs: number },
+  opts: { debounceMs: number; family?: () => Family },
 ): PreviewPanel {
   let map: SyllableSource[] = [];
   let anchors: NoteAnchor[] = [];
@@ -43,6 +44,7 @@ export function createPreviewPanel(
     const inner = host.clientWidth ? host.clientWidth - pad - 4 : 0;
     const r = await engine.render(doc, {
       widthPx: inner > 120 ? inner : undefined,
+      family: opts.family?.(),
       extraLineSpacingPx: extraLineSpacingPx || undefined,
       horizontalSpreadFactor: horizontalSpread > 1 ? horizontalSpread : undefined,
     });

@@ -7,17 +7,20 @@ function hash(s: string): string {
   return `${s.length}:${(h >>> 0).toString(36)}`;
 }
 
+/** Chave da miniatura: conteúdo + família (trocar a família redesenha os neumas). */
+const key = (content: string, family?: string): string => `${family ?? ""}|${hash(content)}`;
+
 export interface ThumbTracker {
-  changed(path: string, content: string): boolean;
-  remember(path: string, content: string): void;
+  changed(path: string, content: string, family?: string): boolean;
+  remember(path: string, content: string, family?: string): void;
   forget(path: string): void;
 }
 
 export function createThumbTracker(): ThumbTracker {
   const seen = new Map<string, string>();
   return {
-    changed: (path, content) => seen.get(path) !== hash(content),
-    remember: (path, content) => { seen.set(path, hash(content)); },
+    changed: (path, content, family) => seen.get(path) !== key(content, family),
+    remember: (path, content, family) => { seen.set(path, key(content, family)); },
     forget: (path) => { seen.delete(path); },
   };
 }
