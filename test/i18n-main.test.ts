@@ -38,7 +38,7 @@ describe("main.ts: idioma", () => {
     expect(code).toContain("runCloseSequence(closeDeps())");
     expect(code).toContain("location.reload()");
     expect(code).toMatch(/const re = takeReopen\(\)/);
-    expect(code).toContain("unlistenClose = u");
-    expect(code).toContain("unlistenClose?.()");
+    expect(code).toContain("closeListener = getCurrentWindow().onCloseRequested");
+    expect(code).toContain("teardownForReload({ closeListener");
   });
 });

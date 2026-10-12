@@ -17,8 +17,12 @@ export async function openProject(): Promise<NotkerProject | null> {
   const path = await open({ multiple: false, filters: [notkerFilter(), GABC_FILTER] });
   if (typeof path !== "string") return null;
   if (/\.notker$/i.test(path)) return openProjectAt(path);
-  const content = await readTextFile(path);
-  return ephemeralFromGabc(content, baseName(path));
+  return openGabcAt(path);
+}
+
+/** Abre um `.gabc` pelo caminho como projeto efêmero. LANÇA. */
+export async function openGabcAt(path: string): Promise<NotkerProject> {
+  return ephemeralFromGabc(await readTextFile(path), baseName(path), path);
 }
 
 /** Abre um `.notker` pelo caminho (Recentes). Quem lê é o Rust (`read_project`), então não

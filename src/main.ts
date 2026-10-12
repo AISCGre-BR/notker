@@ -56,7 +56,7 @@ import { setScreen, type Screen } from "./app/screen";
 import { createWelcome } from "./app/welcome";
 import { mountNewProjectGuide, projectFromDraft, hasDraft, type GuideHandle } from "./app/new-project-guide";
 import { runCloseSequence, type CloseDeps } from "./app/close-sequence";
-import { switchLocale, takeReopen } from "./app/locale-switch";
+import { switchLocale, takeReopen, resolveReopenTarget, performReopen, teardownForReload } from "./app/locale-switch";
 import { getLocale, initLocale, LOCALES, LOCALE_NAMES, t, tn, type Locale, type MessageKey } from "./i18n";
 import { createThumbTracker } from "./app/thumb-tracker";
 import { loadExampleProject } from "./project/example";
@@ -87,7 +87,7 @@ import { detectMarks, type MarkKinds } from "./gabc/strip-marks";
 import { toggleLegend, legendVisible, setLegendLetters } from "./gabc/staff-legend";
 import { clefsBySyllable } from "./gabc/staff-letters";
 import { drawStaffLetters, clearStaffLetters } from "./preview/staff-letters";
-import { openProject, openProjectAt, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
+import { openProject, openProjectAt, openGabcAt, saveProject, exportCurrentGabc, exportAllGabc, pickGabcFile } from "./files/project-io";
 import {
   type NotkerProject, newProject, getActiveChant, effectiveFamily, updateChant, setActive,
   setChantFamily, insertNode, removeNode, restoreRemoved, moveSibling, newChant, gabcName, gabcSkeleton,
@@ -892,6 +892,16 @@ async function boot() {
       }
     }
   }
+  /** Reabre um `.gabc` aberto direto (após trocar o idioma); sumiu/ilegível = aviso e tela inicial. */
+  async function openGabcRecovered(path: string): Promise<void> {
+    try {
+      if (!(await leaveProject())) return;
+      enterProject(await openGabcAt(path));
+    } catch (err) {
+      toaster.show(t("recent.gone"), { kind: "warn" });
+      console.error(err);
+    }
+  }
   async function recoverSession(id: string): Promise<void> {
     const fromPrev = id === "prev";
     const snap = fromPrev ? pendingPrev : pendingRecovery;
@@ -1333,16 +1343,18 @@ async function boot() {
     stopRecovery: () => recovery.stop(),
     clearRecovery: () => recovery.clear(),
   });
-  let unlistenClose: (() => void) | null = null;
+  /** Promessa do registro de onCloseRequested: o teardown a ESPERA (sem janela de tempo). */
+  let closeListener: Promise<() => void> | null = null;
 
   async function changeLocale(l: Locale): Promise<void> {
     await switchLocale(l, {
       current: getLocale,
       close: () => runCloseSequence(closeDeps()),
-      reopenTarget: () => (!projectOpen ? null
-        : project.path ? { kind: "path", path: project.path }
-        : exampleOpen ? { kind: "example" } : null),
-      teardown: async () => { unlistenClose?.(); await client.stop(); },
+      reopenTarget: () => resolveReopenTarget({
+        projectOpen, path: project.path, gabcPath: project.gabcPath, exampleOpen,
+        dirty: projectOpen && dirty.isDirty(project),
+      }),
+      teardown: () => teardownForReload({ closeListener, stop: () => client.stop() }),
       reload: () => location.reload(),
     });
   }
@@ -1455,22 +1467,25 @@ async function boot() {
   showWelcome(); // sem projeto aberto: tela inicial
   recovery.start();
   const re = takeReopen();
-  if (re?.kind === "path") void openRecent(re.path);
-  else if (re?.kind === "example") void commands.run("file.openExample");
-
+  void performReopen(re, {
+    openPath: openRecent,
+    openGabc: openGabcRecovered,
+    openExample: () => commands.run("file.openExample"),
+  });
 
   // Fechar a janela: com alterações, pergunta; grava os nomes pendentes; NUNCA prende a
   // janela (falha inesperada na guarda → fecha). O wrapper do Tauri só chama destroy()
   // se o preventDefault não foi chamado.
   try {
-    void getCurrentWindow().onCloseRequested(async (ev) => {
+    closeListener = getCurrentWindow().onCloseRequested(async (ev) => {
       // Nunca rejeita (o wrapper do Tauri só fecha se o handler não lançar): cada passo
       // da sequência tem o seu try/catch e, no pior caso, a janela fecha.
       try {
         const { prevent } = await runCloseSequence(closeDeps());
         if (prevent) ev.preventDefault();
       } catch (e) { console.error("[notker] fechar:", e); }
-    }).then((u) => { unlistenClose = u; }).catch(() => { /* sem permissão/evento: segue sem guarda */ });
+    });
+    closeListener.catch(() => { /* sem permissão/evento: segue sem guarda */ });
   } catch { /* fora do Tauri (testes/probe) */ }
 }
 
