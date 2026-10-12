@@ -33,6 +33,7 @@ function legendPanel(view: EditorView): Panel {
   letters.addEventListener("click", () => {
     lettersHook.toggle();
     letters.setAttribute("aria-pressed", String(lettersHook.on()));
+    view.focus(); // o botão é só um liga/desliga: a digitação continua no editor
   });
   dom.append(body, letters);
   const draw = () => {

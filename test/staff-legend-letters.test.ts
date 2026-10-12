@@ -32,6 +32,16 @@ describe("painel da régua: botão Letras na pauta", () => {
     view.dispatch({});
     expect(btn.getAttribute("aria-pressed")).toBe("false");
   });
+
+  it("depois do clique, o foco volta ao editor", () => {
+    setLegendLetters({ on: () => false, toggle: () => {} });
+    view = new EditorView({ state: EditorState.create({ doc: "(c4) A(g)", extensions: [legendVisible] }), parent: document.body });
+    view.dispatch({ effects: toggleLegend.of(true) });
+    const btn = document.querySelector<HTMLButtonElement>(".staff-legend button.legend-letters")!;
+    btn.focus();
+    btn.click();
+    expect(view.hasFocus).toBe(true);
+  });
 });
 
 describe("main.ts: comando view.staffLetters", () => {
