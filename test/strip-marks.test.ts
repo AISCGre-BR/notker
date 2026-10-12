@@ -80,3 +80,54 @@ describe("janela", () => {
     expect(stripMarks(d, { vertical: true, horizontal: true, mora: true }, { from, to: d.length }).text).toBe("%%\nDo(f.)mi(g)nus");
   });
 });
+
+describe("onda final: contexto do Gregorio", () => {
+  it("<v>, <alt> e <sp> fora de grupo são texto, não notas (1)", () => {
+    expect(stripMarks("<alt>(T. P.)</alt>Al(g.)", ALL).text).toBe("<alt>(T. P.)</alt>Al(g)");
+    const r = stripMarks("<c><v>(</v></c>Sr.(h.)", ALL);
+    expect(r.text).toBe("<c><v>(</v></c>Sr.(h)");
+    expect(r.counts).toEqual({ vertical: 0, horizontal: 0, mora: 1 });
+    expect(stripMarks("<sp>(R.)</sp> A(g.)", ALL).text).toBe("<sp>(R.)</sp> A(g)");
+    expect(stripMarks("<v>\\%</v>(g.)", ALL).text).toBe("<v>\\%</v>(g)");
+    expect(stripMarks("<v>a$</v>(x.)</v>(g.)", ALL).text).toBe("<v>a$</v>(x.)</v>(g)");
+  });
+  it("_ e seus [oh|uh:…] são uma unidade decidida pela posição do _ (2)", () => {
+    const d = "%%\nA(g_[oh:h]e)";
+    const us = d.indexOf("_");
+    expect(stripMarks(d, ALL, { from: 0, to: us + 1 }).text).toBe("%%\nA(ge)");
+    expect(stripMarks(d, ALL, { from: us + 1, to: d.length }).text).toBe(d);
+  });
+  it("bloco [oh:{] … [oh}] só sai com as duas pontas na janela (2)", () => {
+    const d = "%%\nA(g[oh:{]h_)B(i_[oh}])";
+    const b = d.indexOf("B");
+    const r = stripMarks(d, ALL, { from: 0, to: b });
+    expect(r.text).toBe("%%\nA(g[oh:{]h)B(i_[oh}])");
+    expect(stripMarks(d, ALL, { from: b, to: d.length }).text).toBe("%%\nA(g[oh:{]h_)B(i[oh}])");
+    expect(stripMarks(d, ALL).text).toBe("%%\nA(gh)B(i)");
+  });
+  it("alternância gabc|nabc pelo nabc-lines (3)", () => {
+    const h1 = "nabc-lines: 1;\n%%\n";
+    expect(stripMarks(h1 + "(e.|pu|f_|ta)", ALL).text).toBe(h1 + "(e|pu|f|ta)");
+    expect(stripMarks(h1 + "(e.|vi-'_.|f_|vi-'_.)", ALL).text).toBe(h1 + "(e|vi-'_.|f|vi-'_.)");
+    const h2 = "nabc-lines:2;\n%%\n";
+    expect(stripMarks(h2 + "(e.|vi.|pu_|f_|ta'|x.)", ALL).text).toBe(h2 + "(e|vi.|pu_|f|ta'|x.)");
+    expect(stripMarks("(e.|pu|f_|ta)", ALL).text).toBe("(e|pu|f|ta)"); // sem cabeçalho: 1
+  });
+  it("[[ … ]] são delimitadores, não colchete de atributo (4)", () => {
+    expect(stripMarks("(f[[g.h_]])", ALL).text).toBe("(f[[gh]])");
+  });
+  it("$] escapa dentro de colchete", () => {
+    expect(stripMarks("(g[nv:a$]b.]h.)", ALL).text).toBe("(g[nv:a$]b.]h)");
+  });
+  it("barra no meio do grupo: o que vem colado nela fica (5)", () => {
+    const r = stripMarks("(f.,_g)", ALL);
+    expect(r.text).toBe("(f,_g)");
+    expect(r.counts).toEqual({ vertical: 0, horizontal: 0, mora: 1 });
+    expect(stripMarks("(f.;1'g.)", ALL).text).toBe("(f;1'g)");
+  });
+  it("sem %%: linhas de cabeçalho antes do primeiro grupo não são varridas (6)", () => {
+    expect(stripMarks("name: x (a.b);\n(g.)", ALL).text).toBe("name: x (a.b);\n(g)");
+    expect(stripMarks("nabc-lines: 1;\nA(e.|pu|f_|ta)", ALL).text).toBe("nabc-lines: 1;\nA(e|pu|f|ta)");
+    expect(stripMarks("A(g.)\nname: x (a.b);", ALL).text).toBe("A(g)\nname: x (ab);");
+  });
+});
