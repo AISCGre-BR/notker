@@ -19,12 +19,15 @@ export interface NotkerProject {
   root: TreeNode[];                 // ordem = ordem do usuário
   activeId: string;                 // sempre um ChantNode
   path?: string;                    // caminho do .notker; undefined = efêmero
+  gabcPath?: string;                // .gabc aberto direto (projeto efêmero); só para reabrir após trocar o idioma
 }
 export interface Location { parentId: string | null; index: number }
 export interface VisibleRow { node: TreeNode; depth: number; parentId: string | null; index: number; setSize: number }
 export interface RemoveResult {
   project: NotkerProject; removed: TreeNode; parentId: string | null; index: number;
   prevActiveId: string; createdId?: string;
+  /** Título e esqueleto do canto vazio criado (no idioma do momento): a comparação do desfazer não depende do idioma de agora. */
+  createdTitle?: string; createdContent?: string;
 }
 export type ChantPatch = Partial<Pick<ChantNode, "title" | "content" | "family" | "interpretation">>;
 
@@ -65,10 +68,10 @@ export function newProject(opts: { family: Family; name?: string; office?: strin
   return { schema: 2, kind: "notker-project", title: opts.title ?? title, family: opts.family, root: [chant], activeId: chant.id };
 }
 
-export function ephemeralFromGabc(content: string, fileName: string): NotkerProject {
+export function ephemeralFromGabc(content: string, fileName: string, gabcPath?: string): NotkerProject {
   const title = gabcName(content, fileName.replace(/\.gabc$/i, ""));
   const chant: ChantNode = { kind: "chant", id: genId(), title, content };
-  return { schema: 2, kind: "notker-project", title, family: "stgall", root: [chant], activeId: chant.id };
+  return { schema: 2, kind: "notker-project", title, family: "stgall", root: [chant], activeId: chant.id, ...(gabcPath ? { gabcPath } : {}) };
 }
 
 // ── Leitura ──────────────────────────────────────────────────────────────────
@@ -297,6 +300,7 @@ export function removeNode(p: NotkerProject, id: string): RemoveResult | null {
   if (!loc || !removed) return null;
   let next = withList(p, loc.parentId, (l) => l.filter((_, i) => i !== loc.index))!;
   let createdId: string | undefined;
+  let created: ChantNode | undefined;
   if (subtreeHas(removed, p.activeId)) {
     const order = flattenChants(p);
     const gone = new Set(flattenNodes([removed]).map((x) => x.id));
@@ -308,11 +312,12 @@ export function removeNode(p: NotkerProject, id: string): RemoveResult | null {
       const ph = newChant({ title: placeholderTitle() });
       next = { ...next, root: [...next.root, ph], activeId: ph.id };
       createdId = ph.id;
+      created = ph;
     }
   }
   return {
     project: next, removed, parentId: loc.parentId, index: loc.index, prevActiveId: p.activeId,
-    ...(createdId ? { createdId } : {}),
+    ...(createdId ? { createdId, createdTitle: created!.title, createdContent: created!.content } : {}),
   };
 }
 
@@ -325,7 +330,7 @@ export function restoreRemoved(p: NotkerProject, r: RemoveResult): NotkerProject
   if (subtreeHas(r.removed, r.prevActiveId)) next = setActive(next, r.prevActiveId);
   if (r.createdId) {
     const ph = findChant(next, r.createdId);
-    if (ph && ph.title === placeholderTitle() && ph.content === gabcSkeleton(placeholderTitle()) && !ph.interpretation && next.activeId !== ph.id) {
+    if (ph && ph.title === r.createdTitle && ph.content === r.createdContent && !ph.interpretation && next.activeId !== ph.id) {
       next = removeNode(next, ph.id)?.project ?? next;
     }
   }

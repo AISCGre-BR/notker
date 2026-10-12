@@ -218,6 +218,14 @@ describe("removeNode / restoreRemoved", () => {
     expect(shape(back.root)).toBe("a g1[b d] e c");
     expect(restoreRemoved(back, r)).toBe(back);
   });
+  it("restoreRemoved: o canto vazio criado é reconhecido mesmo se o idioma mudou entre remover e desfazer", () => {
+    const p = newProject({ family: "stgall", name: "Único" });
+    const r = removeNode(p, p.activeId)!; // pt-BR: "Novo"
+    try {
+      setLocale("en");
+      expect(flattenChants(restoreRemoved(r.project, r)).map((x) => x.title)).toEqual(["Único"]);
+    } finally { setLocale("pt-BR"); }
+  });
   it("restoreRemoved remove o canto vazio criado só se ele ficou intocado", () => {
     const p = newProject({ family: "stgall", name: "Único" });
     const r = removeNode(p, p.activeId)!;
