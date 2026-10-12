@@ -11,15 +11,20 @@ const KINDS: { key: keyof MarkKinds; label: string }[] = [
   { key: "mora", label: "Puncta mora" },
 ];
 
-/** Abre o diálogo; null = cancelado. `last` = escolha anterior da sessão. */
-export async function openStripDialog(host: HTMLElement, counts: MarkCounts, last?: MarkKinds): Promise<MarkKinds | null> {
+export type StripScope = "pasted" | "imported" | "selection" | "chant";
+const SCOPE_TEXT: Record<StripScope, string> = {
+  pasted: "do trecho colado", imported: "do canto importado", selection: "do trecho selecionado", chant: "do canto atual",
+};
+
+/** Abre o diálogo; null = cancelado. `last` = escolha anterior da sessão; `scope` diz de onde sairão os sinais. */
+export async function openStripDialog(host: HTMLElement, counts: MarkCounts, last?: MarkKinds, scope: StripScope = "chant"): Promise<MarkKinds | null> {
   const on: MarkKinds = { vertical: false, horizontal: false, mora: false };
   for (const k of KINDS) on[k.key] = counts[k.key] > 0 && (last ? last[k.key] : true);
   const anyOn = (): boolean => KINDS.some((k) => on[k.key]);
 
   const p = openDialog(host, {
     title: "Remover episemas e puncta mora",
-    body: "Escolha o que tirar das notas do canto atual. O nabc, as letras e as divisões não são alterados.",
+    body: `Escolha o que tirar das notas ${SCOPE_TEXT[scope]}. O nabc, as letras e as divisões não são alterados.`,
     segs: [{
       key: "kinds", label: "Remover", value: "",
       options: KINDS.map((k) => ({ value: k.key, label: `${k.label} (${counts[k.key]})`, disabled: counts[k.key] === 0 })),

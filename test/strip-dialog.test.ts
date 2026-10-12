@@ -120,3 +120,21 @@ describe("diálogo Remover — foco e teclado (correção)", () => {
     await expect(q).resolves.toEqual({ vertical: true, horizontal: true, mora: true });
   });
 });
+
+describe("escopo no texto do diálogo", () => {
+  const body = () => host.querySelector(".sc-dialog__body, .sc-dialog__text")?.textContent ?? host.textContent!;
+  it.each([
+    ["pasted", "trecho colado"], ["imported", "canto importado"], ["selection", "trecho selecionado"], ["chant", "canto atual"],
+  ] as const)("%s cita %s", async (scope, frase) => {
+    const p = openStripDialog(host, counts, undefined, scope);
+    expect(body()).toContain(frase);
+    btn("Cancelar").click();
+    await p;
+  });
+  it("sem escopo mantém 'canto atual'", async () => {
+    const p = openStripDialog(host, counts);
+    expect(body()).toContain("canto atual");
+    btn("Cancelar").click();
+    await p;
+  });
+});

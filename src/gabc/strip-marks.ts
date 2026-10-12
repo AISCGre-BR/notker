@@ -10,7 +10,7 @@ export interface MarkCounts { vertical: number; horizontal: number; mora: number
 const ALL: MarkKinds = { vertical: true, horizontal: true, mora: true };
 
 /** Índice onde o corpo começa (depois da linha `%%`); 0 se não houver cabeçalho. */
-function bodyStart(gabc: string): number {
+export function bodyStart(gabc: string): number {
   let i = 0;
   while (i <= gabc.length) {
     let nl = gabc.indexOf("\n", i);
