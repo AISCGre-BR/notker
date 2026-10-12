@@ -21,7 +21,16 @@ import grammarWasmUrl from "./assets/tree-sitter-gregorio.wasm?url";
 import runtimeWasmUrl from "./assets/tree-sitter.wasm?url";
 import { loadNeumeDb } from "./neume/db-load";
 import { loadUserOverlay, saveUserOverlay, exportOverlay, importOverlay } from "./neume/overlay-io";
-import { mergeEntry, addNameToEntries, mergeOverlays, cloneOverlay } from "./neume/overlay";
+import { addNameToEntries, mergeOverlays, emptyOverlay, overlayCounts } from "./neume/overlay";
+import { buildEffective, glyphIndex, byNabcIndex } from "./neume/effective";
+import { validateNabc, type NabcParser } from "./neume/validate-nabc";
+import { createNeumeDrawer } from "./neume/draw";
+import { insertNabcAtCursor } from "./neume/insert";
+import { createNabcOnlyRenderer } from "./preview/nabc-only";
+import { createNeumasView, type NeumasView, type OpenOpts } from "./neumas/view";
+import { chainAtSelection, resolveNameTarget } from "./neumas/name-target";
+import { nabcFieldStart } from "./editor/context";
+import { openContextMenu } from "./ui/pd/context-menu";
 import { createAutosave } from "./neume/autosave";
 import { NeumeSearch } from "./neume/search";
 import { neumeExtensions } from "./neume/index";
@@ -35,22 +44,26 @@ import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
 import { createMenubar, type MenuItem } from "./ui/menubar";
 import { createDirtyTracker } from "./app/dirty";
+import { createViews } from "./app/views";
+import { chantCapture } from "./app/chant-capture";
 import { debounce } from "./preview/debounce";
-import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
+// PLAYBACK-OFF (2026-10-09): barra da onda.
+// import { createWaveBar, type WaveBarHandle } from "./ui/wave-bar";
 import { newDocumentDialog } from "./ui/new-dialog";
 import { openDialog } from "./ui/pd/dialog";
 import { askSaveChanges, resolveUnsaved, type UnsavedGuard } from "./app/session";
 import { NabcLibEngine } from "./preview/nabc-lib";
 import { createPreviewPanel } from "./preview/panel";
 import { installSync, syncFromCursor } from "./preview/sync";
-import { highlightSyllable, clearHighlight } from "./preview/highlight";
-import { createPlayer } from "./tuotilo/player";
-import { extractAll } from "./tuotilo/signs";
-import { buildTimeline } from "./tuotilo/timeline";
-import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuotilo/duration";
-import { syllableRangeOfSelection } from "./preview/source-map";
-import { DEFAULT_PROFILE } from "./tuotilo/profile";
-import { createOverlayPanel, type OverlayPanel } from "./overlay-ui/panel";
+// PLAYBACK-OFF (2026-10-09): realce de playback/onda.
+// import { highlightSyllable, clearHighlight } from "./preview/highlight";
+// PLAYBACK-OFF (2026-10-09): player e linha do tempo.
+// import { createPlayer } from "./tuotilo/player";
+// import { extractAll } from "./tuotilo/signs";
+// import { buildTimeline } from "./tuotilo/timeline";
+// import { computeTimedNotes, sliceFromSyllable, type PlaybackMode } from "./tuotilo/duration";
+// import { syllableRangeOfSelection } from "./preview/source-map";
+// import { DEFAULT_PROFILE } from "./tuotilo/profile";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createSplit, type Split } from "./ui/split";
 import { toggleLegend, legendVisible } from "./gabc/staff-legend";
@@ -61,9 +74,11 @@ import {
   findNode, countChants, newGroup, renameNode, setCollapsed, revealNode, moveNode, duplicateNode,
 } from "./project/tree";
 import { createTreePanel } from "./project/tree-panel";
-import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
+// PLAYBACK-OFF (2026-10-09): faixas da onda.
+// import { createWaveLanes, factorFromDrag, deformLiveSegment, WAVE_SPREAD, WAVE_LINE_SPACING_PX, type NoteIdent } from "./preview/wave-lanes";
 import type { WaveOverlay } from "./tuotilo/wave";
-import { emptyWave, setWaveFactor, applyWave, gabcBodyHash, waveKey } from "./tuotilo/wave";
+// PLAYBACK-OFF (2026-10-09): setWaveFactor, applyWave, waveKey (só a UI da onda os usava).
+import { emptyWave, gabcBodyHash } from "./tuotilo/wave"; // a interpretação salva continua sendo lida e regravada
 
 /** Tipo inferido do segundo parâmetro de lspDiagnosticsToCM (não exportado do módulo). */
 type LspDiagnosticParam = Parameters<typeof lspDiagnosticsToCM>[1][number];
@@ -85,10 +100,13 @@ async function boot() {
   // de montar. Falha vira aviso (toast) depois que o editor está de pé.
   let highlightFailed = false;
   let getTree: () => Tree | null = () => null;
+  /** Parser do realce, reusado para validar cadeias nabc na vista Neumas (null sem WASM). */
+  let nabcParser: NabcParser | null = null;
   try {
     const ts = await makeTreeSitterHighlighter(runtimeWasmUrl, grammarWasmUrl);
     extraExtensions.push(ts.extension);
     getTree = ts.getTree;
+    nabcParser = { parse: ts.parse };
   } catch (err) {
     highlightFailed = true;
     console.error("[notker] falha ao carregar highlighter WASM:", err);
@@ -154,29 +172,36 @@ async function boot() {
 
   if (highlightFailed) toaster.show("O realce de sintaxe não carregou. O editor funciona sem cores.", { kind: "warn" });
 
-  // effectiveRef: hoistado para fora do bloco F2 para que os comandos o alcancem.
+  // effectiveRef: entradas efetivas atuais, hoistado para fora do bloco F2 (usado por "Nomear neuma…").
   let effectiveRef: () => EffectiveEntry[] = () => [];
 
   // Variáveis de overlay, reindex e família ativa — hoistadas para o handler de teclado.
-  let overlay: Overlay = { schema: 1, kind: "notker-neume-overlay", entries: {} };
+  let overlay: Overlay = emptyOverlay();
+  /** O arquivo de nomes existe mas não pôde ser lido (corrompido, versão mais nova, sem
+   *  permissão): NADA é gravado nesta sessão, para não sobrescrevê-lo com um overlay vazio. */
+  let overlayBlocked: string | null = "os nomes ainda não foram carregados"; // guarda começa FECHADA
+  async function writeOverlay(): Promise<void> {
+    if (overlayBlocked) throw new Error("os nomes salvos não puderam ser lidos (" + overlayBlocked + "); nada foi gravado");
+    await saveUserOverlay(overlay);
+  }
   let reindex = () => {};
   let paletteRef: { open(v: EditorView): void } | null = null;
-  // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora pelo
-  // painel); só a ESCRITA é coalescida (300 ms). schedule() resolve quando o disco
+  // Autosave dos nomes: `overlay` fica SEMPRE em dia (atualizado na hora por
+  // `commitOverlay`: vista Neumas, hover); só a ESCRITA é coalescida (300 ms). schedule() resolve quando o disco
   // confirma (indicador "salvo ✓" verdadeiro); flush() antes de import/export/fechar.
   const overlayAutosave = createAutosave(async () => {
     try {
-      await saveUserOverlay(overlay);
-      reindex();
+      await writeOverlay();
     } catch (e) {
       toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" });
       throw e;
     }
   }, 300);
-  // Painel de nomes aberto (se houver): re-sincroniza quando o overlay muda POR FORA
-  // dele (hover "adicionar nome", importar) — senão o próximo autosave do rascunho
-  // antigo apagaria a mudança.
-  let overlayPanel: OverlayPanel | null = null;
+  /** Vista Neumas (criada quando o catálogo carrega). Lê o overlay sempre de `overlay`:
+   *  não guarda rascunho, então mudanças por fora (hover, paleta, importar) não se perdem. */
+  let neumasView: NeumasView | null = null;
+  /** Adota um overlay novo: índices na hora, gravação coalescida (autosave). */
+  let commitOverlay: (next: Overlay) => Promise<void> = () => Promise.resolve();
   const currentFamily = (): Family => effectiveFamily(project, project.activeId);
 
   function familyLabel(f: Family): string { return f === "stgall" ? "St. Gall" : "Laon"; }
@@ -192,25 +217,34 @@ async function boot() {
     const db = await loadNeumeDb();
     // Overlay é OPCIONAL: uma falha (ex.: permissão de fs ausente) não pode
     // impedir a injeção das extensões F2 (paleta/hover/completion/régua).
-    try { overlay = await loadUserOverlay(); }
-    catch (e) { console.warn("[notker] overlay de nomes indisponível (usando vazio):", e); }
-    const effective = (): EffectiveEntry[] => db.all().map((e) => mergeEntry(e, overlay.entries[e.id]));
-    effectiveRef = effective;
-    let searchInst = new NeumeSearch(effective(), currentFamily());
-    reindex = () => { searchInst = new NeumeSearch(effective(), currentFamily()); };
-    // Agrupamento por nabc: múltiplas entradas (famílias diferentes) podem compartilhar o mesmo código.
-    const byNabc = new Map<string, import("./neume/types").NeumeEntry[]>();
-    for (const e of db.all()) {
-      const arr = byNabc.get(e.nabc) ?? [];
-      arr.push(e);
-      byNabc.set(e.nabc, arr);
+    try { overlay = await loadUserOverlay(); overlayBlocked = null; }
+    catch (e) {
+      console.warn("[notker] overlay de nomes indisponível (usando vazio):", e);
+      overlayBlocked = e instanceof Error ? e.message : String(e);
+      toaster.show("Os nomes de neumas salvos não puderam ser lidos. Novos nomes não serão gravados nesta sessão. " + overlayBlocked, { kind: "error" });
     }
+    // Catálogo + nomes do usuário + sequências do usuário, recalculados a cada mudança
+    // do overlay (busca, paleta, completion, hover e vista Neumas leem daqui).
+    const glyphOf = glyphIndex(db.all());
+    let effectiveCache = buildEffective(db.all(), overlay, glyphOf);
+    let lookup = byNabcIndex(effectiveCache);
+    const effective = (): EffectiveEntry[] => effectiveCache;
+    effectiveRef = effective;
+    let searchInst = new NeumeSearch(effectiveCache);
+    const rebuildIndex = (): void => {
+      effectiveCache = buildEffective(db.all(), overlay, glyphOf);
+      lookup = byNabcIndex(effectiveCache);
+      searchInst = new NeumeSearch(effectiveCache);
+    };
+    reindex = () => { rebuildIndex(); if (views.current() === "neumas") neumasView?.refresh(); };
+    commitOverlay = (next) => { overlay = next; rebuildIndex(); return overlayAutosave.schedule(); };
     const rt = {
       getTree,
       search: () => searchInst,
-      lookupByNabc: (nabc: string): EffectiveEntry[] =>
-        (byNabc.get(nabc) ?? []).map((e) => mergeEntry(e, overlay.entries[e.id])),
+      lookupByNabc: (nabc: string): EffectiveEntry[] => lookup(nabc),
       activeFamily: () => currentFamily(),
+      openNames: (t: { id?: string; family: Family; nabc: string }) =>
+        openNeumas(t.id ? { family: t.family, select: t.id, focus: "name" } : { family: t.family, newChain: t.nabc, focus: "name" }),
       onName: async (ids: string[], name: string) => {
         const n = name.trim();
         const targets = ids.map((id) => ({
@@ -218,12 +252,9 @@ async function boot() {
           displayNames: effective().find((e) => e.id === id)?.displayNames ?? [],
         }));
         const r = addNameToEntries(overlay, targets, n);
-        overlay = r.overlay;
-        const changed = r.changed;
-        if (!changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
-        reindex();
-        overlayPanel?.refresh();
-        try { await overlayAutosave.schedule(); toaster.show(`Nome “${n}” cadastrado.`); }
+        if (!r.changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
+        const saved = commitOverlay(r.overlay); // ponto único: overlay + índices + autosave
+        try { await saved; toaster.show(`Nome “${n}” cadastrado.`); }
         catch { /* o autosave já mostrou o erro */ }
       },
     };
@@ -233,6 +264,25 @@ async function boot() {
     view.dispatch({ effects: neumeCompartment.reconfigure(neumeExt) });
     // Estados de outros cantos criados antes do db carregar também recebem as extensões.
     chantStates.mapAll((s) => s.update({ effects: neumeCompartment.reconfigure(neumeExt) }).state);
+
+    // Vista Neumas (tela de nomes). Desenho grande: glifo da fonte → motor do preview
+    // (só nabc) → partes; medição num host pré-existente fora da tela.
+    const drawer = createNeumeDrawer(glyphOf, createNabcOnlyRenderer(document.querySelector<HTMLElement>("#measure-host")!));
+    neumasView = createNeumasView(document.querySelector<HTMLElement>("#neumas-view")!, {
+      entries: effective,
+      overlay: () => overlay,
+      commit: (next) => commitOverlay(next),
+      validate: (n) => validateNabc(nabcParser, n),
+      draw: (f, n) => drawer.draw(f, n, 96),
+      insert: (n) => {
+        backToEdit();
+        insertNabcAtCursor(view, getTree() as Parameters<typeof insertNabcAtCursor>[1], n);
+        view.focus();
+      },
+      exit: () => backToEdit(),
+      toast: (text, opts) => toaster.show(text, opts),
+      now: () => new Date().toISOString(),
+    });
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
     toaster.show("O catálogo de neumas não carregou. " + String(err), { kind: "error" });
@@ -248,118 +298,124 @@ async function boot() {
   // mesmo que o motor de preview (webview-only) falhe.
   const previewHost = document.querySelector<HTMLElement>("#preview")!;
 
-  // Referência mutável para limpar o cursor da onda no stopPlayback.
-  let waveCursorClear: () => void = () => {};
+  // PLAYBACK-OFF (2026-10-09): cursor da onda.
+  // // Referência mutável para limpar o cursor da onda no stopPlayback.
+  // let waveCursorClear: () => void = () => {};
   // Handles de UI atribuídos no fim do boot; os closures abaixo rodam depois.
   let toolbarHandle: ToolbarHandle | null = null;
-  let waveBar: WaveBarHandle | null = null;
+  // PLAYBACK-OFF (2026-10-09): barra da onda.
+  // let waveBar: WaveBarHandle | null = null;
 
-  // ── Onda de interpretação (Tuotilo B2a) ─────────────────────────────────
-  // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
-  const WAVE_SEED = 12345;
+  // ── Onda de interpretação (Tuotilo B2a) — UI desligada (PLAYBACK-OFF); o estado `wave` segue vivo ─────────────────────────────────
+  // PLAYBACK-OFF (2026-10-09): semente do playback.
+  // // seed fixa para visual estável entre re-renders; playback usa Date.now()%9973
+  // const WAVE_SEED = 12345;
   // Espaçamento com onda ativa (WAVE_LINE_SPACING_PX + WAVE_SPREAD): wave-lanes.ts.
   let wave: WaveOverlay = emptyWave("");
 
-  // Estado do arrasto vertical de fator.
-  let dragState: { key: string; syl: number; note: number; startFactor: number; startClientY: number } | null = null;
-  // Contagem de notas por sílaba (interna) p/ a leitura "nota N de M" no rodapé.
-  let waveNotesPerSyl = new Map<number, number>();
+  // PLAYBACK-OFF (2026-10-09): faixas da onda (wave-lanes), arrasto e toasts de onda desatualizada.
+  // // Estado do arrasto vertical de fator.
+  // let dragState: { key: string; syl: number; note: number; startFactor: number; startClientY: number } | null = null;
+  // // Contagem de notas por sílaba (interna) p/ a leitura "nota N de M" no rodapé.
+  // let waveNotesPerSyl = new Map<number, number>();
 
-  const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
-    onFactorDrag: (key, syl, note, startFactor, startClientY) => {
-      if (playbackMode !== "interpretado") { toaster.show("A onda só é editável no modo interpretado.", { kind: "warn" }); return; }
-      dragState = { key, syl, note, startFactor, startClientY };
-    },
-    onHover: (syl) => {
-      const svg = panel?.svgEl?.(); if (!svg) return;
-      if (syl === null) { clearHighlight(svg); return; }
-      highlightSyllable(svg, syl); // syl já é o realSyllableIndex (renderWaveLanes passa o índice real)
-    },
-  }, { readAnchors: () => panel?.noteAnchors?.() ?? [] });
+  // const waveLanes = createWaveLanes(() => panel?.svgEl?.() ?? null, {
+  //   onFactorDrag: (key, syl, note, startFactor, startClientY) => {
+  //     if (playbackMode !== "interpretado") { toaster.show("A onda só é editável no modo interpretado.", { kind: "warn" }); return; }
+  //     dragState = { key, syl, note, startFactor, startClientY };
+  //   },
+  //   onHover: (syl) => {
+  //     const svg = panel?.svgEl?.(); if (!svg) return;
+  //     if (syl === null) { clearHighlight(svg); return; }
+  //     highlightSyllable(svg, syl); // syl já é o realSyllableIndex (renderWaveLanes passa o índice real)
+  //   },
+  // }, { readAnchors: () => panel?.noteAnchors?.() ?? [] });
 
-  // Rótulo do alongamento p/ a leitura ao vivo no rodapé (na estética: sem floats).
-  const fatorLabel = (f: number): string =>
-    Math.abs(f - 1) < 0.01 ? "neumático puro" : `×${f.toFixed(2).replace(".", ",")}`;
-  const notaLabel = (d: NonNullable<typeof dragState>): string => {
-    const total = waveNotesPerSyl.get(d.syl);
-    return total && total > 1 ? `nota ${d.note + 1} de ${total}` : `nota ${d.note + 1}`;
-  };
-  window.addEventListener("pointermove", (ev) => {
-    if (!dragState) return;
-    const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
-    const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
-    // Leitura ao vivo na barra da onda (perto do gesto); rodapé fica p/ status geral.
-    waveBar?.setReading(`alongamento ${fatorLabel(f)} — ${notaLabel(dragState)}`);
-  });
-  window.addEventListener("pointerup", (ev) => {
-    if (!dragState) return;
-    const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
-    wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
-    waveBar?.setReading(null);
-    dragState = null;
-    rebuildWave();
-    scheduleTitle();
-  });
-  window.addEventListener("pointercancel", () => { dragState = null; waveBar?.setReading(null); });
+  // // Rótulo do alongamento p/ a leitura ao vivo no rodapé (na estética: sem floats).
+  // const fatorLabel = (f: number): string =>
+  //   Math.abs(f - 1) < 0.01 ? "neumático puro" : `×${f.toFixed(2).replace(".", ",")}`;
+  // const notaLabel = (d: NonNullable<typeof dragState>): string => {
+  //   const total = waveNotesPerSyl.get(d.syl);
+  //   return total && total > 1 ? `nota ${d.note + 1} de ${total}` : `nota ${d.note + 1}`;
+  // };
+  // window.addEventListener("pointermove", (ev) => {
+  //   if (!dragState) return;
+  //   const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
+  //   const svg = panel?.svgEl?.(); if (svg) deformLiveSegment(svg, dragState.key, f);
+  //   // Leitura ao vivo na barra da onda (perto do gesto); rodapé fica p/ status geral.
+  //   waveBar?.setReading(`alongamento ${fatorLabel(f)} — ${notaLabel(dragState)}`);
+  // });
+  // window.addEventListener("pointerup", (ev) => {
+  //   if (!dragState) return;
+  //   const f = factorFromDrag(dragState.startFactor, dragState.startClientY, ev.clientY);
+  //   wave = setWaveFactor(wave, dragState.syl, dragState.note, f);
+  //   waveBar?.setReading(null);
+  //   dragState = null;
+  //   rebuildWave();
+  //   scheduleTitle();
+  // });
+  // window.addEventListener("pointercancel", () => { dragState = null; waveBar?.setReading(null); });
 
-  // Liga a referência mutável usada em stopPlayback.
-  waveCursorClear = () => waveLanes.setCursor(null);
+  // // Liga a referência mutável usada em stopPlayback.
+  // waveCursorClear = () => waveLanes.setCursor(null);
 
-  /** Recomputa a onda a partir do doc atual + overlay WaveOverlay e repassa para
-   *  o controller de lanes integrado ao SVG da partitura. */
-  function rebuildWave(): void {
-    waveBar?.setCount(Object.keys(wave.factors).length);
-    toolbarHandle?.refresh(); // wave.reset só habilita com fatores editados
-    const map = panel?.sourceMap?.() ?? [];
-    const texto = view.state.doc.toString();
-    const reals = map.filter((s) => s.syllableIndex >= 1);
-    const syls = extractAll(texto, map);
-    if (syls.length === 0) { waveLanes.refresh([]); return; }
-    const tl = buildTimeline(syls);
-    // base = durações neumáticas PURAS (sem applyWave); o fator vem do overlay
-    const base = computeTimedNotes(tl, DEFAULT_PROFILE, WAVE_SEED, "interpretado");
-    const notes: NoteIdent[] = base.notes.map((n) => ({
-      syllableIndex: n.syllableIndex,                                                         // INTERNO — overlay/cursor/data-key
-      realSyllableIndex: reals[n.syllableIndex]?.syllableIndex ?? (n.syllableIndex + 1),      // REAL (syllable-N)
-      noteInSyllable: n.noteInSyllable,
-      pitch: n.pitch, alt: n.alt,
-      factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
-      divisioAfter: n.pauseAfterMs > 0
-        ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
-        : null,
-    }));
-    waveNotesPerSyl = new Map();
-    for (const n of notes) waveNotesPerSyl.set(n.syllableIndex, (waveNotesPerSyl.get(n.syllableIndex) ?? 0) + 1);
-    waveLanes.refresh(notes);
-  }
+  // /** Recomputa a onda a partir do doc atual + overlay WaveOverlay e repassa para
+  //  *  o controller de lanes integrado ao SVG da partitura. */
+  // function rebuildWave(): void {
+  //   waveBar?.setCount(Object.keys(wave.factors).length);
+  //   toolbarHandle?.refresh(); // wave.reset só habilita com fatores editados
+  //   const map = panel?.sourceMap?.() ?? [];
+  //   const texto = view.state.doc.toString();
+  //   const reals = map.filter((s) => s.syllableIndex >= 1);
+  //   const syls = extractAll(texto, map);
+  //   if (syls.length === 0) { waveLanes.refresh([]); return; }
+  //   const tl = buildTimeline(syls);
+  //   // base = durações neumáticas PURAS (sem applyWave); o fator vem do overlay
+  //   const base = computeTimedNotes(tl, DEFAULT_PROFILE, WAVE_SEED, "interpretado");
+  //   const notes: NoteIdent[] = base.notes.map((n) => ({
+  //     syllableIndex: n.syllableIndex,                                                         // INTERNO — overlay/cursor/data-key
+  //     realSyllableIndex: reals[n.syllableIndex]?.syllableIndex ?? (n.syllableIndex + 1),      // REAL (syllable-N)
+  //     noteInSyllable: n.noteInSyllable,
+  //     pitch: n.pitch, alt: n.alt,
+  //     factor: wave.factors[waveKey(n.syllableIndex, n.noteInSyllable)] ?? 1,
+  //     divisioAfter: n.pauseAfterMs > 0
+  //       ? (tl.divisiones.find((d) => d.afterNoteIdx === n.idx)?.kind ?? null)
+  //       : null,
+  //   }));
+  //   waveNotesPerSyl = new Map();
+  //   for (const n of notes) waveNotesPerSyl.set(n.syllableIndex, (waveNotesPerSyl.get(n.syllableIndex) ?? 0) + 1);
+  //   waveLanes.refresh(notes);
+  // }
 
-  /** Verifica hash do canto e sinaliza onda desatualizada (D4). */
-  function syncWaveWithDoc(): void {
-    const h = gabcBodyHash(view.state.doc.toString());
-    // Primeira vez (hash vazio): adota o hash sem marcar como stale
-    if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
-    if (Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h)
-      toaster.show("O canto mudou depois da interpretação. Revise a onda.", { kind: "warn" });
-    rebuildWave();
-  }
+  // /** Verifica hash do canto e sinaliza onda desatualizada (D4). */
+  // function syncWaveWithDoc(): void {
+  //   const h = gabcBodyHash(view.state.doc.toString());
+  //   // Primeira vez (hash vazio): adota o hash sem marcar como stale
+  //   if (wave.gabcBodyHash === "") wave = { ...wave, gabcBodyHash: h };
+  //   if (Object.keys(wave.factors).length > 0 && wave.gabcBodyHash !== h)
+  //     toaster.show("O canto mudou depois da interpretação. Revise a onda.", { kind: "warn" });
+  //   rebuildWave();
+  // }
 
   let split: Split = { orientation: () => "horizontal", setOrientation: () => {}, toggle: () => {} };
-  // panel é declarado fora do try para que playToggle (Tuotilo) acesse em runtime.
+  // panel é declarado fora do try (PLAYBACK-OFF: o playToggle, comentado, o usava em runtime).
   let panel: ReturnType<typeof createPreviewPanel> | null = null;
   try {
     const engine = new NabcLibEngine();
     panel = createPreviewPanel(previewHost, engine, { debounceMs: 150 });
     installSync(view, panel);
     panel.update(view.state.doc.toString());
-    // Re-injeta as wave lanes após cada render (sobrevive a debounce e resize).
-    panel.onRender(() => { if (waveLanes.enabled()) rebuildWave(); });
+    // PLAYBACK-OFF (2026-10-09): faixas da onda na partitura.
+    // // Re-injeta as wave lanes após cada render (sobrevive a debounce e resize).
+    // panel.onRender(() => { if (waveLanes.enabled()) rebuildWave(); });
     // Encadeia no onDocChange (que já vale o sync/LSP didChange) sem substituí-lo.
     const prevOnDocChange = onDocChange;
     onDocChange = () => {
       prevOnDocChange();
       panel!.update(view.state.doc.toString());
-      // Onda: re-sincroniza apenas se as lanes estiverem habilitadas.
-      if (waveLanes.enabled()) syncWaveWithDoc();
+      // PLAYBACK-OFF (2026-10-09): onda.
+      // // Onda: re-sincroniza apenas se as lanes estiverem habilitadas.
+      // if (waveLanes.enabled()) syncWaveWithDoc();
     };
     // Realce de sílaba segue o cursor.
     view.dom.addEventListener("keyup", () => syncFromCursor(view, panel!));
@@ -370,19 +426,20 @@ async function boot() {
     console.error("[notker] preview ao vivo indisponível:", err);
   }
 
-  // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
-  // O panel pode ser null se o preview falhou — todos os caminhos degradam com toast.
-  const player = createPlayer(() => new AudioContext(), "voz");
-  let playbackMode: PlaybackMode = "interpretado";
+  // PLAYBACK-OFF (2026-10-09): player e AudioContext.
+  // // Tuotilo — player semiológico. AudioContext criado no clique (= gesto do usuário).
+  // // O panel pode ser null se o preview falhou — todos os caminhos degradam com toast.
+  // const player = createPlayer(() => new AudioContext(), "voz");
+  // let playbackMode: PlaybackMode = "interpretado";
 
-  /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
-  function stopPlayback(): void {
-    player.stop();
-    toolbarHandle?.refresh();
-    const svg = panel?.svgEl?.() ?? null;
-    if (svg) clearHighlight(svg);
-    waveCursorClear();
-  }
+  // /** Para o playback de forma consistente: silencia, restaura botão, limpa realce e status. */
+  // function stopPlayback(): void {
+  //   player.stop();
+  //   toolbarHandle?.refresh();
+  //   const svg = panel?.svgEl?.() ?? null;
+  //   if (svg) clearHighlight(svg);
+  //   waveCursorClear();
+  // }
 
   const docListHost = document.querySelector<HTMLElement>("#doc-list")!;
   const dialogHost = document.querySelector<HTMLElement>("#dialog-host")!;
@@ -417,10 +474,11 @@ async function boot() {
   function renderTree(): void { treePanel.render(project); updateTitle(); }
   /** Mostra no editor o canto ativo, com o EditorState DELE. Guarda antes o estado do
    *  canto que sai (inclusive se ele acabou de ser excluído: o Desfazer o devolve com
-   *  histórico). O LSP recebe didChange completo; partitura e onda refazem. */
+   *  histórico). O LSP recebe didChange completo; a partitura refaz (onda: PLAYBACK-OFF). */
   function syncFromProject(): void {
     if (shownId) chantStates.remember(shownId, view.state, view.scrollSnapshot());
-    if (player.playing) stopPlayback();
+    // PLAYBACK-OFF (2026-10-09): não há player.
+    // if (player.playing) stopPlayback();
     const chant = getActiveChant(project);
     const legend = view.state.field(legendVisible, false) ?? false;
     diagnostics = []; // eram do texto anterior; o LSP republica após o didChange
@@ -435,14 +493,11 @@ async function boot() {
     wave = chant.interpretation ?? emptyWave(gabcBodyHash(chant.content));
     renderTree();
     reindex();
-    onDocChange(); // setState não dispara updateListener: LSP + partitura + onda à mão
+    onDocChange(); // setState não dispara updateListener: LSP + partitura à mão (onda: PLAYBACK-OFF)
   }
   function captureEditorIntoProject(): void {
     if (!shownId) return;
-    project = updateChant(project, shownId, {
-      content: view.state.doc.toString(),
-      interpretation: Object.keys(wave.factors).length > 0 ? wave : undefined,
-    });
+    project = updateChant(project, shownId, chantCapture(view.state.doc.toString(), wave));
   }
   /** Aplica uma mudança no projeto. O editor é capturado ANTES; se o ativo deixou de ser
    *  o canto exibido, o editor passa a mostrar o novo ativo. */
@@ -586,6 +641,32 @@ async function boot() {
     ask: (title, error) => askSaveChanges(dialogHost, title, error),
   };
 
+  // Vistas (spec nomes-neumas §2.1): body[data-view] alterna hosts pré-existentes.
+  const views = createViews(document.body, () => { toolbarHandle?.refresh(); });
+  const inEdit = (): boolean => views.current() === "edicao";
+  /** Volta à Edição com o cursor e a seleção do editor intactos (o EditorState não muda). */
+  function backToEdit(): void { neumasView?.flush(); views.set("edicao"); view.focus(); }
+  function openNeumas(o: OpenOpts = {}): void {
+    if (!neumasView) { toaster.show("O catálogo de neumas não carregou.", { kind: "error" }); return; }
+    views.set("neumas");
+    neumasView.open({ ...o, family: o.family ?? currentFamily() });
+  }
+  /** "Nomear neuma…" (Ctrl+Shift+N): seleção num campo nabc, sílaba selecionada (clique na
+   *  partitura) ou neuma sob o cursor → glifo/sequência existente ou sequência nova, com o
+   *  foco em "Novo nome…". */
+  function nameNeumeCmd(): void {
+    const sel = view.state.selection.main;
+    const chain = chainAtSelection(view.state.doc.toString(), sel.from, sel.to,
+      getTree() as Parameters<typeof chainAtSelection>[3]);
+    if (!chain) { toaster.show("Ponha o cursor num neuma (no nabc, depois do |) para nomeá-lo.", { kind: "warn" }); return; }
+    const family = currentFamily();
+    const t = resolveNameTarget(effectiveRef(), family, chain);
+    openNeumas(t.kind === "existing" ? { family, select: t.id, focus: "name" } : { family, newChain: t.nabc, focus: "name" });
+  }
+  const countLabel = (c: { named: number; sequences: number }): string =>
+    [c.named ? `${c.named} ${c.named === 1 ? "neuma com nome" : "neumas com nome"}` : "",
+     c.sequences ? `${c.sequences} ${c.sequences === 1 ? "sequência" : "sequências"}` : ""].filter(Boolean).join(" e ");
+
   const commands = createRegistry();
   const h = {
     // Novo projeto via popup (família por botões-toggle, sem radio nativo que
@@ -634,10 +715,11 @@ async function boot() {
     },
     exportOverlay: async () => {
       try {
-        const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
+        try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
+        const c = overlayCounts(overlay);
+        if (c.named + c.sequences === 0) { toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" }); return; }
         await exportOverlay(overlay);
-        if (n) toaster.show(`${n} nomes exportados.`);
-        else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
+        toaster.show(`Exportados: ${countLabel(c)}.`);
       } catch (err) {
         toaster.show("Exportar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao exportar overlay:", err);
@@ -647,17 +729,23 @@ async function boot() {
       try {
         const imported = await importOverlay();
         if (!imported) return;
-        const n = Object.keys(imported.entries).length;
-        if (n === 0) {
+        const c = overlayCounts(imported);
+        if (c.named + c.sequences === 0) {
           toaster.show("O arquivo não tem nomes para importar.", { kind: "warn" });
           return;
         }
         await overlayAutosave.flush();
+        const previous = overlay;
         overlay = mergeOverlays(overlay, imported);
-        await saveUserOverlay(overlay);
         reindex();
-        overlayPanel?.refresh();
-        toaster.show(`${n} nomes importados.`);
+        try { await writeOverlay(); }
+        catch (e) {
+          // Escrita bloqueada/falhou: não mostrar nomes que não foram gravados.
+          overlay = previous;
+          reindex();
+          throw e;
+        }
+        toaster.show(`Importados: ${countLabel(c)}.`);
       } catch (err) {
         toaster.show("Importar nomes falhou. " + String(err), { kind: "error" });
         console.error("[notker] erro ao importar overlay:", err);
@@ -665,38 +753,10 @@ async function boot() {
     },
     toggleFamily: () => { toggleFamily(); },
     openSearch: () => {
+      if (views.current() === "neumas") { neumasView?.focusSearch(); return; }
       if (!paletteRef) return;
       if (!document.querySelector(".neume-palette")) view.focus();
       paletteRef.open(view);
-    },
-    openOverlayPanel: () => {
-      const host = document.querySelector<HTMLElement>("#overlay-host")!;
-      const closePanel = () => { host.style.display = "none"; host.innerHTML = ""; overlayPanel = null; };
-      // Toggle: se já está aberto, fecha.
-      if (host.style.display === "block") { closePanel(); return; }
-      host.style.display = "block";
-      const op = createOverlayPanel(host, {
-        entries: effectiveRef,
-        initial: () => overlay,
-        onChange: (o) => {
-          overlay = cloneOverlay(o); // em dia JÁ (clone: sem aliasing com o rascunho)
-          return overlayAutosave.schedule();
-        },
-        onExport: async () => {
-          // `overlay` já reflete a tela; grava o pendente antes de exportar.
-          try { await overlayAutosave.flush(); } catch { /* status já exibido */ }
-          const n = Object.values(overlay.entries).filter((e) => e.names?.length).length;
-          await exportOverlay(overlay);
-          if (n) toaster.show(`${n} nomes exportados.`);
-          else toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" });
-        },
-        onImport: async () => {
-          await commands.run("names.import"); // flush + merge + refresh do painel lá dentro
-        },
-        onClose: closePanel,
-      });
-      overlayPanel = op;
-      op.open();
     },
     togglePreview: () => {
       previewHost.style.display = previewHost.style.display === "none" ? "" : "none";
@@ -711,86 +771,87 @@ async function boot() {
     moveLeft: () => { runMove(view, () => getTree(), "left"); },
     moveRight: () => { runMove(view, () => getTree(), "right"); },
     moveReset: () => { runMove(view, () => getTree(), "reset"); },
-    // Tuotilo: alterna interpretado ↔ solfejo. No solfejo toda nota vale baseMs
-    // (leitura de solmização); sinais e legato só no interpretado.
-    modeToggle: () => {
-      playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
-      toolbarHandle?.refresh();
-      waveBar?.setSolfejo(playbackMode !== "interpretado");
-      if (player.playing) stopPlayback();
-    },
-    // Tuotilo: alterna Tocar↔Parar no playback semiológico.
-    playToggle: () => {
-      if (player.playing) {
-        stopPlayback();
-        return;
-      }
-      // Obtém mapa de sílabas do preview; sem preview → degrada com status
-      const map = panel?.sourceMap?.();
-      if (!map || map.length === 0) {
-        toaster.show("Nada para tocar: a partitura ainda não foi desenhada.", { kind: "warn" });
-        return;
-      }
-      const texto = view.state.doc.toString();
-      // Contrato de índices: extractAll filtra sílabas reais (syllableIndex>=1) na
-      // MESMA ordem de svgIndices; note.syllableIndex (0-based na timeline) é,
-      // portanto, posição válida em svgIndices.
-      const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
-      const syls = extractAll(texto, map);
-      if (syls.length === 0) {
-        toaster.show("Nada para tocar neste canto.", { kind: "warn" });
-        return;
-      }
-      const tl = buildTimeline(syls);
-      const playback = computeTimedNotes(tl, DEFAULT_PROFILE, Date.now() % 9973, playbackMode);
-      // Onda: aplicar fatores do overlay apenas no modo interpretado (D4)
-      const shaped = playbackMode === "interpretado" ? applyWave(playback, wave) : playback;
-      // Seleção não-vazia do mouse ⇒ toca só o trecho (spec B2a)
-      const sel = view.state.selection.main;
-      const range = syllableRangeOfSelection(map, sel.from, sel.to);
-      const toPlay = range ? sliceFromSyllable(shaped, range[0]) : shaped;
-      if (toPlay.notes.length === 0) {
-        toaster.show("A seleção não tem notas.", { kind: "warn" });
-        return;
-      }
-      const svg = panel?.svgEl?.() ?? null;
-      toolbarHandle?.refresh();
-      let lastSyl = -1;
-      player.play(
-        toPlay,
-        (note) => {
-          // Realce na partitura: por sílaba (sem mudar o guard existente)
-          if (note.syllableIndex !== lastSyl) {
-            lastSyl = note.syllableIndex;
-            if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
-          }
-          // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
-          waveLanes.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
-        },
-        () => { stopPlayback(); },
-      );
-      toolbarHandle?.refresh(); // agora player.playing já é true
-    },
-    toggleWave: () => {
-      const on = !waveLanes.enabled();
-      waveLanes.setEnabled(on);
-      // Abre/fecha o vão entre sistemas + espalha as notas na horizontal (melismas
-      // densos). O re-render dispara onRender → rebuildWave, que (re)desenha as lanes
-      // já no layout espaçado.
-      panel?.setWaveSpacing(on ? WAVE_LINE_SPACING_PX : 0, on ? WAVE_SPREAD : 1);
-      // Com a onda ativa a partitura vira superfície de TRABALHO: mais respiro
-      // ao redor (padding do preview) acompanha o vão maior entre sistemas.
-      previewHost.classList.toggle("wave-on", on);
-      if (on) syncWaveWithDoc();
-      waveBar?.setVisible(on);
-      waveBar?.setSolfejo(playbackMode !== "interpretado");
-      toolbarHandle?.refresh();
-    },
-    resetWave: () => {
-      wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
-      rebuildWave();
-      scheduleTitle();
-    },
+    // PLAYBACK-OFF (2026-10-09): handlers de Tocar/modo/onda.
+    // // Tuotilo: alterna interpretado ↔ solfejo. No solfejo toda nota vale baseMs
+    // // (leitura de solmização); sinais e legato só no interpretado.
+    // modeToggle: () => {
+    //   playbackMode = playbackMode === "interpretado" ? "solfejo" : "interpretado";
+    //   toolbarHandle?.refresh();
+    //   waveBar?.setSolfejo(playbackMode !== "interpretado");
+    //   if (player.playing) stopPlayback();
+    // },
+    // // Tuotilo: alterna Tocar↔Parar no playback semiológico.
+    // playToggle: () => {
+    //   if (player.playing) {
+    //     stopPlayback();
+    //     return;
+    //   }
+    //   // Obtém mapa de sílabas do preview; sem preview → degrada com status
+    //   const map = panel?.sourceMap?.();
+    //   if (!map || map.length === 0) {
+    //     toaster.show("Nada para tocar: a partitura ainda não foi desenhada.", { kind: "warn" });
+    //     return;
+    //   }
+    //   const texto = view.state.doc.toString();
+    //   // Contrato de índices: extractAll filtra sílabas reais (syllableIndex>=1) na
+    //   // MESMA ordem de svgIndices; note.syllableIndex (0-based na timeline) é,
+    //   // portanto, posição válida em svgIndices.
+    //   const svgIndices = map.filter((s) => s.syllableIndex >= 1).map((s) => s.syllableIndex);
+    //   const syls = extractAll(texto, map);
+    //   if (syls.length === 0) {
+    //     toaster.show("Nada para tocar neste canto.", { kind: "warn" });
+    //     return;
+    //   }
+    //   const tl = buildTimeline(syls);
+    //   const playback = computeTimedNotes(tl, DEFAULT_PROFILE, Date.now() % 9973, playbackMode);
+    //   // Onda: aplicar fatores do overlay apenas no modo interpretado (D4)
+    //   const shaped = playbackMode === "interpretado" ? applyWave(playback, wave) : playback;
+    //   // Seleção não-vazia do mouse ⇒ toca só o trecho (spec B2a)
+    //   const sel = view.state.selection.main;
+    //   const range = syllableRangeOfSelection(map, sel.from, sel.to);
+    //   const toPlay = range ? sliceFromSyllable(shaped, range[0]) : shaped;
+    //   if (toPlay.notes.length === 0) {
+    //     toaster.show("A seleção não tem notas.", { kind: "warn" });
+    //     return;
+    //   }
+    //   const svg = panel?.svgEl?.() ?? null;
+    //   toolbarHandle?.refresh();
+    //   let lastSyl = -1;
+    //   player.play(
+    //     toPlay,
+    //     (note) => {
+    //       // Realce na partitura: por sílaba (sem mudar o guard existente)
+    //       if (note.syllableIndex !== lastSyl) {
+    //         lastSyl = note.syllableIndex;
+    //         if (svg) highlightSyllable(svg, svgIndices[note.syllableIndex] ?? note.syllableIndex + 1);
+    //       }
+    //       // Cursor da onda: por NOTA (D5 — sem guard de sílaba)
+    //       waveLanes.setCursor(waveKey(note.syllableIndex, note.noteInSyllable));
+    //     },
+    //     () => { stopPlayback(); },
+    //   );
+    //   toolbarHandle?.refresh(); // agora player.playing já é true
+    // },
+    // toggleWave: () => {
+    //   const on = !waveLanes.enabled();
+    //   waveLanes.setEnabled(on);
+    //   // Abre/fecha o vão entre sistemas + espalha as notas na horizontal (melismas
+    //   // densos). O re-render dispara onRender → rebuildWave, que (re)desenha as lanes
+    //   // já no layout espaçado.
+    //   panel?.setWaveSpacing(on ? WAVE_LINE_SPACING_PX : 0, on ? WAVE_SPREAD : 1);
+    //   // Com a onda ativa a partitura vira superfície de TRABALHO: mais respiro
+    //   // ao redor (padding do preview) acompanha o vão maior entre sistemas.
+    //   previewHost.classList.toggle("wave-on", on);
+    //   if (on) syncWaveWithDoc();
+    //   waveBar?.setVisible(on);
+    //   waveBar?.setSolfejo(playbackMode !== "interpretado");
+    //   toolbarHandle?.refresh();
+    // },
+    // resetWave: () => {
+    //   wave = emptyWave(gabcBodyHash(view.state.doc.toString()));
+    //   rebuildWave();
+    //   scheduleTitle();
+    // },
   };
 
   commands.register([
@@ -805,24 +866,30 @@ async function boot() {
     { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: h.exportAllGabcCmd },
     { id: "names.export", label: "Exportar nomes…", run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
     { id: "names.import", label: "Importar nomes…", run: h.importOverlay, keys: ["Ctrl+Alt+I"] },
-    { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); } },
-    { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); } },
-    { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"] },
-    { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true },
-    { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true },
-    { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true },
-    { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true },
-    { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"] },
+    // Comandos que agem no editor ficam desligados na vista Neumas (o editor está escondido).
+    { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); }, enabled: inEdit },
+    { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); }, enabled: inEdit },
+    { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"], enabled: inEdit },
+    { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"], enabled: inEdit },
     { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
-    { id: "names.panel", label: "Nomes dos neumas…", icon: "tag", run: h.openOverlayPanel, keys: ["Ctrl+Alt+N"] },
+    // O painel lateral "Nomes" não é mais aberto pela UI: Ctrl+Alt+N abre a vista Neumas.
+    { id: "view.edicao", label: "Edição", run: backToEdit, keys: ["Ctrl+Digit1"], checked: () => views.current() === "edicao" },
+    { id: "view.neumas", label: "Neumas", run: () => openNeumas(), keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => views.current() === "neumas" },
+    { id: "neume.name", label: "Nomear neuma…", icon: "tag", run: nameNeumeCmd, keys: ["Ctrl+Shift+N"], enabled: inEdit },
+    { id: "neumas.search", label: "Buscar na tela de nomes", run: () => neumasView?.focusSearch(), keys: ["Ctrl+F"], enabled: () => views.current() === "neumas" },
     { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
     { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
     { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
     { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible, false) ?? false },
-    { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
-    { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
-    { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },
-    { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() && Object.keys(wave.factors).length > 0 },
+    // PLAYBACK-OFF (2026-10-09): comandos de áudio e da onda.
+    // { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
+    // { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
+    // { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: h.toggleWave, checked: () => waveLanes.enabled() },
+    // { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: h.resetWave, enabled: () => waveLanes.enabled() && Object.keys(wave.factors).length > 0 },
   ]);
 
   let themeChoice = loadTheme();
@@ -879,7 +946,7 @@ async function boot() {
         { ...menuItem("edit.undo"), shortcut: "Ctrl+Z" },
         { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" },
         "---",
-        menuItem("neume.palette"), menuItem("edit.format"),
+        menuItem("neume.palette"), menuItem("neume.name"), menuItem("edit.format"),
         "---",
         menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"),
         menuItem("neume.moveRight"), menuItem("neume.moveReset"),
@@ -888,40 +955,60 @@ async function boot() {
     {
       label: "Exibir",
       items: [
+        menuItem("view.edicao"), menuItem("view.neumas"),
+        "---",
         menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"),
         "---",
-        menuItem("names.panel"), menuItem("doc.toggleFamily"),
+        menuItem("doc.toggleFamily"),
         "---",
         menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark"),
       ],
     },
-    {
-      label: "Interpretação",
-      items: [
-        menuItem("play.toggle"), menuItem("play.mode"),
-        "---",
-        menuItem("wave.toggle"), menuItem("wave.reset"),
-      ],
-    },
+    // PLAYBACK-OFF (2026-10-09): menu Interpretação.
+    // {
+    //   label: "Interpretação",
+    //   items: [
+    //     menuItem("play.toggle"), menuItem("play.mode"),
+    //     "---",
+    //     menuItem("wave.toggle"), menuItem("wave.reset"),
+    //   ],
+    // },
     { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
   ]);
   menubar.setTitle(project.title);
 
   toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { group: ["edit.undo", "edit.redo"] },
-    { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"] },
-    { group: ["edit.format", "neume.palette", "names.panel"] },
-    { group: ["view.split", "view.legend"] },
+    { tabs: ["view.edicao", "view.neumas"], label: "Vistas" },
+    { group: ["edit.undo", "edit.redo"], view: "edicao" },
+    { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"], view: "edicao" },
+    { group: ["edit.format", "neume.palette", "neume.name"], view: "edicao" },
+    { group: ["view.split", "view.legend"], view: "edicao" },
     "spacer",
-    { group: ["play.mode", "wave.toggle", "wave.reset"] },
-    { primary: "play.toggle" },
+    // PLAYBACK-OFF (2026-10-09): modo, onda e Tocar na toolbar.
+    // { group: ["play.mode", "wave.toggle", "wave.reset"] },
+    // { primary: "play.toggle" },
   ]);
 
-  waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
-    void commands.run("wave.reset");
-  });
+  // PLAYBACK-OFF (2026-10-09): barra da onda.
+  // waveBar = createWaveBar(document.querySelector<HTMLElement>("#wave-bar-host")!, () => {
+  //   void commands.run("wave.reset");
+  // });
 
   installTooltips(document.querySelector<HTMLElement>("#tooltip-host")!);
+
+  // Menu de contexto do editor SÓ dentro de um campo nabc (fora dele fica o menu nativo,
+  // com copiar/colar). O clique direito leva o cursor ao ponto, salvo dentro da seleção.
+  view.dom.addEventListener("contextmenu", (e) => {
+    const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+    if (pos == null || nabcFieldStart(view.state.doc.toString(), pos) === -1) return;
+    e.preventDefault();
+    const sel = view.state.selection.main;
+    if (sel.empty || pos < sel.from || pos > sel.to) view.dispatch({ selection: { anchor: pos } });
+    openContextMenu(app, e.clientX, e.clientY, [
+      { label: "Nomear neuma…", shortcut: commands.shortcut("neume.name"), run: () => void commands.run("neume.name") },
+      { label: "Buscar neuma…", shortcut: commands.shortcut("neume.palette"), run: () => void commands.run("neume.palette") },
+    ], view.contentDOM);
+  });
 
   // Atalhos no nível da JANELA (registro único), em fase de BOLHA: o CodeMirror
   // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com

@@ -3,7 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Tree } from "web-tree-sitter";
 import { nabcContextAt, outermostNabcAt, nabcPartsAt } from "../editor/context";
 import type { EffectiveEntry, Family } from "./types";
-import { glyphSvgEl } from "./render";
+import { neumeThumb } from "./render";
 import { describeToken } from "./decode";
 import { nameNeume } from "./naming";
 
@@ -11,18 +11,44 @@ function familyLabel(f: Family): string {
   return f === "stgall" ? "St. Gall" : "Laon";
 }
 
+/** Só as entradas da família dada (o hover nunca mostra a outra família). */
+export function ofFamily(list: EffectiveEntry[], family: Family): EffectiveEntry[] {
+  return list.filter((e) => e.family === family);
+}
+
+/** Lookup restrito à família dada (vazio = o hover cai no ramo "fora do catálogo"). */
+export function familyLookup(lookupAll: (nabc: string) => EffectiveEntry[], family: Family): (nabc: string) => EffectiveEntry[] {
+  return (nabc) => ofFamily(lookupAll(nabc), family);
+}
+
+/** "Abrir na tela de nomes": `id` quando o item existe; senão a cadeia nova. */
+export type OpenNames = (t: { id?: string; family: Family; nabc: string }) => void;
+
+function openNamesButton(run: () => void): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "sc-btn neume-open-names";
+  b.textContent = "Abrir na tela de nomes";
+  b.addEventListener("mousedown", (ev) => ev.preventDefault()); // não fecha o tooltip antes do clique
+  b.addEventListener("click", run);
+  return b;
+}
+
 export function buildEntryRow(
   entry: EffectiveEntry, isActive: boolean,
   onName?: (ids: string[], name: string) => void | Promise<void>,
+  onOpen?: OpenNames,
 ): HTMLElement {
   const row = document.createElement("div");
   row.className = "neume-tip-row";
-  row.appendChild(glyphSvgEl(entry.svg, 32));
+  row.appendChild(neumeThumb(entry, 32));
   const info = document.createElement("div");
   info.className = "neume-tip-info";
   const names = document.createElement("strong");
   names.className = "neume-tip-name";
-  names.textContent = entry.displayNames[0];
+  names.textContent = entry.userSequence && entry.userNames?.length
+    ? `Seu nome: ${entry.userNames[0]}`
+    : entry.displayNames[0];
   const fam = document.createElement("span");
   fam.className = "neume-tip-fam";
   fam.textContent = familyLabel(entry.family as Family) + (isActive ? " · ativa" : "");
@@ -66,6 +92,7 @@ export function buildEntryRow(
     };
     row.appendChild(showButton());
   }
+  if (onOpen) row.appendChild(openNamesButton(() => onOpen({ id: entry.id, family: entry.family as Family, nabc: entry.nabc })));
   return row;
 }
 
@@ -117,11 +144,15 @@ export function buildUnknownInfo(
 
 export function nabcHover(
   getTree: () => Tree | null,
-  lookupByNabc: (nabc: string) => EffectiveEntry[],
+  lookupAll: (nabc: string) => EffectiveEntry[],
   activeFamily: () => Family,
   onName?: (ids: string[], name: string) => void | Promise<void>,
+  onOpen?: OpenNames,
 ) {
   return hoverTooltip((view, pos) => {
+    // Família do canto lida AGORA; todas as buscas abaixo só enxergam essa família.
+    const af = activeFamily();
+    const lookupByNabc = familyLookup(lookupAll, af);
     const tree = getTree();
     if (!tree) return null;
     const doc = view.state.doc.toString();
@@ -151,12 +182,6 @@ export function nabcHover(
     // Partes elementares do neuma externo.
     const rawParts = nabcPartsAt(tree as any, doc, pos);
 
-    // Ordena composto: família ativa primeiro.
-    const af = activeFamily();
-    const sorted = composite.slice().sort(
-      (a, b) => Number(b.family === af) - Number(a.family === af),
-    );
-
     return {
       pos: ctx.tokenFrom, end: ctx.tokenTo, above: true,
       create(_view: EditorView) {
@@ -164,7 +189,7 @@ export function nabcHover(
         dom.className = "neume-tooltip";
 
         // ── Cabeçalho: neuma composto inteiro ──────────────────────────────
-        if (sorted.length === 0) {
+        if (composite.length === 0) {
           // Token composto fora do catálogo: decodifica base + letras significativas
           // e mostra ao menos o neuma-base (com imagem, se o base existir no catálogo).
           // F4: fora do catálogo → motor de nomes (canônico(s) da sinopse +
@@ -177,7 +202,7 @@ export function nabcHover(
           );
           const row = document.createElement("div");
           row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:4px;";
-          if (baseSorted.length > 0) row.appendChild(glyphSvgEl(baseSorted[0].svg, 32));
+          if (baseSorted.length > 0) row.appendChild(neumeThumb(baseSorted[0], 32));
           const info = buildUnknownInfo(
             token, naming.displayNames,
             baseSorted.length > 0 ? (baseSorted[0].family as Family) : null,
@@ -185,8 +210,9 @@ export function nabcHover(
           );
           row.appendChild(info);
           dom.appendChild(row);
+          if (onOpen) dom.appendChild(openNamesButton(() => onOpen({ family: af, nabc: token })));
         } else {
-          for (const entry of sorted) dom.appendChild(buildEntryRow(entry, entry.family === af, onName));
+          for (const entry of composite) dom.appendChild(buildEntryRow(entry, entry.family === af, onName, onOpen));
         }
 
         // ── Partes individuais (apenas para neumas genuinamente compostos) ──
@@ -214,7 +240,7 @@ export function nabcHover(
             if (partSorted.length > 0) {
               // Mostra apenas a entrada da família ativa (ou a primeira disponível).
               const best = partSorted[0];
-              partRow.appendChild(glyphSvgEl(best.svg, 20));
+              partRow.appendChild(neumeThumb(best, 20));
               const label = buildPartLabel(best);
               partRow.appendChild(label);
             } else {

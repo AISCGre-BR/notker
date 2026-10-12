@@ -16,3 +16,16 @@ describe("computeInsertion", () => {
     expect(r).toEqual({ insert: "(|vi)", from: 4, to: 4 });
   });
 });
+
+import { EditorView } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+import { insertNabcAtCursor } from "../src/neume/insert";
+
+describe("insertNabcAtCursor", () => {
+  it("sem árvore (fora de campo) insere (|cadeia) no cursor", () => {
+    const view = new EditorView({ state: EditorState.create({ doc: "(c4) Pó(h) ", selection: { anchor: 11 } }), parent: document.body });
+    insertNabcAtCursor(view, null, "pe!vi");
+    expect(view.state.doc.toString()).toBe("(c4) Pó(h) (|pe!vi)");
+    view.destroy();
+  });
+});

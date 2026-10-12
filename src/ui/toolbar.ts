@@ -4,7 +4,13 @@
 import type { CommandRegistry } from "../app/commands";
 import { icon, type IconName } from "./pd/icons";
 
-export type ToolbarEntry = { group: string[] } | { primary: string } | "spacer" | "sep";
+/** `tabs`: seletor de vistas (texto, role=tablist, aria-selected = `checked`).
+ *  `view`: o item só aparece naquela vista (CSS por `body[data-view]`). */
+export type ToolbarEntry =
+  | { group: string[]; view?: string }
+  | { tabs: string[]; label: string }
+  | { primary: string; view?: string }
+  | "spacer" | "sep";
 export interface ToolbarHandle { refresh(): void; }
 
 export function createToolbar(host: HTMLElement, commands: CommandRegistry, items: ToolbarEntry[]): ToolbarHandle {
@@ -20,9 +26,35 @@ export function createToolbar(host: HTMLElement, commands: CommandRegistry, item
   for (const it of items) {
     if (it === "spacer") { bar.appendChild(Object.assign(document.createElement("span"), { className: "sc-toolbar__spacer" })); continue; }
     if (it === "sep") { bar.appendChild(Object.assign(document.createElement("span"), { className: "sc-toolbar__sep" })); continue; }
+    if ("tabs" in it) {
+      const seg = document.createElement("div");
+      seg.className = "sc-seg notker-views";
+      seg.setAttribute("role", "tablist");
+      seg.setAttribute("aria-label", it.label);
+      for (const id of it.tabs) {
+        const def = commands.get(id);
+        if (!def) continue;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("role", "tab");
+        b.dataset.cmd = id;
+        b.addEventListener("click", click(id));
+        seg.appendChild(b);
+        updaters.push(() => {
+          b.textContent = commands.label(id);
+          b.dataset.tip = commands.tooltip(id);
+          const on = def.checked ? def.checked() : false;
+          b.setAttribute("aria-selected", String(on));
+          b.tabIndex = on ? 0 : -1;
+        });
+      }
+      bar.appendChild(seg);
+      continue;
+    }
     if ("group" in it) {
       const seg = document.createElement("div");
       seg.className = "sc-seg";
+      if (it.view) seg.dataset.view = it.view;
       for (const id of it.group) {
         const def = commands.get(id);
         if (!def) continue;
@@ -49,6 +81,7 @@ export function createToolbar(host: HTMLElement, commands: CommandRegistry, item
     b.type = "button";
     b.className = "sc-btn sc-btn--filled";
     b.dataset.cmd = id;
+    if (it.view) b.dataset.view = it.view;
     b.addEventListener("click", click(id));
     bar.appendChild(b);
     updaters.push(() => {

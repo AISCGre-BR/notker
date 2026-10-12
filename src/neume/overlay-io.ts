@@ -5,11 +5,20 @@ import { type Overlay } from "./types";
 import { emptyOverlay, parseOverlay, serializeOverlay } from "./overlay";
 
 const FILE = "neume-overlay.json";
+/** Cópia do arquivo schema 1 feita na 1ª leitura por esta versão (volta segura a uma versão antiga). */
+const BACKUP_V1 = "neume-overlay.schema1.json";
 const FILTERS = [{ name: "Notker neumes", extensions: ["json"] }];
 
 export async function loadUserOverlay(): Promise<Overlay> {
   if (!(await exists(FILE, { baseDir: BaseDirectory.AppData }))) return emptyOverlay();
-  return parseOverlay(await readTextFile(FILE, { baseDir: BaseDirectory.AppData }));
+  const text = await readTextFile(FILE, { baseDir: BaseDirectory.AppData });
+  const o = parseOverlay(text); // lança em arquivo inválido/versão nova: quem chama NÃO grava por cima
+  try {
+    if ((JSON.parse(text) as { schema?: unknown }).schema === 1 && !(await exists(BACKUP_V1, { baseDir: BaseDirectory.AppData }))) {
+      await writeTextFile(BACKUP_V1, text, { baseDir: BaseDirectory.AppData });
+    }
+  } catch { /* cópia de segurança é best-effort */ }
+  return o;
 }
 export async function saveUserOverlay(o: Overlay): Promise<void> {
   await mkdir("", { baseDir: BaseDirectory.AppData, recursive: true }).catch(() => {});

@@ -3,11 +3,37 @@ import type { Completion, CompletionContext, CompletionResult } from "@codemirro
 import { keymap, type EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 import { nabcFieldStart, inNabcTextual } from "../editor/context";
-import { glyphSvgEl } from "./render";
+import { neumeThumb } from "./render";
 import type { NeumeSearch } from "./search";
+import type { Family } from "./types";
 import { composeFromField, setCompose } from "./compose-state";
 
-export function nabcCompletion(search: () => NeumeSearch): Extension[] {
+/** Opções de sugestão para `query`, só da família do canto, sem repetir o mesmo código. */
+export function completionOptions(search: NeumeSearch, query: string, family: Family): Completion[] {
+  const seen = new Set<string>();
+  const options: Completion[] = [];
+  for (const e of search.query(query, 50, { family })) {
+    if (seen.has(e.nabc)) continue;
+    seen.add(e.nabc);
+    const code = e.nabc;
+    options.push({
+      label: e.nabc,
+      detail: e.displayNames[0],
+      type: "constant",
+      info: () => neumeThumb(e, 40),
+      apply: (view, _c, aFrom, aTo) => {
+        view.dispatch({
+          changes: { from: aFrom, to: aTo, insert: code },
+          selection: { anchor: aFrom + code.length },
+          effects: setCompose.of(null),
+        });
+      },
+    });
+  }
+  return options;
+}
+
+export function nabcCompletion(search: () => NeumeSearch, activeFamily: () => Family): Extension[] {
   return [
     autocompletion({
       activateOnTyping: true,
@@ -19,28 +45,7 @@ export function nabcCompletion(search: () => NeumeSearch): Extension[] {
         const from = (cf !== null && cf !== undefined && cf <= ctx.pos) ? cf : fieldStart;
         const query = doc.slice(from, ctx.pos);
         if (query.length === 0 && !ctx.explicit) return null;
-        const results = search().query(query, 50);
-        const seen = new Set<string>();
-        const options: Completion[] = [];
-        for (const e of results) {
-          if (seen.has(e.nabc)) continue;
-          seen.add(e.nabc);
-          const svg = e.svg;
-          const code = e.nabc;
-          options.push({
-            label: e.nabc,
-            detail: e.displayNames[0],
-            type: "constant",
-            info: () => glyphSvgEl(svg, 40),
-            apply: (view, _c, aFrom, aTo) => {
-              view.dispatch({
-                changes: { from: aFrom, to: aTo, insert: code },
-                selection: { anchor: aFrom + code.length },
-                effects: setCompose.of(null),
-              });
-            },
-          });
-        }
+        const options = completionOptions(search(), query, activeFamily());
         return { from, filter: false, options };
       }],
     }),

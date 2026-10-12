@@ -22,15 +22,18 @@ function scoreTerm(term: string, q: string): number {
 
 export class NeumeSearch {
   private items: EffectiveEntry[];
-  constructor(items: EffectiveEntry[], private activeFamily?: Family) {
-    this.items = items.filter((e) => !e.hidden);
+  /** `includeHidden`: a vista Neumas busca também os ocultos (para poder mostrá-los). */
+  constructor(items: EffectiveEntry[], private activeFamily?: Family, opts: { includeHidden?: boolean } = {}) {
+    this.items = opts.includeHidden ? items : items.filter((e) => !e.hidden);
   }
-  query(raw: string, limit = 200): EffectiveEntry[] {
+  /** `opts.family`: devolve SÓ essa família (lida a cada consulta pelo chamador, nunca capturada). */
+  query(raw: string, limit = 200, opts: { family?: Family } = {}): EffectiveEntry[] {
     const q = norm(raw.trim());
-    if (!q) return this.items.slice(0, limit);
+    const pool = opts.family ? this.items.filter((e) => e.family === opts.family) : this.items;
+    if (!q) return pool.slice(0, limit);
     const words = q.split(/\s+/).filter(Boolean);
     const scored: { e: EffectiveEntry; s: number }[] = [];
-    for (const e of this.items) {
+    for (const e of pool) {
       let total = 0;
       let ok = true;
       for (const w of words) {

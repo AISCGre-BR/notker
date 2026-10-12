@@ -4,7 +4,7 @@ import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { neumePalette } from "../src/neume/palette";
 import { NeumeSearch } from "../src/neume/search";
-import type { EffectiveEntry } from "../src/neume/types";
+import type { EffectiveEntry, Family } from "../src/neume/types";
 
 const SVG = { path: "M0 0h10v10H0z", viewBox: "0 0 10 10", advance: 10 };
 const entry = (id: string, nabc: string, names: string[]): EffectiveEntry => ({
@@ -16,11 +16,13 @@ const entry = (id: string, nabc: string, names: string[]): EffectiveEntry => ({
 let entries: EffectiveEntry[];
 let view: EditorView;
 beforeEach(() => {
+  family = "stgall";
   document.body.innerHTML = "";
   entries = [entry("stgall:pe", "pe", ["pes"]), entry("stgall:cl", "cl", ["clivis"])];
   view = new EditorView({ state: EditorState.create({ doc: "(f)" }), parent: document.body });
 });
-const deps = (onName = vi.fn()) => ({ getTree: () => null, search: () => new NeumeSearch(entries, "stgall"), onName });
+let family: Family = "stgall";
+const deps = (onName = vi.fn()) => ({ getTree: () => null, search: () => new NeumeSearch(entries), activeFamily: () => family, onName });
 const kd = (el: Element, key: string, mods: KeyboardEventInit = {}) =>
   el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods }));
 
@@ -146,5 +148,19 @@ describe("paleta de neumas: cadastro rápido", () => {
     kd(f, "Enter", { isComposing: true });
     expect(onName).not.toHaveBeenCalled();
     expect(document.querySelector(".neume-name-input")).toBe(f);
+  });
+  it("mostra SÓ a família do canto, lida a cada consulta (trocar a família muda sem reabrir a paleta)", () => {
+    entries = [
+      entry("stgall:pe", "pe", ["pes"]),
+      { ...entry("laon:un", "un", ["uncinus"]), id: "laon:un", family: "laon" },
+    ];
+    neumePalette(deps()).open(view);
+    const input = document.querySelector<HTMLInputElement>(".neume-palette input")!;
+    const rows = () => [...document.querySelectorAll(".neume-row-code")].map((n) => n.textContent);
+    expect(rows()).toEqual(["pe"]);
+    family = "laon";
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+    expect(rows()).toEqual(["un"]);
   });
 });

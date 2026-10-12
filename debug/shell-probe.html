@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>shell-probe</title>
   </head>
-  <body>
+  <body data-view="edicao">
     <div id="menubar"></div>
     <div id="toolbar"></div>
     <div id="wave-bar-host"></div>
@@ -14,11 +14,13 @@
         <div id="app" class="sc-panel"></div>
         <div id="preview" class="sc-panel"></div>
       </main>
+      <main id="neumas-view" class="sc-workspace notker-neumas" aria-label="Neumas"></main>
     </div>
     <div id="overlay-host"></div>
     <div id="dialog-host"></div>
     <div id="toast-host" role="status" aria-live="polite"></div>
     <div id="tooltip-host" role="tooltip"></div>
+    <div id="measure-host" aria-hidden="true"></div>
     <pre id="dump" style="display:none"></pre>
     <script type="module" src="/debug/shell-probe.ts"></script>
   </body>

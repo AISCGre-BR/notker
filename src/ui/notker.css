@@ -369,3 +369,86 @@ body.notker-dragging, body.notker-dragging * { cursor: grabbing !important; }
 .notker-sidebar__foot { display: flex; padding: var(--space-3); border-top: 1px solid var(--rule-soft); }
 .notker-split__main { flex: 1; border-radius: var(--radius-md) 0 0 var(--radius-md); }
 .notker-split__more { border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-left: 1px; }
+
+/* Miniatura de sequência (partes lado a lado) ou código quando não há glifo. */
+.neume-thumb--parts { display: inline-flex; align-items: center; gap: 1px; }
+.neume-thumb--code { font: 12px/1 var(--font-mono); color: var(--ink-soft); }
+
+/* Medição do desenho de cadeias nabc: fora da tela, com layout (não display:none). */
+#measure-host { position: fixed; left: -10000px; top: 0; visibility: hidden; pointer-events: none; }
+.neume-drawing-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.neume-drawing-wrap--code { font: 16px/1 var(--font-mono); color: var(--ink-soft); }
+
+/* ── Vistas (body[data-view]) — hosts pré-existentes alternando display (WebKitGTK) ── */
+/* !important: o split (ui/split.ts) põe display:flex inline no #workspace. */
+body[data-view="neumas"] #workspace { display: none !important; }
+body:not([data-view="neumas"]) #neumas-view { display: none; }
+body[data-view="neumas"] .sc-toolbar [data-view="edicao"],
+body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none; }
+#neumas-view { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; gap: var(--space-3); padding: var(--space-3); }
+
+
+/* ── Vista Neumas: cartão Catálogo ─────────────────────────────────────────── */
+.neumas-catalog { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.neumas-catalog__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-2); }
+.neumas-search { flex: 1 1 auto; min-width: 0; }
+.neumas-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 var(--space-3) var(--space-2); }
+.neumas-filters__label { font: 500 12px/16px var(--font-sans); color: var(--ink-muted); }
+.neumas-filter.sc-chip { font: 500 13px/1 var(--font-sans); font-style: normal; height: 26px; cursor: pointer; border: 0; }
+.neumas-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 var(--space-3) var(--space-3); }
+.neumas-section + .neumas-section { margin-top: var(--space-3); }
+.neumas-section__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--rule-soft); margin-bottom: var(--space-2); }
+.neumas-section__title { font: 600 12px/16px var(--font-sans); color: var(--ink-muted); letter-spacing: 0.02em; }
+.neumas-new.sc-btn { height: 26px; }
+.neumas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-2); }
+.neumas-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 8px; border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 0 0 1px var(--rule-soft); cursor: pointer; color: var(--ink); min-width: 0; }
+.neumas-card:hover { background: var(--ink-wash); }
+.neumas-card[aria-selected="true"] { background: var(--rubric-wash); box-shadow: 0 0 0 1px var(--rubric-soft); }
+.neumas-card:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.neumas-card.is-hidden { opacity: 0.5; }
+.neumas-catalog.is-composing .neumas-card { cursor: copy; }
+.neumas-card__fig { height: 44px; width: 100%; display: flex; align-items: center; justify-content: center; color: var(--ink); overflow: hidden; }
+.neumas-card__fig > * { max-width: 100%; }
+.neumas-card__fig svg { max-height: 40px; min-width: 0; flex: 0 1 auto; }
+.neumas-card__name { font: 500 14px/18px var(--font-serif); text-align: center; overflow-wrap: anywhere; }
+.neumas-card__name.is-mine { color: var(--rubric); }
+/* Selecionado: rubrica sobre rubric-wash dá 4,25:1 na Vigília; a tinta mantém o contraste (o ponto e a borda seguem marcando "meu"). */
+.neumas-card[aria-selected="true"] .neumas-card__name.is-mine { color: var(--ink); }
+.neumas-card__code { font: 11px/14px var(--font-mono); color: var(--ink-muted); overflow-wrap: anywhere; text-align: center; }
+.neumas-card__mine { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 3px; background: var(--rubric); }
+.neumas-more { margin-top: var(--space-2); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--ink-muted); font-size: 12px; }
+.neumas-more__text { margin-right: var(--space-2); }
+
+
+/* ── Vista Neumas: cartão Bancada ──────────────────────────────────────────── */
+.neumas-bench { flex: 0 0 360px; min-width: 0; display: flex; flex-direction: column; overflow: auto; }
+.neumas-bench__body { display: flex; flex-direction: column; gap: var(--space-3); padding: 0 var(--space-4) var(--space-4); }
+.neumas-figure { min-height: 112px; display: flex; align-items: center; justify-content: center; color: var(--ink); padding: var(--space-2); border-radius: var(--radius-md); background: var(--parchment); box-shadow: var(--inset); overflow: hidden; }
+.neumas-figure svg { max-width: 100%; height: auto; max-height: 96px; }
+.neumas-chain__row { display: flex; align-items: center; gap: var(--space-2); }
+.neumas-chain__input { font-family: var(--font-mono); flex: 1 1 auto; min-width: 0; }
+.neumas-chain__input[readonly] { color: var(--ink-soft); background: var(--ink-wash); border: 1px dashed var(--rule); box-shadow: none; cursor: default; }
+.neumas-chain__input[readonly]:hover, .neumas-chain__input[readonly]:focus { border-color: var(--rule); box-shadow: none; }
+.neumas-chain__hint { margin-top: 4px; font: 400 12px/16px var(--font-sans); color: var(--ink-muted); }
+.neumas-chain__actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.neumas-compose-help { font: 400 12px/16px var(--font-sans); color: var(--ink-soft); }
+.neumas-compose-help:empty { display: none; }
+.neumas-save-seq.sc-btn { flex: none; }
+.neumas-validity { font: 500 12px/16px var(--font-sans); }
+.neumas-validity[data-state="valid"] { color: var(--success); }
+.neumas-validity[data-state="invalid"] { color: var(--danger); }
+.neumas-dup:empty { display: none; }
+.neumas-dup { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; color: var(--ink-soft); }
+.neumas-label { display: block; font: 500 12px/16px var(--font-sans); color: var(--ink-soft); margin-bottom: 6px; }
+.neumas-names__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--space-2); }
+.neumas-name .neumas-name__text { font-family: var(--font-serif); }
+.neumas-name button { border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; padding: 0 0 0 6px; font: 13px/1 var(--font-sans); }
+.neumas-name button:hover { color: var(--rubric); }
+.neumas-ref__name { font: 500 15px/20px var(--font-serif); }
+.neumas-ref__sys, .neumas-ref__src, .neumas-names__none { font-size: 12px; color: var(--ink-muted); }
+.neumas-note__input.sc-textarea { min-height: 56px; font-size: 14px; line-height: 20px; }
+.neumas-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.neumas-names__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.neumas-savestate { font: 12px/16px var(--font-sans); color: var(--ink-muted); min-height: 16px; margin-bottom: 6px; }
+.neumas-savestate[data-state="salvo ✓"] { color: var(--success); }
+.neumas-savestate[data-state="erro ao salvar"] { color: var(--danger); }

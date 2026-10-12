@@ -52,4 +52,13 @@ describe("NeumeSearch", () => {
     expect(r.length).toBe(2);            // nada escondido
     expect(r[0].family).toBe("stgall");  // ativa primeiro mesmo entrando depois
   });
+  it("filtro por família na consulta: só devolve a família pedida, em qualquer ordem de construção", () => {
+    const stg = eff("stgall:vi", "virga", ["virga", "vi"]);
+    const lao = { ...eff("stgall:vi", "virga", ["virga", "vi"]), id: "laon:vi", family: "laon" as const };
+    const s = new NeumeSearch([lao, stg]);
+    expect(s.query("virga", 50, { family: "laon" }).map((e) => e.id)).toEqual(["laon:vi"]);
+    expect(s.query("virga", 50, { family: "stgall" }).map((e) => e.id)).toEqual(["stgall:vi"]);
+    expect(s.query("", 50, { family: "laon" }).map((e) => e.id)).toEqual(["laon:vi"]);
+    expect(s.query("virga").length).toBe(2); // sem filtro, nada escondido
+  });
 });

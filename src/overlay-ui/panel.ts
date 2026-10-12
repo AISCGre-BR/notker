@@ -6,9 +6,9 @@
 // remover, promover a padrão, ocultar — sobre um rascunho clonado do overlay atual;
 // cada mutação vai ao consumidor via onChange (autosave; não-destrutivo via Importar/merge à parte).
 import type { EffectiveEntry, Overlay, OverlayEntry } from "../neume/types";
-import { glyphSvgEl } from "../neume/render";
+import { neumeThumb } from "../neume/render";
 import { promoteToDefault } from "./conflict";
-import { removeName, cloneOverlay } from "../neume/overlay";
+import { removeName, cloneOverlay, emptyOverlay } from "../neume/overlay";
 import { NeumeSearch } from "../neume/search";
 
 /** Sem filtro, limita as linhas renderizadas (1189 entradas): peça uma busca. */
@@ -50,7 +50,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): OverlayPanel {
   let draft: Overlay = opts.initial
     ? cloneOverlay(opts.initial())
-    : { schema: 1, kind: "notker-neume-overlay", entries: {} };
+    : emptyOverlay();
   let filterQuery = "";
   let editingId: string | null = null;
   let saveState: "idle" | "saving" | "saved" | "error" = "idle";
@@ -110,7 +110,7 @@ export function createOverlayPanel(host: HTMLElement, opts: OverlayPanelOpts): O
     if (isHidden(e.id)) row.classList.add("overlay-row-hidden");
 
     const fig = el("div", "overlay-fig");
-    fig.appendChild(glyphSvgEl(e.svg, 30));
+    fig.appendChild(neumeThumb(e, 30));
     row.appendChild(fig);
 
     const main = el("div", "overlay-row-main");

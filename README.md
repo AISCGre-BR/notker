@@ -37,7 +37,11 @@ pip install 'fonttools==4.59.0'   # uma vez
 npm run neume                      # extrai glifos + gera o db (precisa do wasm: npm run grammar)
 ```
 
-Atalhos: F2 ou Ctrl+K: buscar neuma (Ctrl+Enter num resultado: cadastrar nome) · `Ctrl+Alt+L` régua de altura na pauta · `Ctrl+Alt+E`/`Ctrl+Alt+I` exportar/importar nomes.
+Atalhos: F2 ou Ctrl+K: buscar neuma (Ctrl+Enter num resultado: cadastrar nome) · `Ctrl+Shift+N` nomear o neuma sob o cursor · `Ctrl+Alt+L` régua de altura na pauta · `Ctrl+Alt+E`/`Ctrl+Alt+I` exportar/importar nomes.
+
+Tela de nomes (Exibir ▸ Neumas, `Ctrl+3`; `Ctrl+1` ou Esc volta à Edição): setas navegam, N foca "Novo nome…", Enter grava, S cria uma sequência (cadeia nabc livre), / ou `Ctrl+F` busca, I insere no canto. Os nomes valem para todos os projetos e entram na busca, no hover e no completion.
+
+O playback (Tocar, modos e onda de interpretação) está desligado nesta versão; a interpretação salva nos projetos é preservada.
 
 Árvore de cantos: ↑↓ navegar, ←→ recolher/expandir, Enter abrir, F2 renomear, Del excluir, Alt+↑/↓ mover, Ctrl+D duplicar, Shift+F10 menu; arrastar para reordenar ou soltar dentro de um grupo.
 

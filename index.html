@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>Notker</title>
   </head>
-  <body>
+  <body data-view="edicao">
     <div id="menubar"></div>
     <div id="toolbar"></div>
     <div id="wave-bar-host"></div>
@@ -14,6 +14,8 @@
         <div id="app" class="sc-panel"></div>
         <div id="preview" class="sc-panel"></div>
       </main>
+      <!-- Vista Neumas: host PRÉ-EXISTENTE; body[data-view] alterna o display. -->
+      <main id="neumas-view" class="sc-workspace notker-neumas" aria-label="Neumas"></main>
     </div>
     <!-- Hosts PRÉ-EXISTENTES (WebKitGTK só repinta popup alternando display de um
          elemento que já existe; véu de tela cheia não repinta no RDP/llvmpipe). -->
@@ -21,6 +23,8 @@
     <div id="dialog-host"></div>
     <div id="toast-host" role="status" aria-live="polite"></div>
     <div id="tooltip-host" role="tooltip"></div>
+    <!-- Medição fora da tela do desenho de cadeias nabc (nabc-only.ts). -->
+    <div id="measure-host" aria-hidden="true"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
