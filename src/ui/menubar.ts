@@ -13,7 +13,9 @@ export interface MenuItem {
   enabled?: () => boolean;
 }
 /** Item de submenu montado na hora (ex.: um projeto recente): roda direto, sem registro. */
-export interface SubmenuEntry { label: string; caption?: string; run: () => void; enabled?: boolean }
+/** `checked` (boolean) torna o item uma escolha exclusiva (menuitemradio, com ✓) — ex.: Idioma.
+ *  `lang` marca o rótulo num idioma próprio ("English" lido em inglês pelo leitor de tela). */
+export interface SubmenuEntry { label: string; caption?: string; run: () => void; enabled?: boolean; checked?: boolean; lang?: string }
 /** Item que abre um submenu à direita ("Abrir recente ▸"); itens reavaliados a cada abertura. */
 export interface SubmenuSpec { label: string; submenu: () => (SubmenuEntry | "---")[] }
 export interface MenuSpec { label: string; items: MenuEntry[]; }
@@ -96,12 +98,17 @@ export function createMenubar(
       const b = document.createElement("button");
       b.type = "button";
       b.className = "sc-menu__item";
-      b.setAttribute("role", "menuitem");
+      if (it.checked !== undefined) {
+        b.setAttribute("role", "menuitemradio");
+        b.setAttribute("aria-checked", String(it.checked));
+      } else b.setAttribute("role", "menuitem");
       b.disabled = it.enabled === false;
       const check = document.createElement("span");
       check.className = "sc-menu__check";
+      check.textContent = it.checked ? "✓" : "";
       const label = document.createElement("span");
       label.textContent = it.label;
+      if (it.lang) label.lang = it.lang;
       const cap = document.createElement("span");
       cap.className = "sc-menu__kbd";
       cap.textContent = it.caption ?? "";

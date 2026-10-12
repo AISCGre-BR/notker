@@ -30,4 +30,15 @@ describe("main.ts: idioma", () => {
   it("t() do i18n não é sombreado por parâmetro", () => {
     expect(code).not.toMatch(/\(t: \{/);
   });
+  it("Exibir ▸ Idioma: submenu com os três idiomas, troca pela guarda do fechar e reabre depois da recarga", () => {
+    const exibir = code.slice(code.indexOf('label: t("menu.view")'), code.indexOf('label: t("menu.help")'));
+    expect(exibir).toContain('label: t("menu.language"), submenu: languageMenu');
+    expect(code).toMatch(/LOCALES\.map\(\(l\)[^\n]*LOCALE_NAMES\[l\][^\n]*lang: l[^\n]*checked: getLocale\(\) === l/);
+    expect(code).toContain("switchLocale(");
+    expect(code).toContain("runCloseSequence(closeDeps())");
+    expect(code).toContain("location.reload()");
+    expect(code).toMatch(/const re = takeReopen\(\)/);
+    expect(code).toContain("unlistenClose = u");
+    expect(code).toContain("unlistenClose?.()");
+  });
 });

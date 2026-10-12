@@ -401,3 +401,23 @@ describe("menubar — idiomas", () => {
     expect(host.querySelector(".sc-menubar__state")!.textContent).toBe("— Edited");
   });
 });
+
+describe("submenu de escolha exclusiva (Exibir ▸ Idioma ▸)", () => {
+  it("itens com checked viram menuitemradio com ✓ e lang no rótulo", () => {
+    const run = vi.fn();
+    const m = mount([{ label: "Exibir", items: [{ label: "Idioma", submenu: () => [
+      { label: "Português", lang: "pt-BR", checked: true, run },
+      { label: "English", lang: "en", checked: false, run },
+      { label: "Italiano", lang: "it", checked: false, run },
+    ] }] }]);
+    m.host.querySelector<HTMLButtonElement>(".sc-menubar__top")!.click();
+    m.host.querySelector<HTMLButtonElement>(".sc-menu__item")!.click();
+    const items = [...m.host.querySelectorAll<HTMLButtonElement>(".notker-submenu .sc-menu__item")];
+    expect(items.map((b) => b.getAttribute("role"))).toEqual(["menuitemradio", "menuitemradio", "menuitemradio"]);
+    expect(items.map((b) => b.getAttribute("aria-checked"))).toEqual(["true", "false", "false"]);
+    expect(items.map((b) => b.querySelector(".sc-menu__check")!.textContent)).toEqual(["✓", "", ""]);
+    expect((items[1].children[1] as HTMLElement).lang).toBe("en");
+    items[2].click();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+});

@@ -55,8 +55,9 @@ import { askSaveChanges, resolveUnsaved, type UnsavedGuard } from "./app/session
 import { setScreen, type Screen } from "./app/screen";
 import { createWelcome } from "./app/welcome";
 import { mountNewProjectGuide, projectFromDraft, hasDraft, type GuideHandle } from "./app/new-project-guide";
-import { runCloseSequence } from "./app/close-sequence";
-import { initLocale, t, tn, type MessageKey } from "./i18n";
+import { runCloseSequence, type CloseDeps } from "./app/close-sequence";
+import { switchLocale, takeReopen } from "./app/locale-switch";
+import { getLocale, initLocale, LOCALES, LOCALE_NAMES, t, tn, type Locale, type MessageKey } from "./i18n";
 import { createThumbTracker } from "./app/thumb-tracker";
 import { loadExampleProject } from "./project/example";
 import {
@@ -175,6 +176,7 @@ async function boot() {
   let screen: Screen = "welcome";
   /** Há um projeto do usuário carregado (pode estar escondido atrás do guia). */
   let projectOpen = false;
+  let exampleOpen = false; // o projeto aberto é o de exemplo (reabrir depois de trocar o idioma)
   let menubar: ReturnType<typeof createMenubar> | undefined;
   /** Título na menubar com "— Editado" quando o projeto difere do último salvo/aberto. */
   function updateTitle(): void {
@@ -791,6 +793,7 @@ async function boot() {
     if (!loadProject(p)) return false;
     closeGuide();
     toEditView();
+    exampleOpen = false;
     projectOpen = true;
     showScreen("project");
     view.focus();
@@ -991,6 +994,7 @@ async function boot() {
     toEditView(); // nota pendente da vista Neumas gravada; a mesa volta (depois) na Edição
     if (!loadProject(newProject({ family: "stgall", name: t("project.defaultChant") }))) return; // solta o projeto da memória; falhou = continua com o atual
     projectOpen = false;
+    exampleOpen = false;
     showWelcome();
   }
 
@@ -1019,7 +1023,7 @@ async function boot() {
     },
     openExample: async () => {
       if (!(await leaveProject())) return;
-      enterProject(loadExampleProject());
+      if (enterProject(loadExampleProject())) exampleOpen = true;
     },
     exportGabc: async () => {
       try {
@@ -1319,6 +1323,32 @@ async function boot() {
       enabled: def?.enabled,
     };
   };
+  const closeDeps = (): CloseDeps => ({
+    awaitSaving: async () => { if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } } },
+    // Guia com algo digitado: pergunta antes de fechar (o rascunho não tem outra rede).
+    confirmGuide: screen === "guide" && guide && hasDraft(guide.draft()) ? confirmDiscardGuide : undefined,
+    resolveUnsaved: () => resolveUnsaved(unsaved),
+    flushView: () => neumasView?.flush(), // nota em debounce / nome digitado entram no autosave
+    flushNames: () => overlayAutosave.flush(), // erro: o autosave já o mostrou
+    stopRecovery: () => recovery.stop(),
+    clearRecovery: () => recovery.clear(),
+  });
+  let unlistenClose: (() => void) | null = null;
+
+  async function changeLocale(l: Locale): Promise<void> {
+    await switchLocale(l, {
+      current: getLocale,
+      close: () => runCloseSequence(closeDeps()),
+      reopenTarget: () => (!projectOpen ? null
+        : project.path ? { kind: "path", path: project.path }
+        : exampleOpen ? { kind: "example" } : null),
+      teardown: async () => { unlistenClose?.(); await client.stop(); },
+      reload: () => location.reload(),
+    });
+  }
+  const languageMenu = (): SubmenuEntry[] =>
+    LOCALES.map((l) => ({ label: LOCALE_NAMES[l], lang: l, checked: getLocale() === l, run: () => { void changeLocale(l); } }));
+
   menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
     {
       label: t("menu.file"),
@@ -1358,6 +1388,8 @@ async function boot() {
         menuItem("doc.toggleFamily"),
         "---",
         menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark"),
+        "---",
+        { label: t("menu.language"), submenu: languageMenu },
       ],
     },
     // PLAYBACK-OFF (2026-10-09): menu Interpretação.
@@ -1422,6 +1454,10 @@ async function boot() {
   try { pendingPrev = parseSnapshot(await recoveryPrevSlot.read()); } catch { pendingPrev = null; }
   showWelcome(); // sem projeto aberto: tela inicial
   recovery.start();
+  const re = takeReopen();
+  if (re?.kind === "path") void openRecent(re.path);
+  else if (re?.kind === "example") void commands.run("file.openExample");
+
 
   // Fechar a janela: com alterações, pergunta; grava os nomes pendentes; NUNCA prende a
   // janela (falha inesperada na guarda → fecha). O wrapper do Tauri só chama destroy()
@@ -1431,19 +1467,10 @@ async function boot() {
       // Nunca rejeita (o wrapper do Tauri só fecha se o handler não lançar): cada passo
       // da sequência tem o seu try/catch e, no pior caso, a janela fecha.
       try {
-        const { prevent } = await runCloseSequence({
-          awaitSaving: async () => { if (saving) { try { await saving; } catch { /* a pergunta abaixo mostra o que sobrou */ } } },
-          // Guia com algo digitado: pergunta antes de fechar (o rascunho não tem outra rede).
-          confirmGuide: screen === "guide" && guide && hasDraft(guide.draft()) ? confirmDiscardGuide : undefined,
-          resolveUnsaved: () => resolveUnsaved(unsaved),
-          flushView: () => neumasView?.flush(), // nota em debounce / nome digitado entram no autosave
-          flushNames: () => overlayAutosave.flush(), // erro: o autosave já o mostrou
-          stopRecovery: () => recovery.stop(),
-          clearRecovery: () => recovery.clear(),
-        });
+        const { prevent } = await runCloseSequence(closeDeps());
         if (prevent) ev.preventDefault();
       } catch (e) { console.error("[notker] fechar:", e); }
-    }).catch(() => { /* sem permissão/evento: segue sem guarda */ });
+    }).then((u) => { unlistenClose = u; }).catch(() => { /* sem permissão/evento: segue sem guarda */ });
   } catch { /* fora do Tauri (testes/probe) */ }
 }
 
