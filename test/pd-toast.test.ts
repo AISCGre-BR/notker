@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createToaster } from "../src/ui/pd/toast";
+import { setLocale } from "../src/i18n";
 
 let host: HTMLElement;
 beforeEach(() => { vi.useFakeTimers(); document.body.innerHTML = '<div id="toast-host" style="display:none"></div>'; host = document.getElementById("toast-host")!; });
@@ -52,5 +53,14 @@ describe("toast", () => {
     expect(host.querySelector(".sc-toast")).not.toBeNull();
     vi.advanceTimersByTime(1000);
     expect(host.querySelector(".sc-toast")).toBeNull();
+  });
+});
+
+describe("toast — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("o 'Fechar' automático do erro segue o idioma", () => {
+    setLocale("it");
+    createToaster(host).show("x", { kind: "error" });
+    expect(host.querySelector(".sc-toast__act")!.textContent).toBe("Chiudi");
   });
 });

@@ -56,6 +56,7 @@ import { setScreen, type Screen } from "./app/screen";
 import { createWelcome } from "./app/welcome";
 import { mountNewProjectGuide, projectFromDraft, hasDraft, type GuideHandle } from "./app/new-project-guide";
 import { runCloseSequence } from "./app/close-sequence";
+import { initLocale, t, tn, type MessageKey } from "./i18n";
 import { createThumbTracker } from "./app/thumb-tracker";
 import { loadExampleProject } from "./project/example";
 import {
@@ -107,6 +108,12 @@ const URI = "inmemory://notker.gabc";
 let diagnostics: Diagnostic[] = [];
 
 async function boot() {
+  initLocale();
+  const LANDMARKS: [string, MessageKey][] = [
+    ["#doc-list", "landmark.chants"], ["#neumas-view", "landmark.neumes"],
+    ["#welcome-host", "landmark.home"], ["#guide-host", "landmark.newProject"],
+  ];
+  for (const [sel, key] of LANDMARKS) document.querySelector(sel)?.setAttribute("aria-label", t(key));
   const toaster = createToaster(document.querySelector<HTMLElement>("#toast-host")!);
   applyTheme(loadTheme());
   const app = document.querySelector<HTMLElement>("#app")!;
@@ -139,7 +146,7 @@ async function boot() {
   extraExtensions.push(
     externalLinter(() => diagnostics),
     // Colou gabc com episemas/puncta mora: oferece removê-los (toast com ação).
-    pasteMarksWatcher(() => offerStrip("O gabc colado tem episemas ou puncta mora.", "pasted")),
+    pasteMarksWatcher(() => offerStrip(t("strip.offer.pasted"), "pasted")),
     EditorView.updateListener.of((u) => { if (u.docChanged) onDocChange(); }),
     // F4: Alt+setas movem o neuma sob o cursor (altura/horizontal). O thunk lê o
     // getTree atual (reatribuído quando o highlighter WASM carrega).
@@ -155,7 +162,7 @@ async function boot() {
   const chantStates = createChantStates((doc) =>
     createEditorState(doc, [...extraExtensions, neumeCompartment.of(neumeExt)]));
 
-  let project: NotkerProject = newProject({ family: "stgall", name: "Novo" });
+  let project: NotkerProject = newProject({ family: "stgall", name: t("project.defaultChant") });
   const view = new EditorView({ parent: app, state: chantStates.get(project.activeId, getActiveChant(project).content) });
   /** Canto cujo texto está no editor agora: o capture escreve SEMPRE nele. */
   let shownId: string | null = project.activeId;
@@ -173,7 +180,7 @@ async function boot() {
   function updateTitle(): void {
     if (!booted) return;
     if (screen === "welcome") { menubar?.setTitle("Notker"); return; }
-    if (screen === "guide") { menubar?.setTitle("Novo projeto"); return; }
+    if (screen === "guide") { menubar?.setTitle(t("landmark.newProject")); return; }
     captureEditorIntoProject();
     menubar?.setTitle(project.title, dirty.isDirty(project));
   }
@@ -198,7 +205,7 @@ async function boot() {
   });
   onDocChange = () => { sync(); scheduleTitle(); };
 
-  if (highlightFailed) toaster.show("O realce de sintaxe não carregou. O editor funciona sem cores.", { kind: "warn" });
+  if (highlightFailed) toaster.show(t("app.highlightFailed"), { kind: "warn" });
 
   // effectiveRef: entradas efetivas atuais, hoistado para fora do bloco F2 (usado por "Nomear neuma…").
   let effectiveRef: () => EffectiveEntry[] = () => [];
@@ -207,9 +214,9 @@ async function boot() {
   let overlay: Overlay = emptyOverlay();
   /** O arquivo de nomes existe mas não pôde ser lido (corrompido, versão mais nova, sem
    *  permissão): NADA é gravado nesta sessão, para não sobrescrevê-lo com um overlay vazio. */
-  let overlayBlocked: string | null = "os nomes ainda não foram carregados"; // guarda começa FECHADA
+  let overlayBlocked: string | null = t("names.notLoaded"); // guarda começa FECHADA
   async function writeOverlay(): Promise<void> {
-    if (overlayBlocked) throw new Error("os nomes salvos não puderam ser lidos (" + overlayBlocked + "); nada foi gravado");
+    if (overlayBlocked) throw new Error(t("names.blocked", { reason: overlayBlocked }));
     await saveUserOverlay(overlay);
   }
   let reindex = () => {};
@@ -221,7 +228,7 @@ async function boot() {
     try {
       await writeOverlay();
     } catch (e) {
-      toaster.show("Não foi possível salvar os nomes. " + String(e), { kind: "error" });
+      toaster.show(t("names.saveFailed", { error: String(e) }), { kind: "error" });
       throw e;
     }
   }, 300);
@@ -238,7 +245,7 @@ async function boot() {
     applyTree((p) => setChantFamily(p, p.activeId, f));
     reindex();
     panel?.update(view.state.doc.toString()); // a partitura troca a fonte dos neumas
-    toaster.show("Família do canto: " + familyLabel(f) + ".");
+    toaster.show(t("family.changed", { family: familyLabel(f) }));
   }
 
   // Carrega db de neumas e reconfigura o compartment F2.
@@ -250,7 +257,7 @@ async function boot() {
     catch (e) {
       console.warn("[notker] overlay de nomes indisponível (usando vazio):", e);
       overlayBlocked = e instanceof Error ? e.message : String(e);
-      toaster.show("Os nomes de neumas salvos não puderam ser lidos. Novos nomes não serão gravados nesta sessão. " + overlayBlocked, { kind: "error" });
+      toaster.show(t("names.loadFailed", { error: overlayBlocked }), { kind: "error" });
     }
     // Catálogo + nomes do usuário + sequências do usuário, recalculados a cada mudança
     // do overlay (busca, paleta, completion, hover e vista Neumas leem daqui).
@@ -281,9 +288,9 @@ async function boot() {
           displayNames: effective().find((e) => e.id === id)?.displayNames ?? [],
         }));
         const r = addNameToEntries(overlay, targets, n);
-        if (!r.changed) { toaster.show("Esse nome já existe.", { kind: "warn" }); return; }
+        if (!r.changed) { toaster.show(t("names.exists"), { kind: "warn" }); return; }
         const saved = commitOverlay(r.overlay); // ponto único: overlay + índices + autosave
-        try { await saved; toaster.show(`Nome “${n}” cadastrado.`); }
+        try { await saved; toaster.show(t("names.added", { name: n })); }
         catch { /* o autosave já mostrou o erro */ }
       },
     };
@@ -314,7 +321,7 @@ async function boot() {
     });
   } catch (err) {
     console.error("[notker] falha ao carregar neume-db (F2):", err);
-    toaster.show("O catálogo de neumas não carregou. " + String(err), { kind: "error" });
+    toaster.show(t("catalog.loadFailed", { error: String(err) }), { kind: "error" });
   }
 
   /** Substitui todo o conteúdo do editor (usado ao abrir arquivo). */
@@ -514,7 +521,7 @@ async function boot() {
     onSetFamily: (id, f) => {
       applyTree((p) => setChantFamily(p, id, f));
       if (id === project.activeId) { reindex(); panel?.update(view.state.doc.toString()); }
-      toaster.show("Família do canto: " + familyLabel(f) + ".");
+      toaster.show(t("family.changed", { family: familyLabel(f) }));
     },
     onNewChant: (parentId, index) => void newChantAt(parentId, index),
     onNewGroup: (parentId, index) => newGroupAt(parentId, index),
@@ -590,7 +597,7 @@ async function boot() {
       // (senão aparece "— Editado" sem ter mudado, ou perde o aviso e a pergunta de salvar).
       dirty.restoreBaseline(prevBaseline);
       updateTitle();
-      toaster.show("Não foi possível abrir o projeto. " + String(err), { kind: "error" });
+      toaster.show(t("project.openFailed", { error: String(err) }), { kind: "error" });
       return false;
     }
   }
@@ -600,9 +607,9 @@ async function boot() {
   // Novo canto (diálogo com nome/ofício/família) no lugar pedido; vira o ativo.
   // revealNode expande um grupo recolhido que seja o destino.
   async function newChantAt(parentId: string | null, index: number): Promise<void> {
-    const r = await newDocumentDialog(dialogHost, { title: "Novo canto", family: effectiveFamily(project, project.activeId) });
+    const r = await newDocumentDialog(dialogHost, { title: t("newChant.title"), family: effectiveFamily(project, project.activeId) });
     if (!r) return;
-    const chant = newChant({ title: r.name ?? "Novo", content: gabcSkeleton(r.name, r.office), family: r.family });
+    const chant = newChant({ title: r.name ?? t("project.defaultChant"), content: gabcSkeleton(r.name, r.office), family: r.family });
     const target = liveParent(parentId);
     if (target !== parentId) index = Infinity; // o grupo sumiu: vai para o fim da raiz
     applyTree((p) => setActive(revealNode(insertNode(p, target, index, chant), chant.id), chant.id));
@@ -625,9 +632,9 @@ async function boot() {
       applyTree((p) => setActive(insertNode(p, null, Infinity, chant), chant.id));
       view.focus();
       const c = detectMarks(f.content);
-      if (c.vertical + c.horizontal + c.mora > 0) offerStrip("O gabc importado tem episemas ou puncta mora.", "imported");
+      if (c.vertical + c.horizontal + c.mora > 0) offerStrip(t("strip.offer.imported"), "imported");
     } catch (e) {
-      toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" });
+      toaster.show(t("file.importFailed", { error: String(e) }), { kind: "error" });
     }
   }
   /** Remover episemas e puncta mora: escolha anterior da sessão e oferta em toast. Nada age se o
@@ -635,22 +642,22 @@ async function boot() {
   let lastStrip: MarkKinds | undefined;
   function offerStrip(msg: string, scope: StripScope): void {
     const id = shownId, epoch = projectEpoch;
-    toaster.show(msg, { action: { label: "Remover…", run: () => { if (id === shownId && epoch === projectEpoch) void runStrip(scope); } } });
+    toaster.show(msg, { action: { label: t("strip.action"), run: () => { if (id === shownId && epoch === projectEpoch) void runStrip(scope); } } });
   }
   async function runStrip(scope: StripScope): Promise<void> {
     const id = shownId, epoch = projectEpoch;
     const sel = view.state.selection.main;
     const area = (): Range | undefined => scope === "pasted" ? view.state.field(pastedRange, false) ?? undefined
       : scope === "selection" ? { from: sel.from, to: sel.to } : undefined;
-    if (scope === "pasted" && !area()) { toaster.show("O trecho colado não existe mais.", { kind: "warn" }); return; }
+    if (scope === "pasted" && !area()) { toaster.show(t("strip.gone"), { kind: "warn" }); return; }
     const counts = marksIn(view.state, area());
-    if (counts.vertical + counts.horizontal + counts.mora === 0) { toaster.show("Não há episemas nem puncta mora aqui."); return; }
+    if (counts.vertical + counts.horizontal + counts.mora === 0) { toaster.show(t("strip.none")); return; }
     const kinds = await openStripDialog(dialogHost, counts, lastStrip, scope);
     if (!kinds || id !== shownId || epoch !== projectEpoch) return;
-    if (scope === "pasted" && !area()) { toaster.show("O trecho colado não existe mais.", { kind: "warn" }); return; }
+    if (scope === "pasted" && !area()) { toaster.show(t("strip.gone"), { kind: "warn" }); return; }
     lastStrip = kinds;
     const n = applyStrip(view, kinds, area());
-    toaster.show(n === 0 ? "Nada a remover." : n === 1 ? "Removido: 1 sinal." : `Removidos: ${n} sinais.`);
+    toaster.show(n === 0 ? t("strip.nothing") : tn("strip.removed", n));
     view.focus();
   }
   /** Excluir: grupo com cantos pede confirmação (perigo à esquerda, Enter = Cancelar);
@@ -662,12 +669,10 @@ async function boot() {
       const n = countChants(node);
       if (n > 0) {
         const r = await openDialog(dialogHost, {
-          title: n === 1
-            ? `Excluir “${node.title}” e o canto dentro dele?`
-            : `Excluir “${node.title}” e os ${n} cantos dentro dele?`,
+          title: tn("tree.deleteGroupConfirm", n, { title: node.title }),
           actions: [
-            { id: "delete", label: "Excluir", kind: "danger" },
-            { id: "cancel", label: "Cancelar", kind: "elevated" },
+            { id: "delete", label: t("common.delete"), kind: "danger" },
+            { id: "cancel", label: t("common.cancel"), kind: "elevated" },
           ],
           defaultAction: "cancel",
         });
@@ -683,8 +688,8 @@ async function boot() {
     if (!r) return;
     const epoch = projectEpoch;
     applyTree(() => r.project);
-    toaster.show(node.kind === "group" ? "Grupo excluído." : "Canto excluído.", {
-      action: { label: "Desfazer", run: () => { if (epoch === projectEpoch) applyTree((p) => restoreRemoved(p, r)); } },
+    toaster.show(node.kind === "group" ? t("tree.groupDeleted") : t("tree.chantDeleted"), {
+      action: { label: t("common.undo"), run: () => { if (epoch === projectEpoch) applyTree((p) => restoreRemoved(p, r)); } },
     });
   }
   renderTree();
@@ -704,7 +709,7 @@ async function boot() {
       dirty.markSaved(snap);
       project = { ...project, path };
       updateTitle();
-      toaster.show("Projeto salvo.");
+      toaster.show(t("project.saved"));
       void recovery.clear();              // salvo: o retrato desta sessão não serve mais
       void rememberRecent(project, "save"); // entra/sobe nos recentes, com miniatura nova
       return true;
@@ -715,7 +720,7 @@ async function boot() {
   }
   const saveCmd = (saveAs: boolean) => async (): Promise<void> => {
     try { await doSave(saveAs); }
-    catch (err) { toaster.show("Salvar falhou. " + String(err), { kind: "error" }); console.error(err); }
+    catch (err) { toaster.show(t("project.saveFailed", { error: String(err) }), { kind: "error" }); console.error(err); }
   };
 
   const unsaved: UnsavedGuard = {
@@ -735,7 +740,7 @@ async function boot() {
   /** Volta à Edição com o cursor e a seleção do editor intactos (o EditorState não muda). */
   function backToEdit(): void { neumasView?.flush(); views.set("edicao"); view.focus(); }
   function openNeumas(o: OpenOpts = {}): void {
-    if (!neumasView) { toaster.show("O catálogo de neumas não carregou.", { kind: "error" }); return; }
+    if (!neumasView) { toaster.show(t("catalog.notLoaded"), { kind: "error" }); return; }
     views.set("neumas");
     neumasView.open({ ...o, family: o.family ?? currentFamily() });
   }
@@ -746,14 +751,15 @@ async function boot() {
     const sel = view.state.selection.main;
     const chain = chainAtSelection(view.state.doc.toString(), sel.from, sel.to,
       getTree() as Parameters<typeof chainAtSelection>[3]);
-    if (!chain) { toaster.show("Ponha o cursor num neuma (no nabc, depois do |) para nomeá-lo.", { kind: "warn" }); return; }
+    if (!chain) { toaster.show(t("names.cursorHint"), { kind: "warn" }); return; }
     const family = currentFamily();
-    const t = resolveNameTarget(effectiveRef(), family, chain);
-    openNeumas(t.kind === "existing" ? { family, select: t.id, focus: "name" } : { family, newChain: t.nabc, focus: "name" });
+    const target = resolveNameTarget(effectiveRef(), family, chain);
+    openNeumas(target.kind === "existing" ? { family, select: target.id, focus: "name" } : { family, newChain: target.nabc, focus: "name" });
   }
-  const countLabel = (c: { named: number; sequences: number }): string =>
-    [c.named ? `${c.named} ${c.named === 1 ? "neuma com nome" : "neumas com nome"}` : "",
-     c.sequences ? `${c.sequences} ${c.sequences === 1 ? "sequência" : "sequências"}` : ""].filter(Boolean).join(" e ");
+  const countLabel = (c: { named: number; sequences: number }): string => {
+    const parts = [c.named ? tn("names.count.named", c.named) : "", c.sequences ? tn("names.count.sequences", c.sequences) : ""].filter(Boolean);
+    return parts.length === 2 ? t("common.and", { a: parts[0], b: parts[1] }) : parts[0] ?? "";
+  };
 
   // ── Telas (1b-2): tela inicial, guia de novo projeto e mesa ─────────────────
   // (PLAYBACK-OFF: não há player a parar ao sair da mesa.)
@@ -868,7 +874,7 @@ async function boot() {
     const isGone = (): Promise<boolean> => existingPaths([path]).then((r) => r[0] === false).catch(() => false);
     const dropGone = async (): Promise<void> => {
       await setRecents(removeRecent(recents, path));
-      toaster.show("O arquivo não existe mais e saiu dos recentes.", { kind: "warn" });
+      toaster.show(t("recent.gone"), { kind: "warn" });
     };
     try {
       // Sumiu? Avisa e tira só este recente, sem perguntar "Salvar alterações?".
@@ -878,7 +884,7 @@ async function boot() {
     } catch (err) {
       if (await isGone()) await dropGone();
       else {
-        toaster.show("Abrir falhou. " + String(err), { kind: "error" });
+        toaster.show(t("open.failed", { error: String(err) }), { kind: "error" });
         console.error(err);
       }
     }
@@ -889,7 +895,7 @@ async function boot() {
     if (!snap || !(await resolveUnsaved(unsaved))) return;
     let p: NotkerProject;
     try { p = projectFromSnapshot(snap); }
-    catch (err) { toaster.show("Não foi possível recuperar. " + String(err), { kind: "error" }); return; }
+    catch (err) { toaster.show(t("recovery.recoverFailed", { error: String(err) }), { kind: "error" }); return; }
     if (!enterProject(p)) return;
     dirty.markDirty();   // abre como projeto editado (spec §4.6)
     updateTitle();
@@ -915,28 +921,28 @@ async function boot() {
     const snap = fromPrev ? pendingPrev : pendingRecovery;
     if (!snap) return;
     const r = await openDialog(dialogHost, {
-      title: `Descartar o trabalho não salvo de “${snap.title}”?`,
-      body: "Não dá para desfazer.",
+      title: t("recovery.discard.title", { title: snap.title }),
+      body: t("recovery.discard.body"),
       actions: [
-        { id: "discard", label: "Descartar", kind: "danger" },
-        { id: "keep", label: "Manter", kind: "filled" },
+        { id: "discard", label: t("common.discard"), kind: "danger" },
+        { id: "keep", label: t("common.keep"), kind: "filled" },
       ],
       defaultAction: "keep",
     });
     if (r.action !== "discard") return;
     if ((fromPrev ? pendingPrev : pendingRecovery) !== snap) return; // mudou durante a pergunta
     try { await (fromPrev ? recoveryPrevSlot : recoverySlot).remove(); }
-    catch (e) { console.warn("[notker] recuperação:", e); toaster.show("Não foi possível descartar. " + String(e), { kind: "error" }); return; }
+    catch (e) { console.warn("[notker] recuperação:", e); toaster.show(t("recovery.discardFailed", { error: String(e) }), { kind: "error" }); return; }
     if (fromPrev) pendingPrev = null; else pendingRecovery = null;
     renderWelcome();
   }
   /** Itens de Arquivo ▸ Abrir recente (montados a cada abertura do menu). */
   const recentMenu = (): (SubmenuEntry | "---")[] => (recents.length === 0
-    ? [{ label: "Nenhum recente", run: () => {}, enabled: false }]
+    ? [{ label: t("menu.noRecent"), run: () => {}, enabled: false }]
     : [
       ...recents.map((e): SubmenuEntry => ({ label: recentTitle(e), caption: parentFolder(e.path), run: () => { void openRecent(e.path); } })),
       "---",
-      { label: "Limpar recentes", run: () => { void commands.run("file.clearRecents"); } },
+      { label: t("cmd.file.clearRecents"), run: () => { void commands.run("file.clearRecents"); } },
     ]);
   function showWelcome(): void {
     closeGuide();
@@ -945,11 +951,11 @@ async function boot() {
     welcome.focus();
   }
   const confirmDiscardGuide = async (): Promise<boolean> => (await openDialog(dialogHost, {
-    title: "Descartar o novo projeto?",
+    title: t("guide.discard.title"),
     body: "O que foi preenchido no guia será perdido.",
     actions: [
-      { id: "discard", label: "Descartar", kind: "danger" },
-      { id: "keep", label: "Continuar editando", kind: "filled" },
+      { id: "discard", label: t("common.discard"), kind: "danger" },
+      { id: "keep", label: t("guide.discard.keep"), kind: "filled" },
     ],
   })).action === "discard";
   /** Guia de novo projeto. Cancelar volta para onde estava (projeto intacto ou tela inicial). */
@@ -959,7 +965,7 @@ async function boot() {
     guide = mountNewProjectGuide(guideHost, {
       pickGabc: async () => {
         try { return await pickGabcFile(); }
-        catch (e) { toaster.show("Não foi possível importar o arquivo. " + String(e), { kind: "error" }); return null; }
+        catch (e) { toaster.show(t("file.importFailed", { error: String(e) }), { kind: "error" }); return null; }
       },
       confirmDiscard: confirmDiscardGuide,
       onCancel: () => {
@@ -983,7 +989,7 @@ async function boot() {
     if (!projectOpen) return;
     if (!(await leaveProject())) return;
     toEditView(); // nota pendente da vista Neumas gravada; a mesa volta (depois) na Edição
-    if (!loadProject(newProject({ family: "stgall", name: "Novo" }))) return; // solta o projeto da memória; falhou = continua com o atual
+    if (!loadProject(newProject({ family: "stgall", name: t("project.defaultChant") }))) return; // solta o projeto da memória; falhou = continua com o atual
     projectOpen = false;
     showWelcome();
   }
@@ -1009,7 +1015,7 @@ async function boot() {
         const p = await openProject();
         if (!p) return;
         if (enterProject(p)) void rememberRecent(project, "open");
-      } catch (err) { toaster.show("Abrir falhou. " + String(err), { kind: "error" }); console.error(err); }
+      } catch (err) { toaster.show(t("open.failed", { error: String(err) }), { kind: "error" }); console.error(err); }
     },
     openExample: async () => {
       if (!(await leaveProject())) return;
@@ -1019,19 +1025,19 @@ async function boot() {
       try {
         captureEditorIntoProject();
         const out = await exportCurrentGabc(project);
-        if (out) toaster.show("Exportado.");
-      } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
+        if (out) toaster.show(t("export.done"));
+      } catch (err) { toaster.show(t("export.failed", { error: String(err) }), { kind: "error" }); console.error(err); }
     },
     exportAllGabcCmd: async () => {
       try {
         captureEditorIntoProject();
         const n = await exportAllGabc(project);
-        if (n) toaster.show(n === 1 ? "1 canto exportado." : `${n} cantos exportados.`);
-      } catch (err) { toaster.show("Exportar falhou. " + String(err), { kind: "error" }); console.error(err); }
+        if (n) toaster.show(tn("export.chants", n));
+      } catch (err) { toaster.show(t("export.failed", { error: String(err) }), { kind: "error" }); console.error(err); }
     },
     // Arquivo ▸ Exportar PDF… (sub-projeto 3): diálogo → salvar como → desenhar → gravar.
     exportPdf: async () => {
-      if (exportingPdf) { toaster.show("Já há um PDF sendo gerado.", { kind: "warn" }); return; }
+      if (exportingPdf) { toaster.show(t("pdf.busy"), { kind: "warn" }); return; }
       try {
         captureEditorIntoProject();
         const group = exportableGroup(project, treePanel.focusedId());
@@ -1046,15 +1052,15 @@ async function boot() {
         exportingPdf = true;
         const [{ exportPdf }, { pdfBrowserDeps }] = await Promise.all([import("./pdf/export-pdf"), import("./pdf/browser")]);
         const deps = pdfBrowserDeps(document.querySelector<HTMLElement>("#measure-host")!, {
-          onProgress: (i, n) => toaster.show(n > 1 ? `Gerando o PDF… ${i}/${n}` : "Gerando o PDF…"),
+          onProgress: (i, n) => toaster.show(n > 1 ? t("pdf.progressN", { i, n }) : t("pdf.progress")),
         });
         const r = await exportPdf(deps, pieces, scopeTitle(project, opts.scope, groupId), opts);
         if (!r) return;
         const file = r.path.split(/[\\/]/).pop() ?? r.path;
-        if (r.failed.length) toaster.show(`PDF exportado: ${file}. Não desenhados: ${r.failed.join(", ")}.`, { kind: "warn" });
-        else toaster.show(`PDF exportado: ${file}.`);
+        if (r.failed.length) toaster.show(t("pdf.donePartial", { file, failed: r.failed.join(", ") }), { kind: "warn" });
+        else toaster.show(t("pdf.done", { file }));
       } catch (err) {
-        toaster.show("Exportar PDF falhou: " + (err instanceof Error ? err.message : String(err)), { kind: "error" });
+        toaster.show(t("pdf.failed", { error: err instanceof Error ? err.message : String(err) }), { kind: "error" });
         console.error(err);
       } finally {
         exportingPdf = false;
@@ -1067,7 +1073,7 @@ async function boot() {
         // O canto pode ter mudado durante o await: não escreve texto de um no outro.
         if (f != null && shownId === id) replaceDoc(f);
       } catch (err) {
-        toaster.show("Formatar falhou. " + String(err), { kind: "error" });
+        toaster.show(t("format.failed", { error: String(err) }), { kind: "error" });
         console.error("[notker] erro ao formatar:", err);
       }
     },
@@ -1075,11 +1081,11 @@ async function boot() {
       try {
         try { await overlayAutosave.flush(); } catch { /* o autosave já mostrou o erro */ }
         const c = overlayCounts(overlay);
-        if (c.named + c.sequences === 0) { toaster.show("Nenhum nome cadastrado para exportar.", { kind: "warn" }); return; }
+        if (c.named + c.sequences === 0) { toaster.show(t("names.noneToExport"), { kind: "warn" }); return; }
         await exportOverlay(overlay);
-        toaster.show(`Exportados: ${countLabel(c)}.`);
+        toaster.show(t("names.exported", { what: countLabel(c) }));
       } catch (err) {
-        toaster.show("Exportar nomes falhou. " + String(err), { kind: "error" });
+        toaster.show(t("names.exportFailed", { error: String(err) }), { kind: "error" });
         console.error("[notker] erro ao exportar overlay:", err);
       }
     },
@@ -1089,7 +1095,7 @@ async function boot() {
         if (!imported) return;
         const c = overlayCounts(imported);
         if (c.named + c.sequences === 0) {
-          toaster.show("O arquivo não tem nomes para importar.", { kind: "warn" });
+          toaster.show(t("names.fileEmpty"), { kind: "warn" });
           return;
         }
         await overlayAutosave.flush();
@@ -1103,9 +1109,9 @@ async function boot() {
           reindex();
           throw e;
         }
-        toaster.show(`Importados: ${countLabel(c)}.`);
+        toaster.show(t("names.imported", { what: countLabel(c) }));
       } catch (err) {
-        toaster.show("Importar nomes falhou. " + String(err), { kind: "error" });
+        toaster.show(t("names.importFailed", { error: String(err) }), { kind: "error" });
         console.error("[notker] erro ao importar overlay:", err);
       }
     },
@@ -1213,42 +1219,42 @@ async function boot() {
   };
 
   commands.register([
-    { id: "file.newProject", label: "Novo projeto…", run: h.newProjectCmd, keys: ["Ctrl+N"] },
-    { id: "file.open", label: "Abrir…", run: h.openFile, keys: ["Ctrl+O"] },
-    { id: "file.save", label: "Salvar", run: saveCmd(false), keys: ["Ctrl+S"] },
-    { id: "file.saveAs", label: "Salvar como…", run: saveCmd(true), keys: ["Ctrl+Shift+S"] },
-    { id: "file.openExample", label: "Abrir projeto de exemplo", run: h.openExample },
-    { id: "file.clearRecents", label: "Limpar recentes", run: () => setRecents([]) },
-    { id: "file.close", label: "Fechar projeto", run: closeProjectCmd, keys: ["Ctrl+W"] },
-    { id: "project.newChant", label: "Novo canto…", run: () => newChantAt(null, Infinity) },
-    { id: "project.newGroup", label: "Novo grupo", run: () => newGroupAt(null, Infinity) },
-    { id: "project.importGabc", label: "Importar .gabc…", run: importGabcAsChant },
-    { id: "file.exportGabc", label: "Exportar .gabc do canto…", run: h.exportGabc },
-    { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: h.exportAllGabcCmd },
-    { id: "file.exportPdf", label: "Exportar PDF…", run: h.exportPdf, keys: ["Ctrl+P"], enabled: canExportPdf },
-    { id: "names.export", label: "Exportar nomes…", run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
-    { id: "names.import", label: "Importar nomes…", run: h.importOverlay, keys: ["Ctrl+Alt+I"] },
+    { id: "file.newProject", label: t("cmd.file.newProject"), run: h.newProjectCmd, keys: ["Ctrl+N"] },
+    { id: "file.open", label: t("cmd.file.open"), run: h.openFile, keys: ["Ctrl+O"] },
+    { id: "file.save", label: t("cmd.file.save"), run: saveCmd(false), keys: ["Ctrl+S"] },
+    { id: "file.saveAs", label: t("cmd.file.saveAs"), run: saveCmd(true), keys: ["Ctrl+Shift+S"] },
+    { id: "file.openExample", label: t("cmd.file.openExample"), run: h.openExample },
+    { id: "file.clearRecents", label: t("cmd.file.clearRecents"), run: () => setRecents([]) },
+    { id: "file.close", label: t("cmd.file.close"), run: closeProjectCmd, keys: ["Ctrl+W"] },
+    { id: "project.newChant", label: t("cmd.project.newChant"), run: () => newChantAt(null, Infinity) },
+    { id: "project.newGroup", label: t("cmd.project.newGroup"), run: () => newGroupAt(null, Infinity) },
+    { id: "project.importGabc", label: t("cmd.project.importGabc"), run: importGabcAsChant },
+    { id: "file.exportGabc", label: t("cmd.file.exportGabc"), run: h.exportGabc },
+    { id: "file.exportAllGabc", label: t("cmd.file.exportAllGabc"), run: h.exportAllGabcCmd },
+    { id: "file.exportPdf", label: t("cmd.file.exportPdf"), run: h.exportPdf, keys: ["Ctrl+P"], enabled: canExportPdf },
+    { id: "names.export", label: t("cmd.names.export"), run: h.exportOverlay, keys: ["Ctrl+Alt+E"] },
+    { id: "names.import", label: t("cmd.names.import"), run: h.importOverlay, keys: ["Ctrl+Alt+I"] },
     // Comandos que agem no editor ficam desligados na vista Neumas (o editor está escondido).
-    { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: () => { undo(view); view.focus(); }, enabled: inEdit },
-    { id: "edit.redo", label: "Refazer", icon: "redo-2", run: () => { redo(view); view.focus(); }, enabled: inEdit },
-    { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"], enabled: inEdit },
-    { id: "edit.stripMarks", label: "Remover episemas e puncta mora…", run: () => runStrip(view.state.selection.main.empty ? "chant" : "selection"), enabled: inEdit },
-    { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true, enabled: inEdit },
-    { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true, enabled: inEdit },
-    { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true, enabled: inEdit },
-    { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true, enabled: inEdit },
-    { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"], enabled: inEdit },
-    { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
+    { id: "edit.undo", label: t("cmd.edit.undo"), icon: "undo-2", run: () => { undo(view); view.focus(); }, enabled: inEdit },
+    { id: "edit.redo", label: t("cmd.edit.redo"), icon: "redo-2", run: () => { redo(view); view.focus(); }, enabled: inEdit },
+    { id: "edit.format", label: t("cmd.edit.format"), icon: "wand-sparkles", run: h.format, keys: ["Ctrl+Shift+F"], enabled: inEdit },
+    { id: "edit.stripMarks", label: t("cmd.edit.stripMarks"), run: () => runStrip(view.state.selection.main.empty ? "chant" : "selection"), enabled: inEdit },
+    { id: "neume.moveLeft", label: t("cmd.neume.moveLeft"), icon: "chevron-left", run: h.moveLeft, keys: ["Alt+ArrowLeft"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveDown", label: t("cmd.neume.moveDown"), icon: "chevron-down", run: h.moveDown, keys: ["Alt+ArrowDown"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveUp", label: t("cmd.neume.moveUp"), icon: "chevron-up", run: h.moveUp, keys: ["Alt+ArrowUp"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveRight", label: t("cmd.neume.moveRight"), icon: "chevron-right", run: h.moveRight, keys: ["Alt+ArrowRight"], allowRepeat: true, enabled: inEdit },
+    { id: "neume.moveReset", label: t("cmd.neume.moveReset"), icon: "rotate-ccw", run: h.moveReset, keys: ["Alt+0"], enabled: inEdit },
+    { id: "neume.palette", label: t("cmd.neume.palette"), icon: "search", run: h.openSearch, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
     // O painel lateral "Nomes" não é mais aberto pela UI: Ctrl+Alt+N abre a vista Neumas.
-    { id: "view.edicao", label: "Edição", run: backToEdit, keys: ["Ctrl+Digit1"], checked: () => views.current() === "edicao" },
-    { id: "view.neumas", label: "Neumas", run: () => openNeumas(), keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => views.current() === "neumas" },
-    { id: "neume.name", label: "Nomear neuma…", icon: "tag", run: nameNeumeCmd, keys: ["Ctrl+Shift+N"], enabled: inEdit },
-    { id: "neumas.search", label: "Buscar na tela de nomes", run: () => neumasView?.focusSearch(), keys: ["Ctrl+F"], enabled: () => views.current() === "neumas" },
-    { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
-    { id: "view.preview", label: "Partitura", run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
-    { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
-    { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible, false) ?? false },
-    { id: "view.staffLetters", label: "Letras na pauta", run: toggleStaffLetters, checked: () => staffLettersOn },
+    { id: "view.edicao", label: t("cmd.view.edicao"), run: backToEdit, keys: ["Ctrl+Digit1"], checked: () => views.current() === "edicao" },
+    { id: "view.neumas", label: t("cmd.view.neumas"), run: () => openNeumas(), keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => views.current() === "neumas" },
+    { id: "neume.name", label: t("cmd.neume.name"), icon: "tag", run: nameNeumeCmd, keys: ["Ctrl+Shift+N"], enabled: inEdit },
+    { id: "neumas.search", label: t("cmd.neumas.search"), run: () => neumasView?.focusSearch(), keys: ["Ctrl+F"], enabled: () => views.current() === "neumas" },
+    { id: "doc.toggleFamily", label: t("cmd.doc.toggleFamily"), run: h.toggleFamily, keys: ["Ctrl+Shift+G"] },
+    { id: "view.preview", label: t("cmd.view.preview"), run: h.togglePreview, checked: () => previewHost.style.display !== "none" },
+    { id: "view.split", label: t("cmd.view.split"), icon: "columns-2", run: h.toggleSplit, checked: () => split.orientation() === "horizontal" },
+    { id: "view.legend", label: t("cmd.view.legend"), icon: "ruler", run: h.toggleLegend, keys: ["Ctrl+Alt+L"], checked: () => view.state.field(legendVisible, false) ?? false },
+    { id: "view.staffLetters", label: t("cmd.view.staffLetters"), run: toggleStaffLetters, checked: () => staffLettersOn },
     // PLAYBACK-OFF (2026-10-09): comandos de áudio e da onda.
     // { id: "play.toggle", label: () => (player.playing ? "Parar" : "Tocar"), run: h.playToggle },
     // { id: "play.mode", label: () => (playbackMode === "interpretado" ? "Modo: interpretado" : "Modo: solfejo"), icon: "audio-waveform", run: h.modeToggle, checked: () => playbackMode === "solfejo" },
@@ -1263,21 +1269,21 @@ async function boot() {
   });
   // Provisórios (toasts) até o diálogo da Task 8.
   const showShortcuts = () => void openDialog(dialogHost, {
-    title: "Atalhos de teclado",
+    title: t("dialog.shortcuts.title"),
     body: commands.ids().filter((id) => commands.shortcut(id)).map((id) => commands.label(id) + " — " + commands.shortcut(id)).join(" · "),
-    actions: [{ id: "ok", label: "Fechar", kind: "filled" }],
+    actions: [{ id: "ok", label: t("common.close"), kind: "filled" }],
   });
   const showAbout = () => void openDialog(dialogHost, {
-    title: "Sobre o Notker",
-    body: "Notker " + __APP_VERSION__ + " — editor de canto gregoriano. GPL-3.",
-    actions: [{ id: "ok", label: "Fechar", kind: "filled" }],
+    title: t("dialog.about.title"),
+    body: t("dialog.about.body", { version: __APP_VERSION__ }),
+    actions: [{ id: "ok", label: t("common.close"), kind: "filled" }],
   });
   commands.register([
-    themeCmd("system", "Tema: sistema"),
-    themeCmd("light", "Tema: Pergaminho"),
-    themeCmd("dark", "Tema: Vigília"),
-    { id: "help.shortcuts", label: "Atalhos de teclado…", run: showShortcuts },
-    { id: "help.about", label: "Sobre o Notker…", run: showAbout },
+    themeCmd("system", t("cmd.view.theme.system")),
+    themeCmd("light", t("cmd.view.theme.light")),
+    themeCmd("dark", t("cmd.view.theme.dark")),
+    { id: "help.shortcuts", label: t("cmd.help.shortcuts"), run: showShortcuts },
+    { id: "help.about", label: t("cmd.help.about"), run: showAbout },
   ]);
 
   // Fora da mesa (tela inicial/guia) só valem Novo projeto, Abrir, Nomes (importar/
@@ -1315,10 +1321,10 @@ async function boot() {
   };
   menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
     {
-      label: "Arquivo",
+      label: t("menu.file"),
       items: [
         menuItem("file.newProject"), menuItem("file.open"),
-        { label: "Abrir recente", submenu: recentMenu },
+        { label: t("menu.openRecent"), submenu: recentMenu },
         menuItem("file.save"), menuItem("file.saveAs"),
         "---",
         menuItem("project.newChant"), menuItem("project.newGroup"), menuItem("project.importGabc"),
@@ -1331,7 +1337,7 @@ async function boot() {
       ],
     },
     {
-      label: "Editar",
+      label: t("menu.edit"),
       items: [
         { ...menuItem("edit.undo"), shortcut: "Ctrl+Z" },
         { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" },
@@ -1343,7 +1349,7 @@ async function boot() {
       ],
     },
     {
-      label: "Exibir",
+      label: t("menu.view"),
       items: [
         menuItem("view.edicao"), menuItem("view.neumas"),
         "---",
@@ -1363,12 +1369,12 @@ async function boot() {
     //     menuItem("wave.toggle"), menuItem("wave.reset"),
     //   ],
     // },
-    { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("file.openExample"), "---", menuItem("help.about")] },
+    { label: t("menu.help"), items: [menuItem("help.shortcuts"), menuItem("file.openExample"), "---", menuItem("help.about")] },
   ]);
   menubar.setTitle(project.title);
 
   toolbarHandle = createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-    { tabs: ["view.edicao", "view.neumas"], label: "Vistas" },
+    { tabs: ["view.edicao", "view.neumas"], label: t("toolbar.views") },
     { group: ["edit.undo", "edit.redo"], view: "edicao" },
     { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"], view: "edicao" },
     { group: ["edit.format", "neume.palette", "neume.name"], view: "edicao" },
@@ -1395,8 +1401,8 @@ async function boot() {
     const sel = view.state.selection.main;
     if (sel.empty || pos < sel.from || pos > sel.to) view.dispatch({ selection: { anchor: pos } });
     openContextMenu(app, e.clientX, e.clientY, [
-      { label: "Nomear neuma…", shortcut: commands.shortcut("neume.name"), run: () => void commands.run("neume.name") },
-      { label: "Buscar neuma…", shortcut: commands.shortcut("neume.palette"), run: () => void commands.run("neume.palette") },
+      { label: commands.label("neume.name"), shortcut: commands.shortcut("neume.name"), run: () => void commands.run("neume.name") },
+      { label: commands.label("neume.palette"), shortcut: commands.shortcut("neume.palette"), run: () => void commands.run("neume.palette") },
     ], view.contentDOM);
   });
 
@@ -1444,6 +1450,6 @@ async function boot() {
 boot().catch((err) => {
   document.body.dataset.screen = "project"; // a mensagem fica no #app, que a tela inicial esconde
   const app = document.querySelector("#app");
-  if (app) app.textContent = "Falha ao iniciar o Notker: " + String(err);
+  if (app) app.textContent = t("app.bootFailed", { error: String(err) });
   console.error(err);
 });

@@ -48,7 +48,7 @@ describe("main.ts: comando view.staffLetters", () => {
   const main = readFileSync("src/main.ts", "utf8");
   const code = main.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
   it("registrado com rótulo, checked e desligado por padrão", () => {
-    expect(code).toMatch(/\{ id: "view\.staffLetters", label: "Letras na pauta",[^\n]*checked: \(\) => staffLettersOn/);
+    expect(code).toMatch(/\{ id: "view\.staffLetters", label: t\("cmd\.view\.staffLetters"\),[^\n]*checked: \(\) => staffLettersOn/);
     expect(code).toMatch(/let staffLettersOn = false;/);
   });
   it("no menu Exibir logo abaixo de Régua da pauta, e preso à mesa (gateCommands)", () => {

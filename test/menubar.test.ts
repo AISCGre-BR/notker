@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { createMenubar, type MenuSpec, type SubmenuEntry } from "../src/ui/menubar";
 import type { Commands } from "../src/app/commands";
 
@@ -388,5 +389,15 @@ describe("submenu (Abrir recente ▸)", () => {
     const salvar = [...host.querySelectorAll<HTMLButtonElement>(".sc-menu__item")].find((b) => b.textContent?.includes("Salvar"))!;
     salvar.dispatchEvent(new MouseEvent("mouseenter"));
     expect(sub()).toBeNull();
+  });
+});
+
+describe("menubar — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("'— Editado' segue o idioma", () => {
+    setLocale("en");
+    const { bar, host } = mount(BASIC);
+    (bar as unknown as { setTitle(t: string, e?: boolean): void }).setTitle("Missa", true);
+    expect(host.querySelector(".sc-menubar__state")!.textContent).toBe("— Edited");
   });
 });

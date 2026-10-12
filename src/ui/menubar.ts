@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Commands } from "../app/commands";
 
 /** Barra de menus estilo MuseScore/Office (spec B). Rótulos e checks são
@@ -33,12 +34,12 @@ export function createMenubar(
   const title = document.createElement("span");
   title.className = "sc-menubar__title";
   bar.appendChild(title);
-  function setTitle(t: string, edited = false): void {
-    title.textContent = t;
+  function setTitle(text: string, edited = false): void {
+    title.textContent = text;
     if (edited) {
       const s = document.createElement("span");
       s.className = "sc-menubar__state";
-      s.textContent = "— Editado";
+      s.textContent = t("app.edited");
       title.appendChild(s);
     }
   }
