@@ -25,44 +25,45 @@ export function bodyStart(gabc: string): number {
 const isDigit = (c: string | undefined, max: string): boolean => c !== undefined && c >= "0" && c <= max;
 
 /** Processa a parte gabc de um grupo (sem os parênteses e sem o nabc). */
-function stripGroup(g: string, kinds: MarkKinds, counts: MarkCounts): string {
-  let out = "";
+interface Win { from: number; to: number }
+export interface Removal { from: number; to: number }
+
+function stripGroup(g: string, base: number, kinds: MarkKinds, counts: MarkCounts, rem: Removal[], win?: Win): void {
+  const inWin = (p: number): boolean => !win || (p >= win.from && p < win.to);
   let i = 0;
   while (i < g.length) {
     const c = g[i];
     if (c === "[") {
       const end = g.indexOf("]", i);
-      if (end < 0) { out += g.slice(i); break; }
+      if (end < 0) break;
       const inner = g.slice(i + 1, end);
       const isH = inner.startsWith("oh") || inner.startsWith("uh");
-      if (isH && kinds.horizontal) { i = end + 1; continue; } // modificador do episema: não conta
-      out += g.slice(i, end + 1);
+      if (isH && kinds.horizontal && inWin(base + i)) rem.push({ from: base + i, to: base + end + 1 }); // modificador do episema: não conta
       i = end + 1;
       continue;
     }
+    const st = i;
     if (c === "'" && kinds.vertical) {
-      counts.vertical++;
       i++;
       if (isDigit(g[i], "1")) i++;
+      if (inWin(base + st)) { counts.vertical++; rem.push({ from: base + st, to: base + i }); }
       continue;
     }
     if (c === "_" && kinds.horizontal) {
-      counts.horizontal++;
       i++;
       while (isDigit(g[i], "5")) i++;
+      if (inWin(base + st)) { counts.horizontal++; rem.push({ from: base + st, to: base + i }); }
       continue;
     }
     if (c === "." && kinds.mora) {
-      counts.mora++;
       i++;
       if (g[i] === ".") i++;
       if (isDigit(g[i], "1")) i++;
+      if (inWin(base + st)) { counts.mora++; rem.push({ from: base + st, to: base + i }); }
       continue;
     }
-    out += c;
     i++;
   }
-  return out;
 }
 
 /** Acha o `)` que fecha o grupo aberto em `open`, pulando colchetes ([nv:…) etc.). */
@@ -80,24 +81,24 @@ function isBar(gabcPart: string): boolean {
   return t[0] === "`" || t[0] === "^" || t[0] === "," || t[0] === ";" || t[0] === ":";
 }
 
-export function stripMarks(gabc: string, kinds: MarkKinds): { text: string; counts: MarkCounts } {
+/** Varre o texto INTEIRO (mesmo contexto: corpo, `$`, `%`, grupos, colchetes, barras, nabc) e remove
+ *  só os sinais cuja posição cai em `window` ([from,to)); sem janela, todos. `removals` são os
+ *  intervalos removidos no texto original (mudanças mínimas para o editor). */
+export function scanMarks(gabc: string, kinds: MarkKinds, window?: Win): { text: string; counts: MarkCounts; removals: Removal[] } {
   const counts: MarkCounts = { vertical: 0, horizontal: 0, mora: 0 };
-  const start = bodyStart(gabc);
-  let out = gabc.slice(0, start);
-  let i = start;
+  const rem: Removal[] = [];
+  let i = bodyStart(gabc);
   while (i < gabc.length) {
     const c = gabc[i];
-    if (c === "$") { out += gabc.slice(i, i + 2); i += 2; continue; } // escape na letra: $( $) $%
+    if (c === "$") { i += 2; continue; } // escape na letra: $( $) $%
     if (c === "%") { // comentário até o fim da linha
-      let nl = gabc.indexOf("\n", i);
-      if (nl < 0) nl = gabc.length;
-      out += gabc.slice(i, nl);
-      i = nl;
+      const nl = gabc.indexOf("\n", i);
+      i = nl < 0 ? gabc.length : nl;
       continue;
     }
-    if (c !== "(") { out += c; i++; continue; }
+    if (c !== "(") { i++; continue; }
     const close = findClose(gabc, i);
-    if (close < 0) { out += gabc.slice(i); break; }
+    if (close < 0) break;
     const inner = gabc.slice(i + 1, close);
     // `|` dentro de colchetes não separa o nabc: acha o primeiro `|` fora deles
     let bar = -1;
@@ -106,12 +107,20 @@ export function stripMarks(gabc: string, kinds: MarkKinds): { text: string; coun
       else if (inner[k] === "|") { bar = k; break; }
     }
     const g = bar < 0 ? inner : inner.slice(0, bar);
-    out += "(" + (isBar(g) ? g : stripGroup(g, kinds, counts)) + (bar < 0 ? "" : inner.slice(bar)) + ")";
+    if (!isBar(g)) stripGroup(g, i + 1, kinds, counts, rem, window);
     i = close + 1;
   }
-  return { text: out, counts };
+  let text = "", pos = 0;
+  for (const r of rem) { text += gabc.slice(pos, r.from); pos = r.to; }
+  text += gabc.slice(pos);
+  return { text, counts, removals: rem };
 }
 
-export function detectMarks(gabc: string): MarkCounts {
-  return stripMarks(gabc, ALL).counts;
+export function stripMarks(gabc: string, kinds: MarkKinds, window?: Win): { text: string; counts: MarkCounts } {
+  const { text, counts } = scanMarks(gabc, kinds, window);
+  return { text, counts };
+}
+
+export function detectMarks(gabc: string, window?: Win): MarkCounts {
+  return scanMarks(gabc, ALL, window).counts;
 }

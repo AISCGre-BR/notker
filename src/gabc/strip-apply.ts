@@ -2,7 +2,7 @@
  *  colado (mapeado pelas edições seguintes) e aplica `stripMarks` num trecho numa só transação. */
 import { EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { bodyStart, detectMarks, stripMarks, type MarkCounts, type MarkKinds } from "./strip-marks";
+import { detectMarks, scanMarks, type MarkCounts, type MarkKinds } from "./strip-marks";
 
 export interface Range { from: number; to: number }
 
@@ -20,54 +20,43 @@ export const pastedRange = StateField.define<Range | null>({
   },
 });
 
-/** Extensão: depois de uma colagem com sinais, guarda o intervalo e chama `onMarks`. */
+const isInsert = (tr: { isUserEvent(e: string): boolean }): boolean => tr.isUserEvent("input.paste") || tr.isUserEvent("input.drop");
+
+/** Extensão: depois de uma colagem/soltura com sinais, guarda o intervalo e chama `onMarks`.
+ *  Só vale com UMA mudança (vários cursores: não oferece, nunca junta intervalos). */
 export function pasteMarksWatcher(onMarks: (range: Range, counts: MarkCounts) => void): Extension {
   return [
     pastedRange,
     EditorState.transactionExtender.of((tr) => {
-      if (!tr.docChanged || !tr.isUserEvent("input.paste")) return null;
-      const bs = bodyStart(tr.newDoc.toString());
-      let lo = Infinity, hi = -1;
-      tr.changes.iterChanges((_fa, _ta, fb, tb, ins) => {
-        if (tb <= bs) return; // colado no cabeçalho
-        const text = ins.toString();
-        const a = Math.max(fb, bs);
-        const t = a === fb ? text : text.slice(a - fb);
-        const c = detectMarks(t);
-        if (c.vertical + c.horizontal + c.mora === 0) return;
-        lo = Math.min(lo, a);
-        hi = Math.max(hi, tb);
-      });
-      return hi >= 0 ? { effects: setPasted.of({ from: lo, to: hi }) } : null;
+      if (!tr.docChanged || !isInsert(tr)) return null;
+      const ch: Range[] = [];
+      tr.changes.iterChanges((_fa, _ta, fb, tb) => { ch.push({ from: fb, to: tb }); });
+      if (ch.length !== 1 || ch[0].to <= ch[0].from) return null;
+      // Detecta no documento inteiro (mesmo contexto: letra, comentário, colchete, nabc) só no trecho inserido.
+      const c = detectMarks(tr.newDoc.toString(), ch[0]);
+      return c.vertical + c.horizontal + c.mora > 0 ? { effects: setPasted.of(ch[0]) } : null;
     }),
     EditorView.updateListener.of((u) => {
-      if (!u.docChanged || !u.transactions.some((t) => t.isUserEvent("input.paste"))) return;
+      if (!u.docChanged || !u.transactions.some((t) => isInsert(t) && t.effects.some((e) => e.is(setPasted)))) return;
       const r = u.state.field(pastedRange, false);
-      if (!r || !u.transactions.some((t) => t.effects.some((e) => e.is(setPasted)))) return;
-      const c = detectMarks(u.state.sliceDoc(r.from, r.to));
+      if (!r) return;
+      const c = marksIn(u.state, r);
       if (c.vertical + c.horizontal + c.mora > 0) onMarks(r, c);
     }),
   ];
 }
 
-/** Contagens dos sinais em [from,to) (ou no canto todo, respeitando o início do corpo). */
+/** Contagens dos sinais em [from,to) (ou no canto todo), lendo o documento inteiro. */
 export function marksIn(state: EditorState, range?: Range): MarkCounts {
-  return detectMarks(clamp(state, range).text);
+  return detectMarks(state.doc.toString(), range);
 }
 
-function clamp(state: EditorState, range?: Range): { from: number; to: number; text: string } {
-  const bs = bodyStart(state.doc.toString());
-  const from = Math.max(range ? range.from : 0, bs);
-  const to = Math.max(from, range ? Math.min(range.to, state.doc.length) : state.doc.length);
-  return { from, to, text: state.sliceDoc(from, to) };
-}
-
-/** Aplica a remoção ao trecho (ou ao canto) numa única transação. Devolve quantos sinais saíram. */
+/** Remove os sinais do trecho (ou do canto) numa única transação, só com as remoções (histórico e
+ *  cursor preservados). Devolve quantos sinais saíram. */
 export function applyStrip(view: EditorView, kinds: MarkKinds, range?: Range): number {
-  const { from, to, text } = clamp(view.state, range);
-  const r = stripMarks(text, kinds);
-  const n = r.counts.vertical + r.counts.horizontal + r.counts.mora; // só os tipos escolhidos são contados
-  if (n === 0 || r.text === text) return 0;
-  view.dispatch({ changes: { from, to, insert: r.text }, userEvent: "input.strip-marks" });
+  const r = scanMarks(view.state.doc.toString(), kinds, range);
+  const n = r.counts.vertical + r.counts.horizontal + r.counts.mora;
+  if (n === 0 || r.removals.length === 0) return 0;
+  view.dispatch({ changes: r.removals.map((x) => ({ from: x.from, to: x.to })), userEvent: "input.strip-marks" });
   return n;
 }

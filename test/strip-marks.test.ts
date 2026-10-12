@@ -71,3 +71,12 @@ describe("stripMarks", () => {
     expect(stripMarks("(g[nv:x)(y.]h.)", ALL).text).toBe("(g[nv:x)(y.]h)");
   });
 });
+
+describe("janela", () => {
+  it("só conta e remove sinais dentro de [from,to), com o contexto do texto inteiro", () => {
+    const d = "%%\nDo(f.)mi(g.)nus";
+    const from = d.indexOf("mi");
+    expect(detectMarks(d, { from, to: d.length })).toEqual({ vertical: 0, horizontal: 0, mora: 1 });
+    expect(stripMarks(d, { vertical: true, horizontal: true, mora: true }, { from, to: d.length }).text).toBe("%%\nDo(f.)mi(g)nus");
+  });
+});

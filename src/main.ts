@@ -642,7 +642,7 @@ async function boot() {
     const sel = view.state.selection.main;
     const area = (): Range | undefined => scope === "pasted" ? view.state.field(pastedRange, false) ?? undefined
       : scope === "selection" ? { from: sel.from, to: sel.to } : undefined;
-    if (scope === "pasted" && !area()) return;
+    if (scope === "pasted" && !area()) { toaster.show("O trecho colado não existe mais.", { kind: "warn" }); return; }
     const counts = marksIn(view.state, area());
     if (counts.vertical + counts.horizontal + counts.mora === 0) { toaster.show("Não há episemas nem puncta mora aqui."); return; }
     const kinds = await openStripDialog(dialogHost, counts, lastStrip, scope);
