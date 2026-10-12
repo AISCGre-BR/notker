@@ -75,3 +75,48 @@ describe("diálogo Remover episemas e puncta mora", () => {
     await q;
   });
 });
+
+const key = (target: Element, k: string, init: KeyboardEventInit = {}) =>
+  target.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
+
+describe("diálogo Remover — foco e teclado (correção)", () => {
+  it("tudo zerado: foco vai para Cancelar e Esc (no activeElement) cancela", async () => {
+    const p = openStripDialog(host, { vertical: 0, horizontal: 0, mora: 0 });
+    expect(document.activeElement).toBe(btn("Cancelar"));
+    key(document.activeElement!, "Escape");
+    await expect(p).resolves.toBeNull();
+  });
+  it("`last` desligando tudo também move o foco para Cancelar", async () => {
+    const p = openStripDialog(host, counts, { vertical: false, horizontal: false, mora: false });
+    expect(document.activeElement).toBe(btn("Cancelar"));
+    key(document.activeElement!, "Escape");
+    await expect(p).resolves.toBeNull();
+  });
+  it("Enter com algo ligado confirma; Enter num botão do segmentado não é interceptado pela guarda", async () => {
+    const p = openStripDialog(host, counts);
+    key(host.querySelector(".sc-dialog")!, "Enter");
+    await expect(p).resolves.toEqual({ vertical: true, horizontal: true, mora: true });
+    const q = openStripDialog(host, { vertical: 0, horizontal: 0, mora: 0 });
+    const ev = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    toggles()[0].dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+    btn("Cancelar").click();
+    await q;
+  });
+  it("Enter com isComposing não é interceptado pela guarda", async () => {
+    const p = openStripDialog(host, { vertical: 0, horizontal: 0, mora: 0 });
+    const ev = new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true });
+    host.querySelector(".sc-dialog")!.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+    btn("Cancelar").click();
+    await p;
+  });
+  it("abrir → Cancelar → reabrir no mesmo host: Enter confirma o diálogo novo", async () => {
+    const p = openStripDialog(host, { vertical: 0, horizontal: 0, mora: 0 });
+    btn("Cancelar").click();
+    await p;
+    const q = openStripDialog(host, counts);
+    key(host.querySelector(".sc-dialog")!, "Enter");
+    await expect(q).resolves.toEqual({ vertical: true, horizontal: true, mora: true });
+  });
+});

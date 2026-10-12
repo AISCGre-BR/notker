@@ -43,8 +43,13 @@ export async function openStripDialog(host: HTMLElement, counts: MarkCounts, las
     sync();
   }));
   sync();
+  // O foco inicial foi para "Remover" antes de ele ser desabilitado: sem foco válido, Esc/Tab não chegam ao diálogo.
+  const fa = document.activeElement;
+  if (!fa || !host.contains(fa) || (fa as HTMLButtonElement).disabled) {
+    [...host.querySelectorAll<HTMLButtonElement>(".sc-dialog__actions button")].find((b) => b.textContent === "Cancelar")?.focus();
+  }
   // Enter confirma a ação padrão do openDialog; sem nada ligado, não pode confirmar.
-  const guard = (e: KeyboardEvent): void => { if (e.key === "Enter" && !anyOn() && !(e.target instanceof HTMLButtonElement)) { e.stopPropagation(); e.preventDefault(); } };
+  const guard = (e: KeyboardEvent): void => { if (e.key === "Enter" && !e.isComposing && !anyOn() && !(e.target instanceof HTMLButtonElement)) { e.stopPropagation(); e.preventDefault(); } };
   host.addEventListener("keydown", guard, true);
 
   const r = await p;
