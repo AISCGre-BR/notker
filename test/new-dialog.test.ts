@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { newDocumentDialog } from "../src/ui/new-dialog";
+import { setLocale } from "../src/i18n";
 
 const mk = () => { const host = document.createElement("div"); document.body.appendChild(host); return host; };
 const cancelBtn = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>(".sc-dialog__actions button")].find((b) => b.textContent === "Cancelar")!;
@@ -67,5 +68,18 @@ describe("diálogo Novo", () => {
     expect(okBtn(host).textContent).toBe("Criar");
     cancelBtn(host).click();
     await p;
+  });
+});
+
+describe("diálogo Novo canto — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("campos e ações em italiano", () => {
+    setLocale("it");
+    const host = mk();
+    void newDocumentDialog(host, { title: "Nuovo canto" });
+    expect(host.textContent).toContain("Nome");
+    expect(host.textContent).toContain("Parte dell'ufficio (facoltativa)");
+    expect(host.textContent).toContain("Famiglia");
+    expect([...host.querySelectorAll(".sc-dialog__actions button")].map((b) => b.textContent)).toEqual(["Annulla", "Crea"]);
   });
 });

@@ -1,8 +1,9 @@
 // test/tree-panel.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createTreePanel, type TreePanelOpts } from "../src/project/tree-panel";
 import type { NotkerProject, TreeNode, ChantNode, GroupNode } from "../src/project/tree";
 import { createRegistry } from "../src/app/commands";
+import { setLocale } from "../src/i18n";
 
 const c = (id: string, title: string, extra: Partial<ChantNode> = {}): ChantNode => ({ kind: "chant", id, title, content: "", ...extra });
 const g = (id: string, title: string, children: TreeNode[], extra: Partial<GroupNode> = {}): GroupNode => ({ kind: "group", id, title, children, ...extra });
@@ -405,5 +406,18 @@ describe("árvore: seleção para o Exportar PDF", () => {
     (document.activeElement as HTMLElement).blur(); // foco foi para o editor: a seleção fica
     panel.render(proj());
     expect(panel.focusedId()).toBe("n");
+  });
+});
+
+describe("árvore — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("rodapé, menu de contexto e renomear em inglês", () => {
+    setLocale("en");
+    const tp = createTreePanel(host, opts());
+    tp.render(proj());
+    expect(host.querySelector(".notker-split__main")!.textContent).toBe("New Chant");
+    expect(host.querySelector(".notker-split__more")!.getAttribute("aria-label")).toBe("More Options");
+    openMenuOn("b");
+    expect(menuLabels()).toEqual(expect.arrayContaining(["Rename", "Duplicate", "Family: St. Gall", "Family: Laon", "New Chant Here", "New Group Here", "Delete Chant"]));
   });
 });

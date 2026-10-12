@@ -1,5 +1,6 @@
 // test/project-tree.test.ts
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import {
   type NotkerProject, type TreeNode, type ChantNode, type GroupNode,
   newProject, ephemeralFromGabc, newChant, newGroup, gabcName, gabcSkeleton,
@@ -238,5 +239,18 @@ describe("invariantes", () => {
     expect(invariantErrors({ ...sample(), activeId: "g1" })).toEqual(["ativo inválido: g1"]);
     expect(invariantErrors({ ...sample(), root: [c("a"), c("a")], activeId: "a" })).toEqual(["id repetido: a"]);
     expect(invariantErrors({ ...sample(), root: [g("g", [])], activeId: "x" })).toEqual(["projeto sem canto", "ativo inválido: x"]);
+  });
+});
+
+describe("árvore (modelo) — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("padrões de criação e cópia no idioma", () => {
+    setLocale("it");
+    expect(newGroup().title).toBe("Nuovo gruppo");
+    expect(gabcSkeleton()).toContain("name: Nuovo;");
+    expect(gabcName("%%\n(c4)")).toBe("Senza titolo");
+    const p = newProject({ family: "stgall" });
+    const r = duplicateNode(p, p.activeId)!;
+    expect(findNode(r.project, r.id)!.title).toBe("Nuovo (copia)");
   });
 });

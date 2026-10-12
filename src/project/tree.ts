@@ -3,6 +3,7 @@
  *  devolve um projeto novo — ou o MESMO objeto quando não há o que mudar.
  *  Invariantes: ids únicos; ≥ 1 canto; activeId aponta sempre para um canto. */
 import type { Family } from "../neume/types";
+import { t } from "../i18n";
 
 export interface Interpretation { gabcBodyHash: string; factors: Record<string, number> }
 export interface GroupNode { kind: "group"; id: string; title: string; children: TreeNode[]; collapsed?: boolean }
@@ -30,17 +31,17 @@ export type ChantPatch = Partial<Pick<ChantNode, "title" | "content" | "family" 
 export const genId = (): string =>
   globalThis.crypto?.randomUUID?.() ?? "n" + Date.now().toString(36) + Math.random().toString(36).slice(2);
 
-const PLACEHOLDER_TITLE = "Novo";
+const placeholderTitle = (): string => t("project.defaultChant");
 
 export function gabcSkeleton(name?: string, office?: string): string {
-  const lines = [`name: ${name && name.trim() ? name.trim() : "Novo"};`];
+  const lines = [`name: ${name && name.trim() ? name.trim() : t("project.defaultChant")};`];
   if (office && office.trim()) lines.push(`office-part: ${office.trim()};`);
   lines.push("%%", "(c4) ");
   return lines.join("\n");
 }
 
 /** Extrai o `name:` do cabeçalho (antes de %%); fallback no rótulo dado. */
-export function gabcName(content: string, fallback = "Sem título"): string {
+export function gabcName(content: string, fallback = t("project.untitled")): string {
   const head = content.split(/^%%/m)[0];
   const m = head.match(/^\s*name:\s*(.+?);/m);
   return m ? m[1].trim() : fallback;
@@ -54,12 +55,12 @@ export function newChant(opts: { title: string; content?: string; family?: Famil
   };
 }
 
-export function newGroup(title = "Novo grupo"): GroupNode {
+export function newGroup(title = t("project.defaultGroup")): GroupNode {
   return { kind: "group", id: genId(), title, children: [] };
 }
 
 export function newProject(opts: { family: Family; name?: string; office?: string; title?: string }): NotkerProject {
-  const title = (opts.name && opts.name.trim()) || opts.title || "Novo";
+  const title = (opts.name && opts.name.trim()) || opts.title || t("project.defaultChant");
   const chant: ChantNode = { kind: "chant", id: genId(), title, content: gabcSkeleton(opts.name, opts.office) };
   return { schema: 2, kind: "notker-project", title: opts.title ?? title, family: opts.family, root: [chant], activeId: chant.id };
 }
@@ -153,14 +154,14 @@ export function invariantErrors(p: NotkerProject): string[] {
   const seen = new Set<string>();
   const rec = (nodes: TreeNode[]): void => {
     for (const n of nodes) {
-      if (seen.has(n.id)) errs.push(`id repetido: ${n.id}`);
+      if (seen.has(n.id)) errs.push(t("project.error.duplicateId", { id: n.id }));
       seen.add(n.id);
       if (n.kind === "group") rec(n.children);
     }
   };
   rec(p.root);
-  if (flattenChants(p).length === 0) errs.push("projeto sem canto");
-  if (!findChant(p, p.activeId)) errs.push(`ativo inválido: ${p.activeId}`);
+  if (flattenChants(p).length === 0) errs.push(t("project.error.noChant"));
+  if (!findChant(p, p.activeId)) errs.push(t("project.error.badActive", { id: p.activeId }));
   return errs;
 }
 
@@ -209,10 +210,10 @@ export function updateChant(p: NotkerProject, id: string, patch: ChantPatch): No
 }
 
 export function renameNode(p: NotkerProject, id: string, title: string): NotkerProject {
-  const t = title.trim();
+  const trimmed = title.trim();
   const n = findNode(p, id);
-  if (!t || !n || n.title === t) return p;
-  return updateNode(p, id, (x) => ({ ...x, title: t }));
+  if (!trimmed || !n || n.title === trimmed) return p;
+  return updateNode(p, id, (x) => ({ ...x, title: trimmed }));
 }
 
 export function setChantFamily(p: NotkerProject, id: string, family: Family): NotkerProject {
@@ -252,8 +253,8 @@ export function moveNode(p: NotkerProject, id: string, parentId: string | null, 
   const node = findNode(p, id);
   if (!loc || !node) return p;
   if (parentId !== null) {
-    const t = findNode(p, parentId);
-    if (!t || t.kind !== "group" || subtreeHas(node, parentId)) return p; // sem ciclos
+    const target = findNode(p, parentId);
+    if (!target || target.kind !== "group" || subtreeHas(node, parentId)) return p; // sem ciclos
   }
   const same = loc.parentId === parentId;
   const i = same && loc.index < index ? index - 1 : index;
@@ -286,7 +287,7 @@ export function duplicateNode(p: NotkerProject, id: string): { project: NotkerPr
           : {}),
       }
     : { ...x, id: genId(), children: x.children.map(clone) });
-  const copy: TreeNode = { ...clone(n), title: `${n.title} (cópia)` };
+  const copy: TreeNode = { ...clone(n), title: t("project.copyOf", { title: n.title }) };
   return { project: insertNode(p, loc.parentId, loc.index + 1, copy), id: copy.id };
 }
 
@@ -304,7 +305,7 @@ export function removeNode(p: NotkerProject, id: string): RemoveResult | null {
       ?? order.slice(0, Math.max(0, pos)).reverse().find((x) => !gone.has(x.id));
     if (neighbor) next = { ...next, activeId: neighbor.id };
     else {
-      const ph = newChant({ title: PLACEHOLDER_TITLE });
+      const ph = newChant({ title: placeholderTitle() });
       next = { ...next, root: [...next.root, ph], activeId: ph.id };
       createdId = ph.id;
     }
@@ -324,7 +325,7 @@ export function restoreRemoved(p: NotkerProject, r: RemoveResult): NotkerProject
   if (subtreeHas(r.removed, r.prevActiveId)) next = setActive(next, r.prevActiveId);
   if (r.createdId) {
     const ph = findChant(next, r.createdId);
-    if (ph && ph.title === PLACEHOLDER_TITLE && ph.content === gabcSkeleton(PLACEHOLDER_TITLE) && !ph.interpretation && next.activeId !== ph.id) {
+    if (ph && ph.title === placeholderTitle() && ph.content === gabcSkeleton(placeholderTitle()) && !ph.interpretation && next.activeId !== ph.id) {
       next = removeNode(next, ph.id)?.project ?? next;
     }
   }
