@@ -46,6 +46,20 @@ export function isPrintKey(e: KeyboardEvent): boolean {
   return (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
 }
 
+/** Eventos de Ctrl+P que a guarda de janela (captura) já preveniu: o registro os trata
+ *  como não tratados, para que o comando habilitado ainda rode. */
+const printGuarded = new WeakSet<Event>();
+
+/** Listener de janela em CAPTURA: previne a impressão nativa mesmo quando um campo
+ *  inline faz stopPropagation e o evento nunca chegaria à fase de bolha. Devolve o desfazer. */
+export function installPrintGuard(win: Window): () => void {
+  const onKey = (e: KeyboardEvent): void => {
+    if (isPrintKey(e) && !e.defaultPrevented) { printGuarded.add(e); e.preventDefault(); }
+  };
+  win.addEventListener("keydown", onKey, true);
+  return () => win.removeEventListener("keydown", onKey, true);
+}
+
 const ARROWS: Record<string, string> = { ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→" };
 export function displayKey(k: string): string {
   return k.split("+").map((p) => ARROWS[p] ?? p.replace(/^Digit(\d)$/, "$1")).join("+");
@@ -98,7 +112,7 @@ export function createRegistry(): CommandRegistry {
       return s ? `${label(id)} (${s})` : label(id);
     },
     handleKey(e) {
-      if (e.defaultPrevented) return false;
+      if (e.defaultPrevented && !printGuarded.has(e)) return false;
       if (isPrintKey(e)) e.preventDefault(); // vale para todos os `return false` abaixo
       if (document.querySelector('[role="menu"]')) return false; // menu aberto: teclas são do menu
       const k = keyOf(e);

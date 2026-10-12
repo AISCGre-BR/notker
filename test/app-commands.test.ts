@@ -1,6 +1,6 @@
 // test/app-commands.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { createRegistry, keyOf, displayKey, gateCommands } from "../src/app/commands";
+import { createRegistry, keyOf, displayKey, gateCommands, installPrintGuard } from "../src/app/commands";
 
 const key = (k: string, mods: Partial<KeyboardEventInit> = {}, target?: EventTarget) => {
   const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...mods });
@@ -189,5 +189,35 @@ describe("Ctrl+P nunca abre a impressão nativa", () => {
     const e2 = ctrlP({ altKey: true });
     r.handleKey(e2);
     expect(e2.defaultPrevented).toBe(false);
+  });
+});
+
+describe("guarda de janela do Ctrl+P (campos que fazem stopPropagation)", () => {
+  const ctrlP = () => new KeyboardEvent("keydown", { key: "p", code: "KeyP", ctrlKey: true, bubbles: true, cancelable: true });
+  it("input que engole o evento: defaultPrevented true mesmo assim", () => {
+    const off = installPrintGuard(window);
+    const inp = document.createElement("input");
+    inp.addEventListener("keydown", (ev) => ev.stopPropagation());
+    document.body.append(inp);
+    const e = ctrlP();
+    inp.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    inp.remove();
+    off();
+  });
+  it("não toca em outras teclas; habilitado na mesa, o comando roda uma vez", () => {
+    const off = installPrintGuard(window);
+    const r = createRegistry();
+    const run = vi.fn();
+    r.register([{ id: "file.exportPdf", label: "PDF", run, keys: ["Ctrl+P"] }]);
+    window.addEventListener("keydown", (ev) => { r.handleKey(ev); }, { once: true });
+    const e = ctrlP();
+    window.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    const other = new KeyboardEvent("keydown", { key: "o", code: "KeyO", ctrlKey: true, cancelable: true });
+    window.dispatchEvent(other);
+    expect(other.defaultPrevented).toBe(false);
+    off();
   });
 });

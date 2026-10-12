@@ -38,7 +38,7 @@ import { nabcMoveKeymap, runMove } from "./neume/nabc-move";
 import { gabcAssistExtensions } from "./gabc/index";
 import type { Overlay, EffectiveEntry, Family } from "./neume/types";
 import type { Tree } from "web-tree-sitter";
-import { createRegistry, gateCommands } from "./app/commands";
+import { createRegistry, gateCommands, installPrintGuard } from "./app/commands";
 import { undo, redo } from "@codemirror/commands";
 import { createToolbar, type ToolbarHandle } from "./ui/toolbar";
 import { installTooltips } from "./ui/pd/tooltip";
@@ -1348,6 +1348,7 @@ async function boot() {
   // Atalhos no nível da JANELA (registro único), em fase de BOLHA: o CodeMirror
   // trata primeiro F2/Alt+setas quando o editor tem foco e marca o evento com
   // preventDefault; o registro ignora eventos já tratados (sem disparo duplo).
+  installPrintGuard(window); // Ctrl+P nunca imprime, mesmo com campos que engolem a tecla
   window.addEventListener("keydown", (e) => { commands.handleKey(e); });
 
   // Boot pronto: o projeto inicial conta como "sem alterações".
