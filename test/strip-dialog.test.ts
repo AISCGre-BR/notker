@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { openStripDialog } from "../src/gabc/strip-dialog";
 
 let host: HTMLElement;
@@ -155,5 +156,20 @@ describe("escopo no texto do diálogo", () => {
     expect(body()).toContain("canto atual");
     btn("Cancelar").click();
     await p;
+  });
+});
+
+describe("diálogo Remover — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("em italiano: textos do dicionário e a ação continua desabilitando sem nada ligado", async () => {
+    setLocale("it");
+    const p = openStripDialog(host, { vertical: 1, horizontal: 0, mora: 0 }, undefined, "pasted");
+    expect(host.querySelector(".sc-dialog__title")!.textContent).toBe("Rimuovi episemi e puncta mora");
+    expect(host.querySelector(".sc-dialog__body")!.textContent).toContain("passo incollato");
+    expect(toggles().map((b) => b.textContent)).toEqual(["Episemi verticali (1)", "Episemi orizzontali (0)", "Puncta mora (0)"]);
+    toggles()[0].click(); // desliga o único ligado
+    expect(btn("Rimuovi").disabled).toBe(true);
+    btn("Annulla").click();
+    expect(await p).toBeNull();
   });
 });

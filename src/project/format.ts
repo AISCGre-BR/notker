@@ -3,13 +3,14 @@
  *  empacota). Schema 2 = árvore + chants[]; o schema 1 (documents[]) é lido como raiz
  *  plana e regravado como 2. Leitura TOLERANTE: nenhum canto existente se perde. */
 import type { Family } from "../neume/types";
+import { t } from "../i18n";
 import { gabcBodyHash } from "../tuotilo/wave";
 import {
   type NotkerProject, type TreeNode, type ChantNode, type Interpretation,
   genId, gabcSkeleton, flattenChants, flattenNodes,
 } from "./tree";
 
-export const FUTURE_SCHEMA_MESSAGE = "Projeto criado por uma versão mais nova do Notker.";
+export const futureSchemaMessage = (): string => t("project.error.futureSchema");
 export interface Bundle { project_json: string; files: Record<string, string> }
 export interface ExportPlan { dirs: string[]; files: { path: string; content: string }[] }
 
@@ -78,7 +79,7 @@ function chantFrom(meta: Record<string, unknown>, files: Record<string, string>)
   return {
     kind: "chant",
     id: typeof meta.id === "string" && meta.id ? meta.id : genId(),
-    title: typeof meta.title === "string" && meta.title ? meta.title : "Sem título",
+    title: typeof meta.title === "string" && meta.title ? meta.title : t("project.untitled"),
     content: fileOf(files, file) ?? "",
     ...(family ? { family } : {}),
     ...(interpretation ? { interpretation } : {}),
@@ -120,7 +121,7 @@ function readV2(meta: Record<string, unknown>, files: Record<string, string>): T
         groupIds.add(id);
         out.push({
           kind: "group", id,
-          title: typeof item.title === "string" && item.title ? item.title : "Grupo",
+          title: typeof item.title === "string" && item.title ? item.title : t("project.group"),
           children: walk(item.children),
           ...(item.collapsed === true ? { collapsed: true } : {}),
         });
@@ -136,18 +137,18 @@ function readV2(meta: Record<string, unknown>, files: Record<string, string>): T
 
 function parseMeta(projectJson: string): Record<string, unknown> {
   let v: unknown;
-  try { v = JSON.parse(projectJson); } catch { throw new Error("project.json inválido"); }
-  if (!isObj(v) || v.kind !== "notker-project") throw new Error("não é um projeto Notker");
+  try { v = JSON.parse(projectJson); } catch { throw new Error(t("project.error.invalidJson")); }
+  if (!isObj(v) || v.kind !== "notker-project") throw new Error(t("project.error.notNotker"));
   return v;
 }
 
 export function fromBundle(projectJson: string, files: Record<string, string>, path: string | undefined): NotkerProject {
   const meta = parseMeta(projectJson);
   const schema = meta.schema;
-  if (typeof schema === "number" && schema > 2) throw new Error(FUTURE_SCHEMA_MESSAGE);
+  if (typeof schema === "number" && schema > 2) throw new Error(futureSchemaMessage());
   const root = schema === 2 ? readV2(meta, files) : readV1(meta, files);
   if (flattenNodes(root).length === 0) {
-    root.push({ kind: "chant", id: genId(), title: "Sem título", content: gabcSkeleton() });
+    root.push({ kind: "chant", id: genId(), title: t("project.untitled"), content: gabcSkeleton() });
   }
   const chants = flattenNodes(root);
   const active = meta.active;
@@ -166,7 +167,7 @@ export function gabcExportPlan(p: NotkerProject): ExportPlan {
   const rec = (nodes: TreeNode[], prefix: string): void => {
     const w = Math.max(2, String(nodes.length).length);
     nodes.forEach((n, i) => {
-      const name = `${String(i + 1).padStart(w, "0")}-${slug(n.title, n.kind === "group" ? "grupo" : "canto")}`;
+      const name = `${String(i + 1).padStart(w, "0")}-${slug(n.title, n.kind === "group" ? t("project.exportSlug.group") : t("project.exportSlug.chant"))}`;
       if (n.kind === "chant") plan.files.push({ path: `${prefix}${name}.gabc`, content: n.content });
       else { plan.dirs.push(`${prefix}${name}`); rec(n.children, `${prefix}${name}/`); }
     });

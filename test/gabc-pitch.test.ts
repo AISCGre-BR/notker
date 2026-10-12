@@ -1,6 +1,7 @@
 // test/gabc-pitch.test.ts
-import { describe, it, expect } from "vitest";
-import { pitchName, staffOffset } from "../src/gabc/gabc-pitch";
+import { describe, it, expect, afterEach } from "vitest";
+import { pitchName, pitchLabel, staffOffset } from "../src/gabc/gabc-pitch";
+import { setLocale } from "../src/i18n";
 
 // Valores verificados contra notker-LEGACY/.../note_glyph.rs (gregorio CLI).
 describe("gabc-pitch", () => {
@@ -30,5 +31,19 @@ describe("gabc-pitch", () => {
   });
   it("sem clave assume c4", () => {
     expect(pitchName("j", null)).toBe("do");
+  });
+});
+
+describe("pitchLabel — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("pt acentuado, it sem acento, en por letra; pitchName continua devolvendo a chave", () => {
+    expect(pitchName("d", "c4")).toBe("re");
+    expect(pitchLabel("d", "c4")).toBe("ré");
+    expect(pitchLabel("j", "c4")).toBe("dó");
+    setLocale("it");
+    expect(pitchLabel("d", "c4")).toBe("re");
+    setLocale("en");
+    expect(pitchLabel("d", "c4")).toBe("D");
+    expect(pitchLabel("z", "c4")).toBe("?");
   });
 });

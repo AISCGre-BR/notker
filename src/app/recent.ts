@@ -2,6 +2,7 @@
 /** Recentes (spec §4.6 + adendo §11): até 10 projetos `.notker` em AppData `recent.json`,
  *  cada um com a meta da tela inicial (título, data, primeiros cantos, miniatura). PURO:
  *  o arquivo vem por um TextSlot e a checagem de existência por função (comando Rust). */
+import { formatDate } from "../i18n";
 import { type NotkerProject, flattenChants } from "../project/tree";
 import type { TextSlot } from "./text-slot";
 
@@ -99,7 +100,7 @@ export function formatRecentDate(iso: string, now: Date = new Date()): string {
   if (!iso || Number.isNaN(d.getTime())) return "";
   const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "long" };
   if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
-  return new Intl.DateTimeFormat("pt-BR", opts).format(d);
+  return formatDate(d, opts);
 }
 
 export interface RecentStore { load(): Promise<RecentEntry[]>; save(list: RecentEntry[]): Promise<void> }

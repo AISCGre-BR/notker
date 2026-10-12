@@ -4,6 +4,7 @@
  *  esqueleto `(c4)`) ficam de fora — uma peça sem pauta não vira título solto. */
 import type { Family } from "../neume/types";
 import { type NotkerProject, type ChantNode, findNode, findChant, flattenChants, flattenNodes, effectiveFamily } from "../project/tree";
+import { t } from "../i18n";
 
 export type PdfScope = "chant" | "group" | "project";
 
@@ -61,7 +62,7 @@ export function pdfFileName(title: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80)
     .replace(/-+$/, "");
-  return `${slug || "partitura"}.pdf`;
+  return `${slug || t("pdf.fileName")}.pdf`;
 }
 
 /** Título que dá nome ao arquivo: o do canto, o do grupo ou o do projeto. */

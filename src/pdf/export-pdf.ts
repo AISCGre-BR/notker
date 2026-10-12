@@ -8,6 +8,7 @@ import { layoutPages, composePages, type ComposePiece, type PdfSink } from "./co
 import type { RenderedPiece } from "./render";
 import type { PdfOptions } from "./export-dialog";
 import { pdfFileName, type PdfPiece } from "./scope";
+import { t } from "../i18n";
 
 export interface PdfExportDeps {
   pickPath(defaultName: string): Promise<string | null>;
@@ -29,7 +30,7 @@ export interface PdfExportResult { path: string; pages: number; pieces: number; 
 export async function exportPdf(
   deps: PdfExportDeps, pieces: readonly PdfPiece[], fileTitle: string, o: PdfOptions,
 ): Promise<PdfExportResult | null> {
-  if (pieces.length === 0) throw new Error("não há canto com notas para exportar.");
+  if (pieces.length === 0) throw new Error(t("pdf.error.noMusic"));
   const path = await deps.pickPath(pdfFileName(fileTitle));
   if (!path) return null;
   deps.onStart?.();
@@ -56,7 +57,7 @@ export async function exportPdf(
       ok.push({ title: p.title, lines: r.lines });
       families.add(p.family);
     }
-    if (ok.length === 0) throw new Error("nenhum canto pôde ser desenhado.");
+    if (ok.length === 0) throw new Error(t("pdf.error.noneDrawn"));
     await yieldFrame();
     const pages = layoutPages(ok, g, o.newPagePerPiece);
     const sink = await deps.createSink(o.page, [...families]);

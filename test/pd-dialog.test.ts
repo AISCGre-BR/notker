@@ -139,3 +139,11 @@ describe("diálogo Parchment", () => {
     });
   });
 });
+
+describe("openDialog — data-action", () => {
+  it("cada botão de ação carrega data-action com o id (ninguém precisa achar botão pelo texto)", () => {
+    const h = document.createElement("div"); document.body.appendChild(h);
+    void openDialog(h, { title: "x", actions: [{ id: "cancel", label: "A", kind: "elevated" }, { id: "go", label: "B", kind: "filled" }] });
+    expect([...h.querySelectorAll<HTMLButtonElement>(".sc-dialog__actions button")].map((b) => b.dataset.action)).toEqual(["cancel", "go"]);
+  });
+});

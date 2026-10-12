@@ -6,7 +6,7 @@ const main = readFileSync("src/main.ts", "utf8");
 describe("main.ts: remover episemas e puncta mora", () => {
   it("comando no registro, com rótulo, sem atalho, só na mesa e na mesma vista do editor", () => {
     const line = main.split("\n").find((l) => l.includes('id: "edit.stripMarks"'))!;
-    expect(line).toContain('label: "Remover episemas e puncta mora…"');
+    expect(line).toContain('label: t("cmd.edit.stripMarks")');
     expect(line).toContain("enabled: inEdit");
     expect(line).not.toContain("keys:");
     expect(main).toMatch(/gateCommands\(commands, \[[^\]]*"edit\.stripMarks"/);
@@ -16,14 +16,14 @@ describe("main.ts: remover episemas e puncta mora", () => {
   });
   it("colar e importar oferecem a remoção com guarda de canto/projeto", () => {
     expect(main).toContain("pasteMarksWatcher(");
-    expect(main).toContain("O gabc colado tem episemas ou puncta mora.");
-    expect(main).toContain("O gabc importado tem episemas ou puncta mora.");
+    expect(main).toContain('t("strip.offer.pasted")');
+    expect(main).toContain('t("strip.offer.imported")');
     expect(main).toMatch(/if \(id === shownId && epoch === projectEpoch\) void runStrip/);
-    expect(main).toContain("Não há episemas nem puncta mora aqui.");
+    expect(main).toContain('t("strip.none")');
   });
   it("trecho colado que some durante o diálogo também avisa com o toast", () => {
     const after = main.slice(main.indexOf("await openStripDialog("));
-    expect(after).toMatch(/^[\s\S]*?if \(scope === "pasted" && !area\(\)\) \{ toaster\.show\("O trecho colado não existe mais\.", \{ kind: "warn" \}\); return; \}/);
+    expect(after).toMatch(/^[\s\S]*?if \(scope === "pasted" && !area\(\)\) \{ toaster\.show\(t\("strip\.gone"\), \{ kind: "warn" \}\); return; \}/);
   });
   it("preserva o comando Letras na pauta", () => {
     expect(main).toContain('id: "view.staffLetters"');

@@ -3,8 +3,9 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { type NotkerProject, getActiveChant, ephemeralFromGabc } from "../project/tree";
 import { fromBundle, toBundle, gabcExportPlan } from "../project/format";
+import { t } from "../i18n";
 
-const NOTKER_FILTER = { name: "Projeto Notker", extensions: ["notker"] };
+const notkerFilter = () => ({ name: t("fileFilter.project"), extensions: ["notker"] });
 const GABC_FILTER = { name: "Gregorio", extensions: ["gabc"] };
 
 function baseName(path: string): string {
@@ -13,11 +14,15 @@ function baseName(path: string): string {
 
 /** Abre um `.notker` (descompacta via Rust) ou um `.gabc` solto (projeto efêmero). */
 export async function openProject(): Promise<NotkerProject | null> {
-  const path = await open({ multiple: false, filters: [NOTKER_FILTER, GABC_FILTER] });
+  const path = await open({ multiple: false, filters: [notkerFilter(), GABC_FILTER] });
   if (typeof path !== "string") return null;
   if (/\.notker$/i.test(path)) return openProjectAt(path);
-  const content = await readTextFile(path);
-  return ephemeralFromGabc(content, baseName(path));
+  return openGabcAt(path);
+}
+
+/** Abre um `.gabc` pelo caminho como projeto efêmero. LANÇA. */
+export async function openGabcAt(path: string): Promise<NotkerProject> {
+  return ephemeralFromGabc(await readTextFile(path), baseName(path), path);
 }
 
 /** Abre um `.notker` pelo caminho (Recentes). Quem lê é o Rust (`read_project`), então não
@@ -41,8 +46,8 @@ export async function pickGabcFile(): Promise<{ name: string; content: string } 
 export async function saveProject(p: NotkerProject, opts: { saveAs?: boolean } = {}): Promise<string | null> {
   let path = opts.saveAs ? undefined : p.path;
   if (!path) {
-    const name = (p.title || "Projeto").replace(/[\\/:*?"<>|]+/g, "-");
-    const chosen = await save({ filters: [NOTKER_FILTER], defaultPath: `${name}.notker` });
+    const name = (p.title || t("project.fileName")).replace(/[\\/:*?"<>|]+/g, "-");
+    const chosen = await save({ filters: [notkerFilter()], defaultPath: `${name}.notker` });
     if (!chosen) return null;
     path = /\.notker$/i.test(chosen) ? chosen : `${chosen}.notker`;
   }

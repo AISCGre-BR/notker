@@ -1,5 +1,6 @@
 // test/project-tree.test.ts
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import {
   type NotkerProject, type TreeNode, type ChantNode, type GroupNode,
   newProject, ephemeralFromGabc, newChant, newGroup, gabcName, gabcSkeleton,
@@ -217,6 +218,14 @@ describe("removeNode / restoreRemoved", () => {
     expect(shape(back.root)).toBe("a g1[b d] e c");
     expect(restoreRemoved(back, r)).toBe(back);
   });
+  it("restoreRemoved: o canto vazio criado é reconhecido mesmo se o idioma mudou entre remover e desfazer", () => {
+    const p = newProject({ family: "stgall", name: "Único" });
+    const r = removeNode(p, p.activeId)!; // pt-BR: "Novo"
+    try {
+      setLocale("en");
+      expect(flattenChants(restoreRemoved(r.project, r)).map((x) => x.title)).toEqual(["Único"]);
+    } finally { setLocale("pt-BR"); }
+  });
   it("restoreRemoved remove o canto vazio criado só se ele ficou intocado", () => {
     const p = newProject({ family: "stgall", name: "Único" });
     const r = removeNode(p, p.activeId)!;
@@ -238,5 +247,18 @@ describe("invariantes", () => {
     expect(invariantErrors({ ...sample(), activeId: "g1" })).toEqual(["ativo inválido: g1"]);
     expect(invariantErrors({ ...sample(), root: [c("a"), c("a")], activeId: "a" })).toEqual(["id repetido: a"]);
     expect(invariantErrors({ ...sample(), root: [g("g", [])], activeId: "x" })).toEqual(["projeto sem canto", "ativo inválido: x"]);
+  });
+});
+
+describe("árvore (modelo) — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("padrões de criação e cópia no idioma", () => {
+    setLocale("it");
+    expect(newGroup().title).toBe("Nuovo gruppo");
+    expect(gabcSkeleton()).toContain("name: Nuovo;");
+    expect(gabcName("%%\n(c4)")).toBe("Senza titolo");
+    const p = newProject({ family: "stgall" });
+    const r = duplicateNode(p, p.activeId)!;
+    expect(findNode(r.project, r.id)!.title).toBe("Nuovo (copia)");
   });
 });

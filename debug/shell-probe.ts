@@ -34,6 +34,12 @@ import { validateNabc, type NabcParser } from "../src/neume/validate-nabc";
 import { createNeumeDrawer } from "../src/neume/draw";
 import { createNabcOnlyRenderer } from "../src/preview/nabc-only";
 import { createNeumasView } from "../src/neumas/view";
+import { exportPdfDialog } from "../src/pdf/export-dialog";
+import { openStripDialog } from "../src/gabc/strip-dialog";
+import { openDialog } from "../src/ui/pd/dialog";
+import { setLocale, isLocale, t } from "../src/i18n";
+const __lang = new URLSearchParams(location.search).get("lang");
+if (isLocale(__lang)) { setLocale(__lang); document.documentElement.lang = __lang; }
 
 const qs = new URLSearchParams(location.search);
 const theme = qs.get("theme") === "dark" ? "dark" : "light";
@@ -42,38 +48,38 @@ const noop = () => {};
 
 const commands = createRegistry();
 commands.register([
-  { id: "file.newProject", label: "Novo projeto…", run: noop },
-  { id: "file.open", label: "Abrir…", run: noop, keys: ["Ctrl+O"] },
-  { id: "file.save", label: "Salvar", run: noop, keys: ["Ctrl+S"] },
-  { id: "file.exportGabc", label: "Exportar .gabc do canto…", run: noop },
-  { id: "file.exportAllGabc", label: "Exportar todos os .gabc…", run: noop },
-  { id: "names.export", label: "Exportar nomes…", run: noop, keys: ["Ctrl+Alt+E"] },
-  { id: "names.import", label: "Importar nomes…", run: noop, keys: ["Ctrl+Alt+I"] },
-  { id: "edit.undo", label: "Desfazer", icon: "undo-2", run: noop },
-  { id: "edit.redo", label: "Refazer", icon: "redo-2", run: noop },
-  { id: "edit.format", label: "Formatar", icon: "wand-sparkles", run: noop, keys: ["Ctrl+Shift+F"] },
-  { id: "neume.moveLeft", label: "Mover neuma para a esquerda", icon: "chevron-left", run: noop, keys: ["Alt+ArrowLeft"] },
-  { id: "neume.moveDown", label: "Mover neuma para baixo", icon: "chevron-down", run: noop, keys: ["Alt+ArrowDown"] },
-  { id: "neume.moveUp", label: "Mover neuma para cima", icon: "chevron-up", run: noop, keys: ["Alt+ArrowUp"] },
-  { id: "neume.moveRight", label: "Mover neuma para a direita", icon: "chevron-right", run: noop, keys: ["Alt+ArrowRight"] },
-  { id: "neume.moveReset", label: "Resetar posição do neuma", icon: "rotate-ccw", run: noop, keys: ["Alt+0"] },
-  { id: "neume.palette", label: "Buscar neuma…", icon: "search", run: noop, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
-  { id: "view.edicao", label: "Edição", run: noop, keys: ["Ctrl+Digit1"], checked: () => qs.get("view") !== "neumas" },
-  { id: "view.neumas", label: "Neumas", run: noop, keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => qs.get("view") === "neumas" },
-  { id: "neume.name", label: "Nomear neuma…", icon: "tag", run: noop, keys: ["Ctrl+Shift+N"] },
-  { id: "doc.toggleFamily", label: "Família do canto: St. Gall ⇄ Laon", run: noop, keys: ["Ctrl+Shift+G"] },
-  { id: "view.preview", label: "Partitura", run: noop, checked: () => true },
-  { id: "view.split", label: "Partitura ao lado", icon: "columns-2", run: noop, checked: () => true },
-  { id: "view.legend", label: "Régua da pauta", icon: "ruler", run: noop, keys: ["Ctrl+Alt+L"], checked: () => false },
+  { id: "file.newProject", label: t("cmd.file.newProject"), run: noop },
+  { id: "file.open", label: t("cmd.file.open"), run: noop, keys: ["Ctrl+O"] },
+  { id: "file.save", label: t("common.save"), run: noop, keys: ["Ctrl+S"] },
+  { id: "file.exportGabc", label: t("cmd.file.exportGabc"), run: noop },
+  { id: "file.exportAllGabc", label: t("cmd.file.exportAllGabc"), run: noop },
+  { id: "names.export", label: t("cmd.names.export"), run: noop, keys: ["Ctrl+Alt+E"] },
+  { id: "names.import", label: t("cmd.names.import"), run: noop, keys: ["Ctrl+Alt+I"] },
+  { id: "edit.undo", label: t("common.undo"), icon: "undo-2", run: noop },
+  { id: "edit.redo", label: t("cmd.edit.redo"), icon: "redo-2", run: noop },
+  { id: "edit.format", label: t("cmd.edit.format"), icon: "wand-sparkles", run: noop, keys: ["Ctrl+Shift+F"] },
+  { id: "neume.moveLeft", label: t("cmd.neume.moveLeft"), icon: "chevron-left", run: noop, keys: ["Alt+ArrowLeft"] },
+  { id: "neume.moveDown", label: t("cmd.neume.moveDown"), icon: "chevron-down", run: noop, keys: ["Alt+ArrowDown"] },
+  { id: "neume.moveUp", label: t("cmd.neume.moveUp"), icon: "chevron-up", run: noop, keys: ["Alt+ArrowUp"] },
+  { id: "neume.moveRight", label: t("cmd.neume.moveRight"), icon: "chevron-right", run: noop, keys: ["Alt+ArrowRight"] },
+  { id: "neume.moveReset", label: t("cmd.neume.moveReset"), icon: "rotate-ccw", run: noop, keys: ["Alt+0"] },
+  { id: "neume.palette", label: t("cmd.neume.palette"), icon: "search", run: noop, keys: ["F2", "Ctrl+K", "Ctrl+Space"] },
+  { id: "view.edicao", label: t("cmd.view.edicao"), run: noop, keys: ["Ctrl+Digit1"], checked: () => qs.get("view") !== "neumas" },
+  { id: "view.neumas", label: t("cmd.view.neumas"), run: noop, keys: ["Ctrl+Digit3", "Ctrl+Alt+N"], checked: () => qs.get("view") === "neumas" },
+  { id: "neume.name", label: t("cmd.neume.name"), icon: "tag", run: noop, keys: ["Ctrl+Shift+N"] },
+  { id: "doc.toggleFamily", label: t("cmd.doc.toggleFamily"), run: noop, keys: ["Ctrl+Shift+G"] },
+  { id: "view.preview", label: t("cmd.view.preview"), run: noop, checked: () => true },
+  { id: "view.split", label: t("cmd.view.split"), icon: "columns-2", run: noop, checked: () => true },
+  { id: "view.legend", label: t("cmd.view.legend"), icon: "ruler", run: noop, keys: ["Ctrl+Alt+L"], checked: () => false },
   { id: "play.toggle", label: "Tocar", run: noop },
   { id: "play.mode", label: "Modo: interpretado", icon: "audio-waveform", run: noop, checked: () => false },
   { id: "wave.toggle", label: "Onda de interpretação", icon: "chart-column", run: noop, checked: () => false },
   { id: "wave.reset", label: "Resetar onda", icon: "rotate-ccw", run: noop, enabled: () => false },
-  { id: "view.theme.system", label: "Tema: sistema", run: noop, checked: () => false },
-  { id: "view.theme.light", label: "Tema: Pergaminho", run: noop, checked: () => theme === "light" },
-  { id: "view.theme.dark", label: "Tema: Vigília", run: noop, checked: () => theme === "dark" },
-  { id: "help.shortcuts", label: "Atalhos de teclado…", run: noop },
-  { id: "help.about", label: "Sobre o Notker…", run: noop },
+  { id: "view.theme.system", label: t("cmd.view.theme.system"), run: noop, checked: () => false },
+  { id: "view.theme.light", label: t("cmd.view.theme.light"), run: noop, checked: () => theme === "light" },
+  { id: "view.theme.dark", label: t("cmd.view.theme.dark"), run: noop, checked: () => theme === "dark" },
+  { id: "help.shortcuts", label: t("cmd.help.shortcuts"), run: noop },
+  { id: "help.about", label: t("cmd.help.about"), run: noop },
 ]);
 
 const menuItem = (id: string): MenuItem => {
@@ -81,15 +87,15 @@ const menuItem = (id: string): MenuItem => {
   return { cmd: id, label: () => commands.label(id), shortcut: commands.shortcut(id), checked: def?.checked, enabled: def?.enabled };
 };
 const menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
-  { label: "Arquivo", items: [menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"), "---", menuItem("file.exportGabc"), menuItem("file.exportAllGabc"), "---", menuItem("names.import"), menuItem("names.export")] },
-  { label: "Editar", items: [{ ...menuItem("edit.undo"), shortcut: "Ctrl+Z" }, { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" }, "---", menuItem("neume.palette"), menuItem("edit.format"), "---", menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"), menuItem("neume.moveRight"), menuItem("neume.moveReset")] },
-  { label: "Exibir", items: [menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"), "---", menuItem("view.edicao"), menuItem("view.neumas"), "---", menuItem("doc.toggleFamily"), "---", menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark")] },
-  { label: "Ajuda", items: [menuItem("help.shortcuts"), menuItem("help.about")] },
+  { label: t("menu.file"), items: [menuItem("file.newProject"), menuItem("file.open"), menuItem("file.save"), "---", menuItem("file.exportGabc"), menuItem("file.exportAllGabc"), "---", menuItem("names.import"), menuItem("names.export")] },
+  { label: t("menu.edit"), items: [{ ...menuItem("edit.undo"), shortcut: "Ctrl+Z" }, { ...menuItem("edit.redo"), shortcut: "Ctrl+Shift+Z" }, "---", menuItem("neume.palette"), menuItem("edit.format"), "---", menuItem("neume.moveLeft"), menuItem("neume.moveDown"), menuItem("neume.moveUp"), menuItem("neume.moveRight"), menuItem("neume.moveReset")] },
+  { label: t("menu.view"), items: [menuItem("view.preview"), menuItem("view.split"), menuItem("view.legend"), "---", menuItem("view.edicao"), menuItem("view.neumas"), "---", menuItem("doc.toggleFamily"), "---", menuItem("view.theme.system"), menuItem("view.theme.light"), menuItem("view.theme.dark")] },
+  { label: t("menu.help"), items: [menuItem("help.shortcuts"), menuItem("help.about")] },
 ]);
 menubar.setTitle("Kyrie — Missa de teste", !!qs.get("edited"));
 
 createToolbar(document.querySelector<HTMLElement>("#toolbar")!, commands, [
-  { tabs: ["view.edicao", "view.neumas"], label: "Vistas" },
+  { tabs: ["view.edicao", "view.neumas"], label: t("toolbar.views") },
   { group: ["edit.undo", "edit.redo"], view: "edicao" },
   { group: ["neume.moveLeft", "neume.moveDown", "neume.moveUp", "neume.moveRight", "neume.moveReset"], view: "edicao" },
   { group: ["edit.format", "neume.palette", "neume.name"], view: "edicao" },
@@ -255,13 +261,17 @@ async function main(): Promise<void> {
     const tops = document.querySelectorAll<HTMLElement>(".sc-menubar__top");
     tops[Number(menuN) - 1]?.click();
   }
+  const dlg = qs.get("dialog");
+  if (dlg === "pdf") void exportPdfDialog(document.querySelector<HTMLElement>("#dialog-host")!, { chantHasMusic: true, group: { id: "g", title: "Natal" } });
+  if (dlg === "strip") void openStripDialog(document.querySelector<HTMLElement>("#dialog-host")!, { vertical: 3, horizontal: 2, mora: 0 });
+  if (dlg === "session") void openDialog(document.querySelector<HTMLElement>("#dialog-host")!, { title: t("session.ask.title", { title: "Missa de Natal" }), body: t("session.ask.body"), actions: [{ id: "c", label: t("common.cancel"), kind: "elevated" }, { id: "n", label: t("common.dontSave"), kind: "danger" }, { id: "s", label: t("common.save"), kind: "filled" }] });
   if (qs.get("palette")) {
     neume.palette.open(view);
     const input = document.querySelector<HTMLInputElement>(".neume-palette input")!;
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
   }
-  if (qs.get("toast") === "error") toaster.show("Salvar falhou. Permissão negada.", { kind: "error" });
-  if (qs.get("toast") === "ok") toaster.show("Projeto salvo.");
+  if (qs.get("toast") === "error") toaster.show(t("project.saveFailed", { error: "Permissão negada." }), { kind: "error" });
+  if (qs.get("toast") === "ok") toaster.show(t("project.saved"));
   if (qs.get("tip")) {
     const b = document.querySelector<HTMLElement>('.sc-toolbar button[data-cmd="neume.palette"]')!;
     b.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));

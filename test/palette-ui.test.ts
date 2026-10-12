@@ -1,5 +1,6 @@
 // test/palette-ui.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { neumePalette } from "../src/neume/palette";
@@ -162,5 +163,16 @@ describe("paleta de neumas: cadastro rápido", () => {
     input.value = "";
     input.dispatchEvent(new Event("input"));
     expect(rows()).toEqual(["un"]);
+  });
+});
+
+describe("paleta — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("rótulo e placeholder em italiano", () => {
+    setLocale("it");
+    neumePalette(deps()).open(view);
+    const root = document.querySelector<HTMLElement>(".neume-palette")!;
+    expect(root.getAttribute("aria-label")).toBe("Cerca neuma");
+    expect(root.querySelector<HTMLInputElement>("input")!.placeholder).toBe("Cerca neumi per nome o codice");
   });
 });

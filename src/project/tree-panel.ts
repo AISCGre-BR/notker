@@ -9,6 +9,7 @@ import type { Family } from "../neume/types";
 import { type NotkerProject, type TreeNode, type VisibleRow, visibleRows, findNode, locate, childrenOf, subtreeHas } from "./tree";
 import { computeDrop, type Drop, type DropRow } from "./tree-dnd";
 import { icon } from "../ui/pd/icons";
+import { t } from "../i18n";
 import { openContextMenu, closeContextMenu, type CtxEntry } from "../ui/pd/context-menu";
 
 export interface TreePanelOpts {
@@ -46,7 +47,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
   const list = document.createElement("div");
   list.className = "notker-sidebar__list notker-tree";
   list.setAttribute("role", "tree");
-  list.setAttribute("aria-label", "Cantos do projeto");
+  list.setAttribute("aria-label", t("tree.label"));
   host.replaceChildren(list, buildFoot());
 
   // ── Arrastar e soltar: Pointer Events próprios (a API HTML5 de DnD é instável no
@@ -132,20 +133,20 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     const add = document.createElement("button");
     add.type = "button";
     add.className = "sc-btn sc-btn--elevated notker-split__main";
-    add.append(icon("plus"), document.createTextNode("Novo canto"));
+    add.append(icon("plus"), document.createTextNode(t("tree.newChant")));
     add.addEventListener("click", () => opts.onNewChant(null, Infinity));
     const more = document.createElement("button");
     more.type = "button";
     more.className = "sc-btn sc-btn--elevated sc-btn--icon notker-split__more";
-    more.setAttribute("aria-label", "Mais opções");
-    more.dataset.tip = "Mais opções";
+    more.setAttribute("aria-label", t("tree.moreOptions"));
+    more.dataset.tip = t("tree.moreOptions");
     more.appendChild(icon("chevron-up"));
     more.addEventListener("click", () => {
       const r = more.getBoundingClientRect();
       openContextMenu(host, r.left, r.top - 8, [
-        { label: "Novo canto", run: () => opts.onNewChant(null, Infinity) },
-        { label: "Novo grupo", run: () => opts.onNewGroup(null, Infinity) },
-        { label: "Importar .gabc…", run: () => opts.onImport() },
+        { label: t("tree.newChant"), run: () => opts.onNewChant(null, Infinity) },
+        { label: t("cmd.project.newGroup"), run: () => opts.onNewGroup(null, Infinity) },
+        { label: t("cmd.project.importGabc"), run: () => opts.onImport() },
       ], more, { openUp: true });
     });
     foot.append(add, more);
@@ -165,24 +166,24 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     const siblings = childrenOf(p, loc.parentId)!;
     const here = hereOf(n);
     const items: CtxEntry[] = [
-      { label: "Renomear", shortcut: "F2", run: () => startRename(n.id) },
-      { label: "Duplicar", shortcut: "Ctrl+D", run: () => opts.onDuplicate(n.id) },
+      { label: t("tree.rename"), shortcut: "F2", run: () => startRename(n.id) },
+      { label: t("tree.duplicate"), shortcut: "Ctrl+D", run: () => opts.onDuplicate(n.id) },
     ];
     if (n.kind === "chant") {
       const fam = n.family ?? p.family;
       items.push("---",
-        { label: "Família: St. Gall", checked: fam === "stgall", run: () => opts.onSetFamily(n.id, "stgall") },
-        { label: "Família: Laon", checked: fam === "laon", run: () => opts.onSetFamily(n.id, "laon") });
+        { label: t("tree.family", { family: "St. Gall" }), checked: fam === "stgall", run: () => opts.onSetFamily(n.id, "stgall") },
+        { label: t("tree.family", { family: "Laon" }), checked: fam === "laon", run: () => opts.onSetFamily(n.id, "laon") });
     }
     items.push("---",
-      { label: "Novo canto aqui", run: () => opts.onNewChant(here.parentId, here.index) },
-      { label: "Novo grupo aqui", run: () => opts.onNewGroup(here.parentId, here.index) });
+      { label: t("tree.newChantHere"), run: () => opts.onNewChant(here.parentId, here.index) },
+      { label: t("tree.newGroupHere"), run: () => opts.onNewGroup(here.parentId, here.index) });
     const moves: CtxEntry[] = [];
-    if (loc.index > 0) moves.push({ label: "Mover para cima", shortcut: "Alt+↑", run: () => opts.onMoveBy(n.id, -1) });
-    if (loc.index < siblings.length - 1) moves.push({ label: "Mover para baixo", shortcut: "Alt+↓", run: () => opts.onMoveBy(n.id, 1) });
+    if (loc.index > 0) moves.push({ label: t("tree.moveUp"), shortcut: "Alt+↑", run: () => opts.onMoveBy(n.id, -1) });
+    if (loc.index < siblings.length - 1) moves.push({ label: t("tree.moveDown"), shortcut: "Alt+↓", run: () => opts.onMoveBy(n.id, 1) });
     if (moves.length) items.push("---", ...moves);
     items.push("---", {
-      label: n.kind === "group" ? "Excluir grupo" : "Excluir canto", shortcut: "Del", danger: true,
+      label: n.kind === "group" ? t("tree.deleteGroup") : t("tree.deleteChant"), shortcut: "Del", danger: true,
       run: () => opts.onRemove(n.id),
     });
     openContextMenu(host, x, y, items, row);
@@ -197,7 +198,7 @@ export function createTreePanel(host: HTMLElement, opts: TreePanelOpts): TreePan
     const input = document.createElement("input");
     input.className = "sc-input notker-tree__rename";
     input.value = n.title;
-    input.setAttribute("aria-label", n.kind === "group" ? "Nome do grupo" : "Nome do canto");
+    input.setAttribute("aria-label", n.kind === "group" ? t("tree.groupName") : t("guide.chantName"));
     name.replaceWith(input);
     let done = false;
     const finish = (commit: boolean): void => {

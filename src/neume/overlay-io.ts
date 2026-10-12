@@ -1,13 +1,14 @@
 // src/neume/overlay-io.ts  (IO Tauri — sem teste unitário; coberto no E2E)
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile, BaseDirectory, mkdir, exists } from "@tauri-apps/plugin-fs";
+import { t } from "../i18n";
 import { type Overlay } from "./types";
 import { emptyOverlay, parseOverlay, serializeOverlay } from "./overlay";
 
 const FILE = "neume-overlay.json";
 /** Cópia do arquivo schema 1 feita na 1ª leitura por esta versão (volta segura a uma versão antiga). */
 const BACKUP_V1 = "neume-overlay.schema1.json";
-const FILTERS = [{ name: "Notker neumes", extensions: ["json"] }];
+const namesFilter = () => [{ name: t("fileFilter.names"), extensions: ["json"] }];
 
 export async function loadUserOverlay(): Promise<Overlay> {
   if (!(await exists(FILE, { baseDir: BaseDirectory.AppData }))) return emptyOverlay();
@@ -25,11 +26,11 @@ export async function saveUserOverlay(o: Overlay): Promise<void> {
   await writeTextFile(FILE, serializeOverlay(o), { baseDir: BaseDirectory.AppData });
 }
 export async function exportOverlay(o: Overlay): Promise<void> {
-  const path = await save({ filters: FILTERS, defaultPath: "meus-neumas.notker-neumes.json" });
+  const path = await save({ filters: namesFilter(), defaultPath: `${t("names.fileName")}.notker-neumes.json` });
   if (path) await writeTextFile(path, serializeOverlay(o));
 }
 export async function importOverlay(): Promise<Overlay | null> {
-  const path = await open({ multiple: false, filters: FILTERS });
+  const path = await open({ multiple: false, filters: namesFilter() });
   if (typeof path !== "string") return null;
   return parseOverlay(await readTextFile(path));
 }

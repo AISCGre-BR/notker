@@ -6,6 +6,7 @@ import type { EffectiveEntry, Family } from "./types";
 import { neumeThumb } from "./render";
 import { describeToken } from "./decode";
 import { nameNeume } from "./naming";
+import { t } from "../i18n";
 
 function familyLabel(f: Family): string {
   return f === "stgall" ? "St. Gall" : "Laon";
@@ -22,13 +23,13 @@ export function familyLookup(lookupAll: (nabc: string) => EffectiveEntry[], fami
 }
 
 /** "Abrir na tela de nomes": `id` quando o item existe; senão a cadeia nova. */
-export type OpenNames = (t: { id?: string; family: Family; nabc: string }) => void;
+export type OpenNames = (target: { id?: string; family: Family; nabc: string }) => void;
 
 function openNamesButton(run: () => void): HTMLButtonElement {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "sc-btn neume-open-names";
-  b.textContent = "Abrir na tela de nomes";
+  b.textContent = t("hover.openNames");
   b.addEventListener("mousedown", (ev) => ev.preventDefault()); // não fecha o tooltip antes do clique
   b.addEventListener("click", run);
   return b;
@@ -47,11 +48,11 @@ export function buildEntryRow(
   const names = document.createElement("strong");
   names.className = "neume-tip-name";
   names.textContent = entry.userSequence && entry.userNames?.length
-    ? `Seu nome: ${entry.userNames[0]}`
+    ? t("hover.yourName", { name: entry.userNames[0] })
     : entry.displayNames[0];
   const fam = document.createElement("span");
   fam.className = "neume-tip-fam";
-  fam.textContent = familyLabel(entry.family as Family) + (isActive ? " · ativa" : "");
+  fam.textContent = isActive ? t("hover.activeFamily", { family: familyLabel(entry.family as Family) }) : familyLabel(entry.family as Family);
   info.append(names, document.createTextNode(" "), fam);
   if (entry.qualifiers.length) info.append(Object.assign(document.createElement("small"), { textContent: entry.qualifiers.join(" ") }));
   if (entry.meaning) info.append(Object.assign(document.createElement("div"), { textContent: entry.meaning }));
@@ -61,12 +62,12 @@ export function buildEntryRow(
       const b = document.createElement("button");
       b.type = "button";
       b.className = "sc-btn neume-name-btn";
-      b.textContent = "Nomear…";
+      b.textContent = t("hover.name");
       b.addEventListener("mousedown", (ev) => ev.preventDefault()); // não fecha o tooltip
       b.addEventListener("click", () => {
         const f = document.createElement("input");
         f.className = "sc-input neume-name-input";
-        f.placeholder = "Novo nome";
+        f.placeholder = t("palette.newName");
         // nada por baixo (editor) reage a cliques/teclas no campo
         f.addEventListener("mousedown", (ev) => ev.stopPropagation());
         f.addEventListener("click", (ev) => ev.stopPropagation());
@@ -131,14 +132,14 @@ export function buildUnknownInfo(
   line((sm) => {
     const code = document.createElement("code");
     code.textContent = token;
-    sm.append("composto: ", code);
+    sm.append(t("hover.composite") + " ", code);
   });
   if (letters.length) line((sm) => {
     const b = document.createElement("b");
     b.textContent = letters.join(", ");
-    sm.append("letra significativa: ", b);
+    sm.append(t("hover.significantLetter") + " ", b);
   });
-  if (source) line((sm) => { sm.textContent = `fonte: ${source}`; });
+  if (source) line((sm) => { sm.textContent = t("hover.source", { source }); });
   return info;
 }
 
@@ -222,7 +223,7 @@ export function nabcHover(
           sep.style.cssText =
             "margin-top:6px;padding-top:4px;border-top:1px solid var(--rule);" +
             "font-size:0.85em;color:var(--ink-muted);";
-          sep.textContent = "partes:";
+          sep.textContent = t("hover.parts");
           dom.appendChild(sep);
 
           for (const part of rawParts) {

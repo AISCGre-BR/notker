@@ -3,12 +3,13 @@
 // (`entries`) e sequências nabc criadas pelo usuário (`sequences`, id
 // `seq:<família>:<nabc normalizado>`). O schema 1 é lido e migrado (sequences = {}).
 // Todas as funções são PURAS e imutáveis: devolvem o MESMO objeto quando nada muda.
+import { t } from "../i18n";
 import type { NeumeEntry, EffectiveEntry, Family, Overlay, OverlayEntry, UserSequence } from "./types";
 
 const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-export const FUTURE_OVERLAY_MESSAGE = "Arquivo de nomes criado por uma versão mais nova do Notker.";
+export const futureOverlayMessage = (): string => t("overlay.error.future");
 /** `created` de sequências lidas sem data (arquivo editado à mão). */
 const EPOCH = "1970-01-01T00:00:00.000Z";
 
@@ -123,7 +124,7 @@ export function addSequence(
   o: Overlay, family: Family, nabc: string, created: string,
 ): { overlay: Overlay; id: string; existed: boolean } {
   const n = normalizeNabc(nabc);
-  if (!n) throw new Error("cadeia nabc vazia");
+  if (!n) throw new Error(t("overlay.error.emptyChain"));
   const id = sequenceId(family, n);
   if (Object.hasOwn(o.sequences, id)) return { overlay: o, id, existed: true };
   return { overlay: { ...o, sequences: { ...o.sequences, [id]: { family, nabc: n, created } } }, id, existed: false };
@@ -205,13 +206,13 @@ function readItem(x: unknown): OverlayEntry {
   });
 }
 
-/** Lê schema 1 (migra: `sequences = {}`) ou 2. Schema maior: FUTURE_OVERLAY_MESSAGE.
+/** Lê schema 1 (migra: `sequences = {}`) ou 2. Schema maior: futureOverlayMessage().
  *  Sequências são re-chaveadas pelo id canônico (as que colidem têm os nomes unidos). */
 export function parseOverlay(text: string): Overlay {
   const o: unknown = JSON.parse(text);
-  if (!isObj(o) || o.kind !== "notker-neume-overlay") throw new Error("arquivo de overlay inválido");
-  if (typeof o.schema === "number" && o.schema > 2) throw new Error(FUTURE_OVERLAY_MESSAGE);
-  if (o.schema !== 1 && o.schema !== 2) throw new Error("arquivo de overlay inválido");
+  if (!isObj(o) || o.kind !== "notker-neume-overlay") throw new Error(t("overlay.error.invalid"));
+  if (typeof o.schema === "number" && o.schema > 2) throw new Error(futureOverlayMessage());
+  if (o.schema !== 1 && o.schema !== 2) throw new Error(t("overlay.error.invalid"));
   const out = emptyOverlay();
   if (isObj(o.entries)) {
     for (const [id, e] of Object.entries(o.entries)) {

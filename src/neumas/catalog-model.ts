@@ -1,24 +1,25 @@
 // src/neumas/catalog-model.ts — o que a grade da vista Neumas mostra (seções, filtros,
 // teto de renderização) e a navegação vertical por posição. PURO.
+import { t, type MessageKey } from "../i18n";
 import { NeumeSearch } from "../neume/search";
 import type { EffectiveEntry, Family } from "../neume/types";
 
 export type CatalogFilter = "todos" | "meus" | "sem-nome" | "sequencias";
-export const FILTERS: { id: CatalogFilter; label: string }[] = [
-  { id: "todos", label: "Todos" },
-  { id: "meus", label: "Com meus nomes" },
-  { id: "sem-nome", label: "Sem nome" },
-  { id: "sequencias", label: "Sequências" },
+export const FILTERS: { id: CatalogFilter; labelKey: MessageKey }[] = [
+  { id: "todos", labelKey: "catalog.filter.all" },
+  { id: "meus", labelKey: "catalog.filter.mine" },
+  { id: "sem-nome", labelKey: "catalog.filter.unnamed" },
+  { id: "sequencias", labelKey: "catalog.filter.sequences" },
 ];
 export type SectionId = "minhas" | "catalogo" | "glifos";
 export interface CatalogSection { id: SectionId; title: string; items: EffectiveEntry[]; total: number }
 /** Teto inicial por seção (a grade inteira teria ~600 cartões por família); a vista amplia por seção ("Mostrar mais"). */
 export const SECTION_CAP = 150;
 
-const TITLES: Record<SectionId, string> = {
-  minhas: "Minhas sequências",
-  catalogo: "Sequências do catálogo",
-  glifos: "Glifos",
+const TITLES: Record<SectionId, MessageKey> = {
+  minhas: "catalog.section.mine",
+  catalogo: "catalog.section.catalog",
+  glifos: "catalog.section.glyphs",
 };
 export const sectionOf = (e: EffectiveEntry): SectionId =>
   (e.userSequence ? "minhas" : e.synthetic ? "catalogo" : "glifos");
@@ -46,7 +47,7 @@ export function catalogSections(
     const items = list.slice(0, opts.caps?.[id] ?? cap);
     const pinned = opts.pin ? list.find((e) => e.id === opts.pin) : undefined;
     if (pinned && !items.includes(pinned)) items.push(pinned);
-    return { id, title: TITLES[id], items, total: list.length };
+    return { id, title: t(TITLES[id]), items, total: list.length };
   });
 }
 

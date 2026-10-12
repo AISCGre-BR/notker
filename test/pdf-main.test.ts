@@ -7,13 +7,13 @@ const code = main.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n
 
 describe("Exportar PDF no app", () => {
   it("comando file.exportPdf com Ctrl+P, único dono do atalho, com enabled", () => {
-    expect(code).toMatch(/\{ id: "file\.exportPdf", label: "Exportar PDF…", run: h\.exportPdf, keys: \["Ctrl\+P"\], enabled: canExportPdf \}/);
+    expect(code).toMatch(/\{ id: "file\.exportPdf", label: t\("cmd\.file\.exportPdf"\), run: h\.exportPdf, keys: \["Ctrl\+P"\], enabled: canExportPdf \}/);
     expect(code.match(/"Ctrl\+P"/g)).toHaveLength(1);
   });
   it("preso à mesa (gateCommands) e no menu Arquivo depois dos .gabc", () => {
     const gate = main.slice(main.indexOf("gateCommands(commands, ["), main.indexOf('], () => screen === "project")'));
     expect(gate).toContain('"file.exportPdf"');
-    const arquivo = main.slice(main.indexOf('label: "Arquivo"'), main.indexOf('label: "Editar"'));
+    const arquivo = main.slice(main.indexOf('label: t("menu.file")'), main.indexOf('label: t("menu.edit")'));
     expect(arquivo).toContain('menuItem("file.exportAllGabc"), menuItem("file.exportPdf")');
   });
   it("jsPDF/svg2pdf só por import dinâmico (fora do pacote inicial)", () => {
@@ -31,7 +31,7 @@ describe("Exportar PDF no app", () => {
 describe("Exportar PDF: robustez do comando", () => {
   it("2º Ctrl+P durante a geração avisa; captura e diálogo ficam dentro do try", () => {
     const body = code.slice(code.indexOf("exportPdf: async () => {"), code.indexOf("format: async () => {"));
-    expect(body).toContain('if (exportingPdf) { toaster.show("Já há um PDF sendo gerado."');
+    expect(body).toContain('if (exportingPdf) { toaster.show(t("pdf.busy")');
     expect(body.indexOf("try {")).toBeLessThan(body.indexOf("captureEditorIntoProject()"));
     expect(body.indexOf("try {")).toBeLessThan(body.indexOf("await exportPdfDialog"));
   });

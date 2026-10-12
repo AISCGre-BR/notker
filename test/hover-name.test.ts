@@ -1,6 +1,7 @@
 // test/hover-name.test.ts
 import { readFileSync } from "node:fs";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { buildEntryRow, buildPartLabel, buildUnknownInfo, ofFamily, familyLookup } from "../src/neume/hover-nabc";
 import { nameNeume } from "../src/neume/naming";
 import type { EffectiveEntry } from "../src/neume/types";
@@ -147,5 +148,20 @@ describe("hover — só a família do canto", () => {
     expect(stg("cl")).toEqual([]);
     expect(familyLookup(all, "laon")("cl").map((x) => x.id)).toEqual(["laon:cl"]);
     expect(nameNeume("cl", "stgall").systematic).toBeTruthy();
+  });
+});
+
+describe("hover — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("botões, família ativa, 'seu nome' e linhas do composto em inglês", () => {
+    setLocale("en");
+    const row = buildEntryRow({ ...e, userSequence: true, userNames: ["podatus"] }, true, vi.fn(), vi.fn());
+    expect(row.querySelector(".neume-tip-name")!.textContent).toBe("Your name: podatus");
+    expect(row.querySelector(".neume-tip-fam")!.textContent).toBe("St. Gall · active");
+    expect(row.querySelector(".neume-name-btn")!.textContent).toBe("Name…");
+    const info = buildUnknownInfo("pelsc2", ["pes"], "stgall", ["c"], "Cardine");
+    expect(info.textContent).toContain("composite:");
+    expect(info.textContent).toContain("significative letter:");
+    expect(info.textContent).toContain("source: Cardine");
   });
 });

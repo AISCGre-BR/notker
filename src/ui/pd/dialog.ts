@@ -95,6 +95,7 @@ export function openDialog(host: HTMLElement, spec: DialogSpec): Promise<DialogR
       b.type = "button";
       b.className = "sc-btn" + (a.kind === "filled" ? " sc-btn--filled" : a.kind === "elevated" ? " sc-btn--elevated" : a.kind === "danger" ? " sc-btn--danger" : "");
       b.textContent = a.label;
+      b.dataset.action = a.id;
       b.addEventListener("click", () => finish(a.id));
       acts.appendChild(b);
       if (a.kind === "danger" && i < sorted.length - 1) acts.appendChild(Object.assign(document.createElement("span"), { className: "sc-spacer" }));

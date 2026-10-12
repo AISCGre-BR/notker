@@ -1,6 +1,7 @@
 // test/project-format.test.ts
-import { describe, it, expect } from "vitest";
-import { toBundle, fromBundle, gabcExportPlan, slug, FUTURE_SCHEMA_MESSAGE } from "../src/project/format";
+import { describe, it, expect, afterEach } from "vitest";
+import { toBundle, fromBundle, gabcExportPlan, slug, futureSchemaMessage } from "../src/project/format";
+import { setLocale } from "../src/i18n";
 import { gabcBodyHash } from "../src/tuotilo/wave";
 import {
   type NotkerProject, type TreeNode, type ChantNode, type GroupNode,
@@ -81,8 +82,8 @@ describe("fromBundle", () => {
     expect(JSON.parse(toBundle(p).project_json).schema).toBe(2);
   });
   it("schema futuro → mensagem clara; não-Notker e JSON inválido → erro", () => {
-    expect(() => fromBundle(JSON.stringify({ schema: 3, kind: "notker-project" }), {}, undefined)).toThrow(FUTURE_SCHEMA_MESSAGE);
-    expect(FUTURE_SCHEMA_MESSAGE).toBe("Projeto criado por uma versão mais nova do Notker.");
+    expect(() => fromBundle(JSON.stringify({ schema: 3, kind: "notker-project" }), {}, undefined)).toThrow(futureSchemaMessage());
+    expect(futureSchemaMessage()).toBe("Projeto criado por uma versão mais nova do Notker.");
     expect(() => fromBundle(JSON.stringify({ kind: "outro" }), {}, undefined)).toThrow(/não é um projeto Notker/);
     expect(() => fromBundle("{ quebrado", {}, undefined)).toThrow(/project\.json inválido/);
   });
@@ -120,6 +121,14 @@ describe("exportação e slug", () => {
       { path: "01-kyrie.gabc", content: "name: Kyrie;\n%%\n(c4) c1aaaaaaaa(f)" },
       { path: "02-natal/01-puer-natus.gabc", content: "name: Puer natus;\n%%\n(c4) c2(f)" },
     ]);
+  });
+  it("toBundle e gabcExportPlan não dependem do idioma (o ZIP é o mesmo)", () => {
+    const pt = { b: toBundle(sample()), plan: gabcExportPlan(sample()) };
+    try {
+      setLocale("it");
+      expect(toBundle(sample())).toEqual(pt.b);
+      expect(gabcExportPlan(sample())).toEqual(pt.plan);
+    } finally { setLocale("pt-BR"); }
   });
   it("slug translitera ligaduras e acentos; vazio cai no fallback", () => {
     expect(slug("Rorate Cæli")).toBe("rorate-caeli");
@@ -172,5 +181,15 @@ describe("leitura tolerante: endurecimento final", () => {
     const cs = flat(p);
     expect(cs.length).toBe(1);
     expect(p.activeId).toBe(cs[0].id);
+  });
+});
+
+describe("formato — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("erros e padrões no idioma", () => {
+    setLocale("en");
+    expect(() => fromBundle(JSON.stringify({ schema: 3, kind: "notker-project" }), {}, undefined)).toThrow("This project was created by a newer version of Notker.");
+    expect(() => fromBundle("{", {}, undefined)).toThrow("invalid project.json");
+    expect(() => fromBundle("{}", {}, undefined)).toThrow("not a Notker project");
   });
 });

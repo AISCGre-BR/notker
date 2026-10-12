@@ -4,7 +4,7 @@ import {
   makeSnapshot, parseSnapshot, projectFromSnapshot, createRecoveryWriter, RECOVERY_INTERVAL_MS,
 } from "../src/app/recovery";
 import { projectFingerprint } from "../src/app/dirty";
-import { FUTURE_SCHEMA_MESSAGE } from "../src/project/format";
+import { futureSchemaMessage } from "../src/project/format";
 import { type NotkerProject, newProject, newGroup, newChant, insertNode, updateChant, getActiveChant } from "../src/project/tree";
 
 const NOW = new Date("2026-10-10T09:00:00.000Z");
@@ -60,7 +60,7 @@ describe("retrato", () => {
       schema: 1, kind: "notker-recovery", title: "X", savedAt: "",
       bundle: { project_json: JSON.stringify({ schema: 9, kind: "notker-project" }), files: {} },
     }))!;
-    expect(() => projectFromSnapshot(snap)).toThrow(FUTURE_SCHEMA_MESSAGE);
+    expect(() => projectFromSnapshot(snap)).toThrow(futureSchemaMessage());
   });
 });
 

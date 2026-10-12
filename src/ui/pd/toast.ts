@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 /** Toast do Parchment (sc-toast): faixa no pé da janela, um ponto de cor do estado,
  *  uma frase e no máximo uma ação. Sucesso some em 4 s (10 s se tiver ação); erro fica até dispensar.
  *  Monta num host PRÉ-EXISTENTE alternando display (WebKitGTK só repinta assim). */
@@ -21,23 +22,23 @@ export function createToaster(host: HTMLElement): Toaster {
     show(text, opts = {}) {
       dismiss();
       const kind = opts.kind ?? "ok";
-      const t = document.createElement("div");
-      t.className = `sc-toast sc-toast--${kind}`;
+      const toast = document.createElement("div");
+      toast.className = `sc-toast sc-toast--${kind}`;
       const dot = document.createElement("span");
       dot.className = "sc-toast__dot";
       const msg = document.createElement("span");
       msg.textContent = text;
-      t.append(dot, msg);
-      const action = opts.action ?? (kind === "error" ? { label: "Fechar", run: () => {} } : undefined);
+      toast.append(dot, msg);
+      const action = opts.action ?? (kind === "error" ? { label: t("common.close"), run: () => {} } : undefined);
       if (action) {
         const b = document.createElement("button");
         b.className = "sc-toast__act";
         b.type = "button";
         b.textContent = action.label;
         b.addEventListener("click", () => { dismiss(); action.run(); });
-        t.appendChild(b);
+        toast.appendChild(b);
       }
-      host.appendChild(t);
+      host.appendChild(toast);
       host.style.display = "block";
       if (kind !== "error") timer = setTimeout(dismiss, opts.action ? AUTO_MS_ACTION : AUTO_MS);
     },

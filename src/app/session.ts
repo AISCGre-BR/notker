@@ -2,6 +2,7 @@
 /** "Salvar alterações?" (spec §4.5): ao abrir/criar outro projeto e ao fechar a janela.
  *  Regra de ouro: fechar NUNCA fica bloqueado — erro ao salvar reabre a pergunta com a
  *  mensagem, e "Não salvar" continua disponível. (Recentes e recuperação: etapa 1b-2.) */
+import { t } from "../i18n";
 import { openDialog } from "../ui/pd/dialog";
 
 export type SaveChoice = "save" | "discard" | "cancel";
@@ -14,12 +15,12 @@ export interface UnsavedGuard {
 
 export async function askSaveChanges(host: HTMLElement, title: string, error?: string): Promise<SaveChoice> {
   const r = await openDialog(host, {
-    title: `Salvar alterações em “${title}”?`,
-    body: error ?? "Se não salvar, as alterações serão perdidas.",
+    title: t("session.ask.title", { title }),
+    body: error ?? t("session.ask.body"),
     actions: [
-      { id: "discard", label: "Não salvar", kind: "danger" },
-      { id: "cancel", label: "Cancelar", kind: "elevated" },
-      { id: "save", label: "Salvar", kind: "filled" },
+      { id: "discard", label: t("common.dontSave"), kind: "danger" },
+      { id: "cancel", label: t("common.cancel"), kind: "elevated" },
+      { id: "save", label: t("common.save"), kind: "filled" },
     ],
   });
   return r.action === "save" ? "save" : r.action === "discard" ? "discard" : "cancel";
@@ -36,7 +37,7 @@ export async function resolveUnsaved(g: UnsavedGuard): Promise<boolean> {
       return await g.save();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      error = `Não foi possível salvar: ${msg.replace(/\.+$/, "")}. Escolha “Não salvar” para continuar sem salvar.`;
+      error = t("session.saveError", { error: msg.replace(/\.+$/, "") });
     }
   }
 }

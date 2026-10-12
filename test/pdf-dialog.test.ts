@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { exportPdfDialog, type PdfDialogContext } from "../src/pdf/export-dialog";
 
 let host: HTMLElement;
@@ -61,5 +62,24 @@ describe("diálogo Exportar PDF", () => {
     const p2 = exportPdfDialog(host, ctx());
     click("Cancelar");
     await expect(p2).resolves.toBeNull();
+  });
+});
+
+describe("diálogo Exportar PDF — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("em inglês e italiano, todo texto visível vem do dicionário", async () => {
+    setLocale("en");
+    let p = exportPdfDialog(host, ctx({ group: { id: "g", title: "Kyrie" } }));
+    expect(host.querySelector(".sc-dialog__title")!.textContent).toBe("Export PDF");
+    expect(host.textContent).toContain("Group “Kyrie”");
+    expect(host.textContent).toContain("Each on a new page");
+    click("Cancel");
+    expect(await p).toBeNull();
+    setLocale("it");
+    p = exportPdfDialog(host, ctx());
+    expect(host.querySelector(".sc-dialog__title")!.textContent).toBe("Esporta PDF");
+    expect(host.textContent).toContain("Gruppo selezionato");
+    click("Annulla");
+    expect(await p).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import type { Family } from "../neume/types";
 import { openDialog } from "./pd/dialog";
+import { t } from "../i18n";
 
 export interface NewDocResult { family: Family; name?: string; office?: string }
 
@@ -12,14 +13,14 @@ export async function newDocumentDialog(
   const r = await openDialog(host, {
     title: opts.title,
     fields: [
-      { key: "name", label: "Nome", placeholder: "Puer natus est", serif: true },
-      { key: "office", label: "Ofício (opcional)", placeholder: "Intróito" },
+      { key: "name", label: t("newChant.name"), placeholder: "Puer natus est", serif: true },
+      { key: "office", label: t("guide.office"), placeholder: t("newChant.office.placeholder") },
     ],
-    segs: [{ key: "family", label: "Família", value: opts.family ?? "stgall",
+    segs: [{ key: "family", label: t("common.family"), value: opts.family ?? "stgall",
       options: [{ value: "stgall", label: "St. Gall" }, { value: "laon", label: "Laon" }] }],
     actions: [
-      { id: "cancel", label: "Cancelar", kind: "elevated" },
-      { id: "ok", label: opts.okLabel ?? "Criar", kind: "filled" },
+      { id: "cancel", label: t("common.cancel"), kind: "elevated" },
+      { id: "ok", label: opts.okLabel ?? t("common.create"), kind: "filled" },
     ],
   });
   if (r.action !== "ok") return null;
