@@ -52,4 +52,22 @@ describe("stripMarks", () => {
   it("detectMarks = counts do strip com tudo ligado", () => {
     expect(detectMarks(HEAD + IN)).toEqual(stripMarks(HEAD + IN, ALL).counts);
   });
+  it("escape $( $) na letra não abre grupo", () => {
+    const r = stripMarks("a $(Ps. 1$)(g.)", ALL);
+    expect(r.text).toBe("a $(Ps. 1$)(g)");
+    expect(r.counts.mora).toBe(1);
+  });
+  it("comentários % fora de grupo ficam intactos", () => {
+    expect(stripMarks("Do(g.)\n% x (v. 2)\nnus(h)", ALL).text).toBe("Do(g)\n% x (v. 2)\nnus(h)");
+    expect(stripMarks("% (1\nDo'(g')", ALL).text).toBe("% (1\nDo'(g)");
+  });
+  it("barras ficam intactas e não contam", () => {
+    const r = stripMarks("(:') (,_) (;1) (`_) (^.)", ALL);
+    expect(r.text).toBe("(:') (,_) (;1) (`_) (^.)");
+    expect(r.counts).toEqual({ vertical: 0, horizontal: 0, mora: 0 });
+    expect(stripMarks("(z0::c3) (c4g.)", ALL).text).toBe("(z0::c3) (c4g)");
+  });
+  it(") dentro de colchetes não fecha o grupo", () => {
+    expect(stripMarks("(g[nv:x)(y.]h.)", ALL).text).toBe("(g[nv:x)(y.]h)");
+  });
 });

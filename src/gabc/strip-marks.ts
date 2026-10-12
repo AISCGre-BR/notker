@@ -65,18 +65,40 @@ function stripGroup(g: string, kinds: MarkKinds, counts: MarkCounts): string {
   return out;
 }
 
+/** Acha o `)` que fecha o grupo aberto em `open`, pulando colchetes ([nv:…) etc.). */
+function findClose(s: string, open: number): number {
+  for (let k = open + 1; k < s.length; k++) {
+    if (s[k] === "[") { const e = s.indexOf("]", k); if (e < 0) return -1; k = e; }
+    else if (s[k] === ")") return k;
+  }
+  return -1;
+}
+
+/** Barras (`, ; : ^ \``) ficam intactas: nelas `_` é "bar brace", não episema. */
+function isBar(gabcPart: string): boolean {
+  const t = gabcPart.replace(/\s+/g, "");
+  return t[0] === "`" || t[0] === "^" || t[0] === "," || t[0] === ";" || t[0] === ":";
+}
+
 export function stripMarks(gabc: string, kinds: MarkKinds): { text: string; counts: MarkCounts } {
   const counts: MarkCounts = { vertical: 0, horizontal: 0, mora: 0 };
   const start = bodyStart(gabc);
   let out = gabc.slice(0, start);
   let i = start;
   while (i < gabc.length) {
-    const open = gabc.indexOf("(", i);
-    if (open < 0) { out += gabc.slice(i); break; }
-    const close = gabc.indexOf(")", open);
+    const c = gabc[i];
+    if (c === "$") { out += gabc.slice(i, i + 2); i += 2; continue; } // escape na letra: $( $) $%
+    if (c === "%") { // comentário até o fim da linha
+      let nl = gabc.indexOf("\n", i);
+      if (nl < 0) nl = gabc.length;
+      out += gabc.slice(i, nl);
+      i = nl;
+      continue;
+    }
+    if (c !== "(") { out += c; i++; continue; }
+    const close = findClose(gabc, i);
     if (close < 0) { out += gabc.slice(i); break; }
-    out += gabc.slice(i, open + 1);
-    const inner = gabc.slice(open + 1, close);
+    const inner = gabc.slice(i + 1, close);
     // `|` dentro de colchetes não separa o nabc: acha o primeiro `|` fora deles
     let bar = -1;
     for (let k = 0; k < inner.length; k++) {
@@ -84,7 +106,7 @@ export function stripMarks(gabc: string, kinds: MarkKinds): { text: string; coun
       else if (inner[k] === "|") { bar = k; break; }
     }
     const g = bar < 0 ? inner : inner.slice(0, bar);
-    out += stripGroup(g, kinds, counts) + (bar < 0 ? "" : inner.slice(bar)) + ")";
+    out += "(" + (isBar(g) ? g : stripGroup(g, kinds, counts)) + (bar < 0 ? "" : inner.slice(bar)) + ")";
     i = close + 1;
   }
   return { text: out, counts };
