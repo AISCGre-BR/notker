@@ -26,7 +26,7 @@ export async function saveUserOverlay(o: Overlay): Promise<void> {
   await writeTextFile(FILE, serializeOverlay(o), { baseDir: BaseDirectory.AppData });
 }
 export async function exportOverlay(o: Overlay): Promise<void> {
-  const path = await save({ filters: namesFilter(), defaultPath: "meus-neumas.notker-neumes.json" });
+  const path = await save({ filters: namesFilter(), defaultPath: `${t("names.fileName")}.notker-neumes.json` });
   if (path) await writeTextFile(path, serializeOverlay(o));
 }
 export async function importOverlay(): Promise<Overlay | null> {

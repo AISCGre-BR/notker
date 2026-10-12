@@ -180,6 +180,7 @@ export const ptBR = {
   "legend.activeClef": "clave ativa",
   "legend.letters.tip": "Mostrar a letra gabc de cada linha e espaço à esquerda da partitura",
   "staffLetters.title": "{letter} — {pitch} (clave {clef})",
+  "names.fileName": "meus-neumas",
   "names.exists": "Esse nome já existe.",
   "names.added": "Nome “{name}” cadastrado.",
   "names.cursorHint": "Ponha o cursor num neuma (no nabc, depois do |) para nomeá-lo.",

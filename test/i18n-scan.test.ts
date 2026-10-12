@@ -142,6 +142,11 @@ function scan(): { strings: Hit[]; topLevelT: Hit[] } {
   return { strings, topLevelT };
 }
 
+// Limites conhecidos da varredura (heurística sobre o AST, não prova): só vê literais de
+// string/template com cara de texto em pt-BR (inicial maiúscula + espaço/reticências, acentos
+// ou palavras comuns); não pega texto em inglês/italiano fixo, texto montado por concatenação
+// de pedaços curtos, nem texto vindo de JSON/HTML (index.html só tem os aria-label conferidos
+// abaixo). Complementa-se com os probes em en/it (innerText sem palavra pt).
 describe("varredura de i18n", () => {
   const { strings, topLevelT } = scan();
   const fmt = (h: Hit[]) => h.map((x) => `${x.file}:${x.line}  ${JSON.stringify(x.text)}`).join("\n");

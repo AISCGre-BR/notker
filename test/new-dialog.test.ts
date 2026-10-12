@@ -78,7 +78,7 @@ describe("diálogo Novo canto — idiomas", () => {
     const host = mk();
     void newDocumentDialog(host, { title: "Nuovo canto" });
     expect(host.textContent).toContain("Nome");
-    expect(host.textContent).toContain("Parte dell'ufficio (facoltativa)");
+    expect(host.textContent).toContain("Parte liturgica (facoltativa)");
     expect(host.textContent).toContain("Famiglia");
     expect([...host.querySelectorAll(".sc-dialog__actions button")].map((b) => b.textContent)).toEqual(["Annulla", "Crea"]);
   });

@@ -89,11 +89,11 @@ describe("Salvar alterações? — idiomas", () => {
     const host = document.createElement("div"); document.body.appendChild(host);
     const p = askSaveChanges(host, "Mass");
     expect(host.querySelector(".sc-dialog__title")!.textContent).toBe("Save changes to “Mass”?");
-    expect([...host.querySelectorAll(".sc-dialog__actions button")].map((b) => b.textContent)).toEqual(["Don't Save", "Cancel", "Save"]);
+    expect([...host.querySelectorAll(".sc-dialog__actions button")].map((b) => b.textContent)).toEqual(["Don’t Save", "Cancel", "Save"]);
     host.querySelector<HTMLButtonElement>(".sc-dialog__actions .sc-btn--filled")!.click();
     expect(await p).toBe("save");
     const { g, errors } = guard(["save", "cancel"], { save: vi.fn(async () => { throw new Error("disk full."); }) });
     await resolveUnsaved(g);
-    expect(errors[1]).toBe("Could not save: disk full. Choose “Don't Save” to continue without saving.");
+    expect(errors[1]).toBe("Could not save: disk full. Choose “Don’t Save” to continue without saving.");
   });
 });

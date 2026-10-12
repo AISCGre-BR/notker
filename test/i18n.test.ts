@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   DICTIONARIES, LOCALES, LOCALE_KEY, LOCALE_NAMES, detectLocale, formatDate, getLocale, initLocale,
   loadLocalePref, paramsOf, saveLocalePref, setLocale, t, tn,
@@ -63,6 +64,28 @@ describe("t / tn", () => {
     expect(tn("tree.deleteGroupConfirm", 2, { title: "Kyrie" })).toBe("Eliminare «Kyrie» e i 2 canti al suo interno?");
   });
 
+  it("plural: n = 0 usa .other nos três idiomas", () => {
+    expect(tn("export.chants", 0)).toBe("0 cantos exportados.");
+    setLocale("en");
+    expect(tn("export.chants", 0)).toMatch(/^0 /);
+    setLocale("it");
+    expect(tn("export.chants", 0)).toMatch(/^0 /);
+  });
+
+  it("nome de arquivo sugerido das neumas por idioma", () => {
+    expect(t("names.fileName")).toBe("meus-neumas");
+    setLocale("en");
+    expect(t("names.fileName")).toBe("my-neumes");
+    setLocale("it");
+    expect(t("names.fileName")).toBe("i-miei-neumi");
+  });
+
+  it("en usa o apóstrofo tipográfico (’), nunca o reto", () => {
+    expect(Object.values(DICTIONARIES.en).filter((v) => v.includes("'"))).toEqual([]);
+    setLocale("en");
+    expect(t("common.dontSave")).toBe("Don’t Save");
+  });
+
   it("troca de idioma muda as próximas chamadas", () => {
     setLocale("en");
     expect(t("cmd.file.saveAs")).toBe("Save As…");
@@ -112,5 +135,13 @@ describe("idioma inicial", () => {
     } finally {
       Storage.prototype.getItem = orig;
     }
+  });
+});
+
+describe("exportar nomes", () => {
+  it("exportar nomes sugere o arquivo pelo idioma (names.fileName)", () => {
+    const io = readFileSync("src/neume/overlay-io.ts", "utf8");
+    expect(io).toContain('t("names.fileName")');
+    expect(io).not.toContain("meus-neumas");
   });
 });

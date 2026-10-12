@@ -102,6 +102,6 @@ describe("letras na pauta — idiomas", () => {
     drawStaffLetters(svg, () => "c4");
     const titleOf = (line: number, i: number) =>
       svg.querySelectorAll(".ChantLineInner")[line].querySelectorAll("text.staff-letter")[i].querySelector("title")!.textContent;
-    expect(titleOf(0, 6)).toBe("j — do (chiave di c4)");
+    expect(titleOf(0, 6)).toBe("j — do (chiave c4)");
   });
 });

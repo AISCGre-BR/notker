@@ -8,6 +8,8 @@
  *    de idioma grava a preferência e recarrega a janela (src/app/locale-switch.ts).
  *  - Antes de `initLocale` (e em todos os testes) o idioma é pt-BR: os testes existentes
  *    continuam valendo sem configuração.
+ *  - Parâmetros numéricos saem formatados pelo Intl (1.189 / 1,189). Ids, anos e qualquer
+ *    número que NÃO deva ganhar separador de milhar vão como STRING (`String(id)`).
  *  - Nunca chamar `t()` no nível de módulo (o texto ficaria congelado no idioma do import);
  *    o teste test/i18n-scan.test.ts impede. */
 import { ptBR, type MessageKey } from "./pt-BR";
