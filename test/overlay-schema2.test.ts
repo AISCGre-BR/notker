@@ -5,7 +5,7 @@ import {
   sequenceId, normalizeNabc, isSequenceId, parseSequenceId,
   addName, addNameToEntries, removeName, promoteName, setNote, setHidden,
   addSequence, removeSequence, restoreSequence, changeSequenceNabc, overlayCounts,
-  FUTURE_OVERLAY_MESSAGE,
+  futureOverlayMessage,
 } from "../src/neume/overlay";
 import { promoteToDefault } from "../src/overlay-ui/conflict";
 import type { Overlay } from "../src/neume/types";
@@ -43,7 +43,7 @@ describe("parseOverlay: schema 1 → 2", () => {
     expect(parseOverlay(serializeOverlay(s))).toEqual(s);
   });
   it("schema maior que 2 dá a mensagem de versão nova; kind errado é inválido", () => {
-    expect(() => parseOverlay('{"schema":3,"kind":"notker-neume-overlay","entries":{}}')).toThrow(FUTURE_OVERLAY_MESSAGE);
+    expect(() => parseOverlay('{"schema":3,"kind":"notker-neume-overlay","entries":{}}')).toThrow(futureOverlayMessage());
     expect(() => parseOverlay('{"schema":2,"kind":"outro","entries":{}}')).toThrow("inválido");
     expect(() => parseOverlay('{"kind":"notker-neume-overlay","entries":{}}')).toThrow("inválido");
   });

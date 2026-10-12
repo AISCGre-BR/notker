@@ -2,6 +2,7 @@
 // vista (família, filtro, busca, seleção, rascunho, compor) e traduz intenções em
 // operações PURAS sobre o overlay (src/neume/overlay.ts), entregues a `deps.commit`.
 // Nunca guarda rascunho do overlay: lê sempre `deps.overlay()` (sem dados velhos).
+import { t } from "../i18n";
 import type { EffectiveEntry, Family, Overlay } from "../neume/types";
 import type { NabcValidity } from "../neume/validate-nabc";
 import {
@@ -40,8 +41,8 @@ export interface NeumasView {
   flush(): void;
 }
 
-const isField = (t: EventTarget | null): boolean =>
-  t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || (t instanceof HTMLElement && t.isContentEditable);
+const isField = (el: EventTarget | null): boolean =>
+  el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
 
 export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasView {
   host.replaceChildren();
@@ -123,7 +124,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
 
   /** Descarta o rascunho; avisa se havia cadeia digitada (sem Desfazer). */
   function discardDraft(): void {
-    if (draft && normalizeNabc(draft.nabc)) deps.toast("Rascunho descartado.", { kind: "warn" });
+    if (draft && normalizeNabc(draft.nabc)) deps.toast(t("neumas.draftDiscarded"), { kind: "warn" });
     draft = null; editChain = null; composing = false;
   }
   /** Troca de família: nota gravada, seleção e rascunho não atravessam. */
@@ -163,7 +164,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   // ── gravação ──
   function save(next: Overlay, inPlace = false): Promise<void> {
     if (next === deps.overlay()) return Promise.resolve();
-    saveState = "salvando…";
+    saveState = t("neumas.saving");
     const p = deps.commit(next);
     // inPlace (o usuário só saiu do campo): não recria a grade — o clique que causou o blur
     // ainda vai chegar ao cartão. Atualiza só o cartão do item e a bancada.
@@ -171,8 +172,8 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     if (cur && catalog.updateCard(cur)) renderBench(); else render();
     return p.then(
       // Só o estado de gravação mudou: refaz a bancada, não a grade (centenas de cartões).
-      () => { saveState = "salvo ✓"; renderBench(); },
-      () => { saveState = "erro ao salvar"; renderBench(); }, // o toast de erro vem de quem grava
+      () => { saveState = t("neumas.saved"); renderBench(); },
+      () => { saveState = t("neumas.saveError"); renderBench(); }, // o toast de erro vem de quem grava
     );
   }
 
@@ -210,9 +211,9 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     bench.flushNote();
     if (!draft) return Promise.resolve(null);
     const st = chainStatus();
-    if (st.validity === "empty") { deps.toast("Digite a cadeia nabc da sequência.", { kind: "warn" }); return Promise.resolve(null); }
-    if (st.validity === "invalid") { deps.toast("Cadeia nabc inválida — corrija antes de salvar.", { kind: "warn" }); return Promise.resolve(null); }
-    if (st.duplicate) { deps.toast(`Já existe: ${st.duplicate.label}.`, { kind: "warn" }); return Promise.resolve(null); }
+    if (st.validity === "empty") { deps.toast(t("neumas.typeChain"), { kind: "warn" }); return Promise.resolve(null); }
+    if (st.validity === "invalid") { deps.toast(t("neumas.invalidSave"), { kind: "warn" }); return Promise.resolve(null); }
+    if (st.duplicate) { deps.toast(t("neumas.exists", { label: st.duplicate.label }), { kind: "warn" }); return Promise.resolve(null); }
     const r = addSequence(deps.overlay(), family, draft.nabc, deps.now());
     draft = null; composing = false; selectedId = r.id;
     return save(r.overlay).then(() => r.id);
@@ -250,9 +251,9 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
         draft = null; composing = false;
         selectedId = target.id;
         const r = addNameToEntries(deps.overlay(), [{ id: target.id, displayNames: target.displayNames }], name);
-        if (!r.changed) { render(); deps.toast("Esse nome já existe.", { kind: "warn" }); return false; }
+        if (!r.changed) { render(); deps.toast(t("names.exists"), { kind: "warn" }); return false; }
         await save(r.overlay, quiet);
-        deps.toast(`Nome “${name}” adicionado a “${st.duplicate.label}”, que já existia.`);
+        deps.toast(t("neumas.nameAddedTo", { name, label: st.duplicate.label }));
         if (!quiet) catalog.focusGrid();
         return true;
       }
@@ -265,7 +266,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     const e = selectedEntry();
     if (!e) return false;
     const r = addNameToEntries(deps.overlay(), [{ id: e.id, displayNames: e.displayNames }], name);
-    if (!r.changed) { deps.toast("Esse nome já existe.", { kind: "warn" }); return false; }
+    if (!r.changed) { deps.toast(t("names.exists"), { kind: "warn" }); return false; }
     const before = cardIds();
     void save(r.overlay, quiet);
     // Filtro "Sem nome": o item sai da grade ao ser nomeado; o foco vai ao vizinho.
@@ -282,7 +283,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     if (!chain) return;
     if (draft || selectedIsUserSeq()) {
       const v = deps.validate(chain);
-      if (v === "invalid") { deps.toast("Cadeia nabc inválida — corrija antes de inserir.", { kind: "warn" }); return; }
+      if (v === "invalid") { deps.toast(t("neumas.invalidInsert"), { kind: "warn" }); return; }
     }
     bench.flushNote();
     draft = null; editChain = null; composing = false; // inserida: o rascunho cumpriu o papel
@@ -301,9 +302,9 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     if (selectedId === e.id) selectedId = null;
     void save(r.overlay);
     catalog.focusGrid();
-    deps.toast("Sequência excluída.", {
+    deps.toast(t("neumas.sequenceDeleted"), {
       action: {
-        label: "Desfazer",
+        label: t("common.undo"),
         run: () => {
           discardDraft();
           selectedId = e.id;

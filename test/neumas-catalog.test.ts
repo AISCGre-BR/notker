@@ -1,5 +1,6 @@
 // test/neumas-catalog.test.ts — cartão Catálogo (DOM)
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { createCatalog, type CatalogCallbacks, type CatalogState } from "../src/neumas/catalog";
 import { catalogSections } from "../src/neumas/catalog-model";
 import type { EffectiveEntry, Family } from "../src/neume/types";
@@ -142,5 +143,19 @@ describe("paginação incremental por seção", () => {
     const c = createCatalog(host, cbs());
     c.render(catalogSections(ALL, "stgall", "todos", ""), st());
     expect(host.querySelector(".neumas-more-btn")).toBeNull();
+  });
+});
+
+describe("catálogo — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("busca, filtros, seções e 'mostrar mais' em inglês", () => {
+    setLocale("en");
+    const c = createCatalog(host, cbs());
+    c.render(catalogSections(ALL, "stgall", "todos", ""), st());
+    expect(host.querySelector<HTMLInputElement>(".neumas-search")!.placeholder).toBe("Search name or code…");
+    expect([...host.querySelectorAll(".neumas-filter")].map((b) => b.textContent)).toEqual(["All", "With my names", "Unnamed", "Sequences"]);
+    expect(host.querySelector(".neumas-section__title")!.textContent).toBe("My sequences (1)");
+    c.render(catalogSections(ALL, "stgall", "todos", "zzz"), st({ query: "zzz" }));
+    expect(host.querySelector(".sc-empty")!.textContent).toBe("Nothing found for “zzz”.");
   });
 });

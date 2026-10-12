@@ -3,18 +3,16 @@
  *  O `openDialog` trata o segmentado como escolha única; aqui o clique é reinterpretado
  *  como liga/desliga por tipo, e o estado próprio (`on`) manda no resultado. */
 import { openDialog } from "../ui/pd/dialog";
+import { t, type MessageKey } from "../i18n";
 import type { MarkCounts, MarkKinds } from "./strip-marks";
 
-const KINDS: { key: keyof MarkKinds; label: string }[] = [
-  { key: "vertical", label: "Episemas verticais" },
-  { key: "horizontal", label: "Episemas horizontais" },
-  { key: "mora", label: "Puncta mora" },
+const KINDS: { key: keyof MarkKinds; labelKey: MessageKey }[] = [
+  { key: "vertical", labelKey: "strip.kind.vertical" },
+  { key: "horizontal", labelKey: "strip.kind.horizontal" },
+  { key: "mora", labelKey: "strip.kind.mora" },
 ];
 
 export type StripScope = "pasted" | "imported" | "selection" | "chant";
-const SCOPE_TEXT: Record<StripScope, string> = {
-  pasted: "do trecho colado", imported: "do canto importado", selection: "do trecho selecionado", chant: "do canto atual",
-};
 
 /** Abre o diálogo; null = cancelado. `last` = escolha anterior da sessão; `scope` diz de onde sairão os sinais. */
 export async function openStripDialog(host: HTMLElement, counts: MarkCounts, last?: MarkKinds, scope: StripScope = "chant"): Promise<MarkKinds | null> {
@@ -23,21 +21,21 @@ export async function openStripDialog(host: HTMLElement, counts: MarkCounts, las
   const anyOn = (): boolean => KINDS.some((k) => on[k.key]);
 
   const p = openDialog(host, {
-    title: "Remover episemas e puncta mora",
-    body: `Escolha o que tirar das notas ${SCOPE_TEXT[scope]}. O nabc, as letras e as divisões não são alterados.`,
+    title: t("strip.title"),
+    body: t(`strip.body.${scope}` as MessageKey),
     segs: [{
-      key: "kinds", label: "Sinais a remover", value: "",
-      options: KINDS.map((k) => ({ value: k.key, label: `${k.label} (${counts[k.key]})` })),
+      key: "kinds", label: t("strip.group"), value: "",
+      options: KINDS.map((k) => ({ value: k.key, label: `${t(k.labelKey)} (${counts[k.key]})` })),
     }],
     actions: [
-      { id: "cancel", label: "Cancelar", kind: "elevated" },
-      { id: "remove", label: "Remover", kind: "filled" },
+      { id: "cancel", label: t("common.cancel"), kind: "elevated" },
+      { id: "remove", label: t("common.remove"), kind: "filled" },
     ],
   });
 
   // openDialog monta de forma síncrona: ajusta o DOM já presente no host.
   const btns = [...host.querySelectorAll<HTMLButtonElement>(".sc-seg button")];
-  const action = [...host.querySelectorAll<HTMLButtonElement>(".sc-dialog__actions button")].find((b) => b.textContent === "Remover");
+  const action = host.querySelector<HTMLButtonElement>('.sc-dialog__actions button[data-action="remove"]');
   const sync = (): void => {
     btns.forEach((b, i) => b.setAttribute("aria-pressed", String(on[KINDS[i].key])));
     if (action) action.disabled = !anyOn();
@@ -54,7 +52,7 @@ export async function openStripDialog(host: HTMLElement, counts: MarkCounts, las
   // O foco inicial foi para "Remover" antes de ele ser desabilitado: sem foco válido, Esc/Tab não chegam ao diálogo.
   const fa = document.activeElement;
   if (!fa || !host.contains(fa) || (fa as HTMLButtonElement).disabled) {
-    [...host.querySelectorAll<HTMLButtonElement>(".sc-dialog__actions button")].find((b) => b.textContent === "Cancelar")?.focus();
+    host.querySelector<HTMLButtonElement>('.sc-dialog__actions button[data-action="cancel"]')?.focus();
   }
   // Enter confirma a ação padrão do openDialog; sem nada ligado, não pode confirmar.
   const guard = (e: KeyboardEvent): void => { if (e.key === "Enter" && !e.isComposing && !anyOn() && !(e.target instanceof HTMLButtonElement)) { e.stopPropagation(); e.preventDefault(); } };

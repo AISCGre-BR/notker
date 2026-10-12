@@ -1,5 +1,6 @@
 // test/neumas-bench.test.ts — cartão Bancada (DOM)
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { createBench, type BenchCallbacks, type BenchStatus, type BenchItem } from "../src/neumas/bench";
 import type { EffectiveEntry } from "../src/neume/types";
 
@@ -309,5 +310,28 @@ describe("bancada: Novo nome grava ao sair do campo", () => {
     expect(names.querySelector(".neumas-savestate")!.textContent).toBe("salvo ✓");
     b.render({ kind: "entry", entry: glyph }, st({ saveState: "erro ao salvar" }));
     expect(names.querySelector(".neumas-savestate")!.getAttribute("data-state")).toBe("erro ao salvar");
+  });
+});
+
+describe("bancada — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("glifo do catálogo em italiano", () => {
+    setLocale("it");
+    const b = createBench(host, cbs(), drawFn());
+    b.render({ kind: "entry", entry: glyph }, st());
+    expect(q(".sc-panel__title").textContent).toBe("Glifo");
+    expect(q(".neumas-create-from").textContent).toBe("Crea sequenza da questo");
+    expect(q<HTMLInputElement>(".neumas-newname").placeholder).toBe("Nuovo nome…");
+    expect(q(".neumas-insert").textContent).toBe("Inserisci nel canto");
+    expect(host.textContent).toContain("I tuoi nomi");
+    expect(host.textContent).toContain("Riferimento");
+  });
+  it("indicador de gravação: data-kind independe do idioma", () => {
+    setLocale("en");
+    const b = createBench(host, cbs(), drawFn());
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "saved ✓" }));
+    expect(q(".neumas-savestate").getAttribute("data-kind")).toBe("saved");
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "error saving" }));
+    expect(q(".neumas-savestate").getAttribute("data-kind")).toBe("error");
   });
 });

@@ -1,6 +1,7 @@
 // src/neumas/catalog.ts — cartão "Catálogo" da vista Neumas: busca, família (segmentado),
 // filtros em fichas e a grade de cartões em seções. Só DOM + eventos: o estado vem de fora
 // (render) e as intenções saem por callbacks. Textos do usuário sempre por textContent.
+import { t, tn } from "../i18n";
 import type { EffectiveEntry, Family } from "../neume/types";
 import { neumeThumb } from "../neume/render";
 import { FILTERS, verticalNeighbor, type CatalogFilter, type CatalogSection, type SectionId } from "./catalog-model";
@@ -14,7 +15,7 @@ export interface CatalogCallbacks {
   /** Clique ou Enter num cartão (selecionar, ou acrescentar à cadeia ao compor). */
   onActivate(id: string): void;
   onNewSequence(): void;
-  /** "Mostrar mais" (150 a mais) ou "Mostrar todos" (`all`) numa seção cortada. */
+  /** "Mostrar mais" (150 a mais) ou t("catalog.all") (`all`) numa seção cortada. */
   onMore(section: SectionId, all: boolean): void;
   /** Esc no campo de busca: devolve o foco à grade. */
   onSearchEscape(): void;
@@ -48,13 +49,13 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 
 export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog {
   const card = el("section", "sc-panel neumas-catalog");
-  card.setAttribute("aria-label", "Catálogo de neumas");
+  card.setAttribute("aria-label", t("catalog.label"));
 
   const head = el("div", "neumas-catalog__head");
   const search = el("input", "sc-input neumas-search");
   search.type = "search";
-  search.placeholder = "Buscar nome ou código…";
-  search.setAttribute("aria-label", "Buscar neuma por nome ou código");
+  search.placeholder = t("catalog.search.placeholder");
+  search.setAttribute("aria-label", t("palette.placeholder"));
   search.addEventListener("input", () => cb.onQuery(search.value));
   search.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cb.onSearchEscape(); }
@@ -64,7 +65,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
   });
   const fam = el("div", "sc-seg neumas-family");
   fam.setAttribute("role", "group");
-  fam.setAttribute("aria-label", "Família");
+  fam.setAttribute("aria-label", t("common.family"));
   const famButtons = FAMILIES.map((f) => {
     const b = el("button", undefined, f.label);
     b.type = "button";
@@ -77,10 +78,10 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
 
   const filters = el("div", "neumas-filters");
   filters.setAttribute("role", "group");
-  filters.setAttribute("aria-label", "Filtro");
-  filters.appendChild(el("span", "neumas-filters__label", "Filtro:"));
+  filters.setAttribute("aria-label", t("catalog.filter"));
+  filters.appendChild(el("span", "neumas-filters__label", t("catalog.filter.label")));
   const filterButtons = FILTERS.map((f) => {
-    const b = el("button", "sc-chip neumas-filter", f.label);
+    const b = el("button", "sc-chip neumas-filter", t(f.labelKey));
     b.type = "button";
     b.dataset.filter = f.id;
     b.addEventListener("click", () => cb.onFilter(f.id));
@@ -90,7 +91,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
 
   const list = el("div", "neumas-list");
   list.setAttribute("role", "listbox");
-  list.setAttribute("aria-label", "Neumas");
+  list.setAttribute("aria-label", t("landmark.neumes"));
   card.append(head, filters, list);
   host.appendChild(card);
 
@@ -102,10 +103,10 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
   };
 
   list.addEventListener("keydown", (e) => {
-    const t = e.target as HTMLElement;
-    if (!t.classList?.contains("neumas-card") || e.altKey || e.ctrlKey || e.metaKey) return;
+    const tgt = e.target as HTMLElement;
+    if (!tgt.classList?.contains("neumas-card") || e.altKey || e.ctrlKey || e.metaKey) return;
     const all = cards();
-    const i = all.indexOf(t);
+    const i = all.indexOf(tgt);
     let j = -1;
     if (e.key === "ArrowRight") j = Math.min(i + 1, all.length - 1);
     else if (e.key === "ArrowLeft") j = Math.max(i - 1, 0);
@@ -116,7 +117,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
       j = verticalNeighbor(rects, i, e.key === "ArrowDown" ? 1 : -1);
     } else if (e.key === "Enter" && !e.isComposing) {
       e.preventDefault();
-      cb.onActivate(t.dataset.id!);
+      cb.onActivate(tgt.dataset.id!);
       return;
     } else return;
     e.preventDefault();
@@ -129,7 +130,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
     c.dataset.id = e.id;
     c.setAttribute("aria-selected", String(selected));
     c.tabIndex = selected ? 0 : -1;
-    if (e.hidden) { c.classList.add("is-hidden"); c.title = "Oculto da busca"; }
+    if (e.hidden) { c.classList.add("is-hidden"); c.title = t("catalog.hidden"); }
     const fig = el("span", "neumas-card__fig");
     fig.appendChild(neumeThumb(e, 40));
     const mine = !!e.userNames?.length;
@@ -139,7 +140,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
     if (mine) {
       const dot = el("span", "neumas-card__mine");
       dot.setAttribute("role", "img");
-      dot.setAttribute("aria-label", "tem nome seu");
+      dot.setAttribute("aria-label", t("catalog.hasYourName"));
       c.appendChild(dot);
     }
     c.addEventListener("click", () => { focusCard(c); cb.onActivate(e.id); });
@@ -163,7 +164,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
       for (const s of sections) {
         if (s.total === 0) {
           // "Minhas sequências" vazia só aparece sem busca e com filtro Todos/Sequências
-          // (é onde "+ Nova" e a frase de ajuda fazem sentido); fora disso, some.
+          // (é onde t("catalog.new") e a frase de ajuda fazem sentido); fora disso, some.
           const plain = !st.query.trim() && (st.filter === "todos" || st.filter === "sequencias");
           if (s.id !== "minhas" || !plain) continue;
         }
@@ -175,9 +176,9 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
         sec.setAttribute("aria-label", s.title);
         h.appendChild(title);
         if (s.id === "minhas") {
-          const add = el("button", "sc-btn sc-btn--tonal neumas-new", "+ Nova");
+          const add = el("button", "sc-btn sc-btn--tonal neumas-new", t("catalog.new"));
           add.type = "button";
-          add.dataset.tip = "Nova sequência (S)";
+          add.dataset.tip = t("catalog.new.tip");
           add.addEventListener("click", () => cb.onNewSequence());
           h.appendChild(add);
         }
@@ -185,17 +186,17 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
         const grid = el("div", "neumas-grid");
         for (const e of s.items) grid.appendChild(cardEl(e, e.id === st.selectedId));
         if (s.id === "minhas" && s.total === 0) {
-          grid.appendChild(el("div", "sc-empty neumas-empty", "Nenhuma sequência ainda. Tecle S ou clique em + Nova."));
+          grid.appendChild(el("div", "sc-empty neumas-empty", t("catalog.empty")));
         }
         sec.appendChild(grid);
         if (s.items.length < s.total) {
           const more = el("div", "neumas-more");
-          more.appendChild(el("span", "neumas-more__text", `mostrando ${s.items.length} de ${s.total}`));
+          more.appendChild(el("span", "neumas-more__text", t("catalog.showing", { shown: s.items.length, total: s.total })));
           const rest = s.total - s.items.length;
-          const next = el("button", "sc-btn sc-btn--elevated neumas-more-btn", `Mostrar mais (${rest} restantes)`);
+          const next = el("button", "sc-btn sc-btn--elevated neumas-more-btn", tn("catalog.more", rest));
           next.type = "button";
           next.addEventListener("click", () => cb.onMore(s.id, false));
-          const every = el("button", "sc-btn sc-btn--elevated neumas-all-btn", "Mostrar todos");
+          const every = el("button", "sc-btn sc-btn--elevated neumas-all-btn", t("catalog.all"));
           every.type = "button";
           every.addEventListener("click", () => cb.onMore(s.id, true));
           more.append(next, every);
@@ -204,7 +205,7 @@ export function createCatalog(host: HTMLElement, cb: CatalogCallbacks): Catalog 
         list.appendChild(sec);
         any = any || s.items.length > 0;
       }
-      if (!any && st.query.trim()) list.appendChild(el("div", "sc-empty", `Nada encontrado para “${st.query.trim()}”.`));
+      if (!any && st.query.trim()) list.appendChild(el("div", "sc-empty", t("catalog.noResults", { query: st.query.trim() })));
       // Foco itinerante: sem seleção, o primeiro cartão é o focável.
       const all = cards();
       if (!all.some((c) => c.tabIndex === 0) && all[0]) all[0].tabIndex = 0;

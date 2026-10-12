@@ -468,8 +468,8 @@ body:not([data-view="neumas"]) .sc-toolbar [data-view="neumas"] { display: none;
 .neumas-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .neumas-names__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
 .neumas-savestate { font: 12px/16px var(--font-sans); color: var(--ink-muted); min-height: 16px; margin-bottom: 6px; }
-.neumas-savestate[data-state="salvo ✓"] { color: var(--success); }
-.neumas-savestate[data-state="erro ao salvar"] { color: var(--danger); }
+.neumas-savestate[data-kind="saved"] { color: var(--success); }
+.neumas-savestate[data-kind="error"] { color: var(--danger); }
 /* ── Tela inicial (1b-2) ─────────────────────────────────────────────────── */
 .notker-welcome { flex-direction: column; }
 .notker-welcome__wrap {
