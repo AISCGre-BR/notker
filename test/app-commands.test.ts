@@ -179,13 +179,16 @@ describe("Ctrl+P nunca abre a impressão nativa", () => {
     expect(e.defaultPrevented).toBe(true);
     expect(run).not.toHaveBeenCalled();
   });
-  it("habilitado: executa e previne; Ctrl+Shift+P e Ctrl+Alt+P não são tocados", () => {
+  it("habilitado: executa e previne; Ctrl+Shift+P não exporta mas não imprime; Ctrl+Alt+P não é tocado", () => {
     const { r, run } = setup();
     const e = ctrlP();
     expect(r.handleKey(e)).toBe(true);
     expect(e.defaultPrevented).toBe(true);
     expect(run).toHaveBeenCalledTimes(1);
-    expect(r.handleKey(ctrlP({ shiftKey: true }))).toBe(false);
+    const es = ctrlP({ shiftKey: true });
+    expect(r.handleKey(es)).toBe(false);
+    expect(es.defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
     const e2 = ctrlP({ altKey: true });
     r.handleKey(e2);
     expect(e2.defaultPrevented).toBe(false);
@@ -242,5 +245,48 @@ describe("Ctrl+P no macOS", () => {
     window.dispatchEvent(c);
     expect(c.defaultPrevented).toBe(true);
     off(); spy.mockRestore();
+  });
+});
+
+describe("Ctrl+Shift+P e Ctrl físico no macOS (onda final)", () => {
+  const ev = (mods: Partial<KeyboardEventInit>) => new KeyboardEvent("keydown", { key: "P", code: "KeyP", bubbles: true, cancelable: true, ...mods });
+  it("fora do Mac: a guarda previne Ctrl+Shift+P", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const off = installPrintGuard(window);
+    const c = ev({ ctrlKey: true, shiftKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(true);
+    off(); spy.mockRestore();
+  });
+  it("Mac: a guarda previne Cmd+Shift+P e deixa Ctrl+Shift+P", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    const off = installPrintGuard(window);
+    const m = ev({ metaKey: true, shiftKey: true });
+    window.dispatchEvent(m);
+    expect(m.defaultPrevented).toBe(true);
+    const c = ev({ ctrlKey: true, shiftKey: true });
+    window.dispatchEvent(c);
+    expect(c.defaultPrevented).toBe(false);
+    off(); spy.mockRestore();
+  });
+  it("Mac: só Cmd vira Ctrl em keyOf; Ctrl físico não dispara atalhos do registro", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    expect(keyOf(key("s", { metaKey: true }))).toBe("Ctrl+S");
+    expect(keyOf(key("s", { ctrlKey: true }))).not.toBe("Ctrl+S");
+    expect(keyOf(key("s", { ctrlKey: true }))).not.toBe("S");
+    expect(keyOf(key("&", { metaKey: true, code: "Digit1" }))).toBe("Ctrl+Digit1");
+    const r = createRegistry();
+    const run = vi.fn();
+    r.register([{ id: "x", label: "x", run, keys: ["Ctrl+S"] }]);
+    expect(r.handleKey(key("s", { ctrlKey: true, cancelable: true }))).toBe(false);
+    expect(r.handleKey(key("s", { metaKey: true, cancelable: true }))).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+  it("fora do Mac: Ctrl e Cmd continuam sendo Ctrl", () => {
+    const spy = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    expect(keyOf(key("s", { ctrlKey: true }))).toBe("Ctrl+S");
+    expect(keyOf(key("s", { metaKey: true }))).toBe("Ctrl+S");
+    spy.mockRestore();
   });
 });

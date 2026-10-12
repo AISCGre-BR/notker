@@ -26,26 +26,31 @@ export interface CommandRegistry extends Commands {
   onDidRun(listener: (id: string) => void): () => void;
 }
 
+/** No macOS só Cmd (meta) vale "Ctrl" nos atalhos do registro; o Ctrl físico fica com o
+ *  CodeMirror (emacs) e vira "MacCtrl", que nenhum atalho usa. Fora do Mac, Ctrl ou Meta. */
 export function keyOf(e: KeyboardEvent): string {
   const parts: string[] = [];
-  if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
+  const mac = isMac();
+  const mod = mac ? e.metaKey : (e.ctrlKey || e.metaKey);
+  if (mac && e.ctrlKey) parts.push("MacCtrl");
+  if (mod) parts.push("Ctrl");
   if (e.altKey) parts.push("Alt");
   if (e.shiftKey) parts.push("Shift");
   let k = e.key;
-  if (/^Digit\d$/.test(e.code) && (e.ctrlKey || e.metaKey)) k = e.code; // tecla física (AZERTY)
+  if (/^Digit\d$/.test(e.code) && mod) k = e.code; // tecla física (AZERTY)
   else if (k === " ") k = "Space";
   else if (k.length === 1) k = k.toUpperCase();
   parts.push(k);
   return parts.join("+");
 }
 
-/** Ctrl+P (ou Cmd+P) puro, pela tecla física. O Notker usa esse atalho para Exportar PDF…:
- *  em NENHUM caso (comando desabilitado, menu ou diálogo aberto, tecla segurada) a janela
- *  pode abrir a impressão nativa do navegador. */
+/** Ctrl+P ou Ctrl+Shift+P (Cmd no Mac), pela tecla física. O Notker usa Ctrl+P para Exportar
+ *  PDF… (o atalho é decidido por keyOf; aqui é só a guarda): em NENHUM caso (comando desabilitado,
+ *  menu ou diálogo aberto, tecla segurada) a janela pode abrir a impressão nativa do navegador. */
 export function isPrintKey(e: KeyboardEvent): boolean {
   // No macOS a impressão é Cmd+P; Ctrl+P é do CodeMirror (emacs cursorLineUp).
   const mod = isMac() ? e.metaKey : (e.ctrlKey || e.metaKey);
-  return mod && !e.shiftKey && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
+  return mod && !e.altKey && (e.code === "KeyP" || (!e.code && e.key.toLowerCase() === "p"));
 }
 
 function isMac(): boolean {
