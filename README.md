@@ -63,6 +63,7 @@ Tela inicial: o projeto mais recente em destaque (Continuar), os anteriores em c
 
 ### Interface
 
+- Idioma: a interface vem no idioma do sistema (português, inglês ou italiano; outros → inglês). Exibir ▸ Idioma escolhe e lembra; trocar pergunta "Salvar alterações?" como ao fechar, recarrega a janela e reabre o projeto. Nomes latinos dos neumas, códigos gabc/nabc e o texto da partitura não mudam.
 - Ícones: [Lucide](https://lucide.dev), licença ISC — SVGs copiados em `src/ui/pd/icons.ts`.
 - Fontes: [Source Sans 3](https://github.com/adobe-fonts/source-sans) e [Source Serif 4](https://github.com/adobe-fonts/source-serif) (Adobe, SIL Open Font License 1.1) via [@fontsource](https://fontsource.org).
 - Linguagem visual: [Parchment Design](https://github.com/AISCGre-BR/parchment-design) (AISCGre-BR, MIT).

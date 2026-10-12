@@ -19,6 +19,9 @@ import { mountNewProjectGuide } from "../src/app/new-project-guide";
 import { scoreThumbnail } from "../src/app/thumbnail";
 import type { RecentEntry } from "../src/app/recent";
 import { createContrastChecker } from "./contrast";
+import { setLocale, isLocale, t } from "../src/i18n";
+const __lang = new URLSearchParams(location.search).get("lang");
+if (isLocale(__lang)) { setLocale(__lang); document.documentElement.lang = __lang; }
 
 const qs = new URLSearchParams(location.search);
 applyTheme(qs.get("theme") === "dark" ? "dark" : "light");
@@ -26,17 +29,17 @@ const noop = () => {};
 
 async function main(): Promise<void> {
   const commands = createRegistry();
-  commands.register([{ id: "file.open", label: "Abrir…", run: noop, keys: ["Ctrl+O"] }]);
+  commands.register([{ id: "file.open", label: t("cmd.file.open"), run: noop, keys: ["Ctrl+O"] }]);
   const menubar = createMenubar(document.querySelector<HTMLElement>("#menubar")!, commands, [
-    { label: "Arquivo", items: [
-      { cmd: "file.open", label: "Abrir…", shortcut: "Ctrl+O" },
-      { label: "Abrir recente", submenu: () => qs.get("norecent") ? [{ label: "Nenhum recente", run: noop, enabled: false }] : [
+    { label: t("menu.file"), items: [
+      { cmd: "file.open", label: t("cmd.file.open"), shortcut: "Ctrl+O" },
+      { label: t("menu.openRecent"), submenu: () => qs.get("norecent") ? [{ label: t("menu.noRecent"), run: noop, enabled: false }] : [
         { label: "Missa de Natal", caption: "Missas", run: noop },
         { label: "Vigília Pascal", caption: "Missas", run: noop },
-        "---", { label: "Limpar recentes", run: noop },
+        "---", { label: t("cmd.file.clearRecents"), run: noop },
       ] },
     ] },
-    { label: "Editar", items: [] }, { label: "Exibir", items: [] }, { label: "Ajuda", items: [] },
+    { label: t("menu.edit"), items: [] }, { label: t("menu.view"), items: [] }, { label: t("menu.help"), items: [] },
   ]);
   const rows: string[] = [];
   const gabc = await fetch("/samples/04-dies-sanctificatus.gabc").then((r) => r.text());
@@ -52,7 +55,7 @@ async function main(): Promise<void> {
   const step = Number(qs.get("guide") ?? 0);
   if (step) {
     setScreen("guide");
-    menubar.setTitle("Novo projeto");
+    menubar.setTitle(t("landmark.newProject"));
     const g = mountNewProjectGuide(document.querySelector<HTMLElement>("#guide-host")!,
       { onCreate: noop, onCancel: noop, confirmDiscard: async () => false, pickGabc: async () => null },
       { title: "Missa de Natal", family: "laon", chantName: "Puer natus est", office: "Introitus", gabc: "" });
