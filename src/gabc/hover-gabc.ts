@@ -2,7 +2,8 @@ import { hoverTooltip } from "@codemirror/view";
 import type { EditorView } from "@codemirror/view";
 import type { Tree } from "web-tree-sitter";
 import { nodeKindAt, activeClefAt, nabcContextAt } from "../editor/context";
-import { pitchName } from "./gabc-pitch";
+import { pitchLabel } from "./gabc-pitch";
+import { t } from "../i18n";
 
 export function gabcHover(getTree: () => Tree | null) {
   return hoverTooltip((view, pos) => {
@@ -12,10 +13,10 @@ export function gabcHover(getTree: () => Tree | null) {
     if (nabcContextAt(tree as any, doc, pos).inNabc) return null;
     const kind = nodeKindAt(tree as any, pos);
     const ch = doc[pos] ?? "";
-    let text = `elemento: ${kind}`;
+    let text = t("gabcHover.element", { kind });
     if (/[a-mA-M]/.test(ch)) {
       const clef = activeClefAt(tree as any, doc, pos);
-      text = `nota '${ch}' · ${pitchName(ch, clef)} (clave ${clef ?? "c4"})`;
+      text = t("gabcHover.note", { letter: ch, pitch: pitchLabel(ch, clef), clef: clef ?? "c4" });
     }
     return {
       pos, above: true,

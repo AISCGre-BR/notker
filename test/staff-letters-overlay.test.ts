@@ -1,7 +1,8 @@
 // test/staff-letters-overlay.test.ts — Task 4: overlay das letras sobre um SVG falso
 // com a MESMA estrutura do nabc-lib (medida no Chromium: g.ChantLine > g.ChantLineInner >
 // 4 × line.StaffLine com y1 = 0 / 16.32 / 32.64 / 48.96, de cima para baixo).
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { setLocale } from "../src/i18n";
 import { drawStaffLetters, clearStaffLetters, STAFF_LETTERS_GAP, STAFF_LETTERS_STAGGER } from "../src/preview/staff-letters";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -90,5 +91,17 @@ describe("drawStaffLetters", () => {
     expect(drawStaffLetters(svg, () => "c4")).toBe(2);
     expect(drawStaffLetters(null, () => "c4")).toBe(0);
     expect(() => clearStaffLetters(null)).not.toThrow();
+  });
+});
+
+describe("letras na pauta — idiomas", () => {
+  afterEach(() => setLocale("pt-BR"));
+  it("tooltip com o nome da nota e a clave no idioma", () => {
+    setLocale("it");
+    const svg = fakeSvg();
+    drawStaffLetters(svg, () => "c4");
+    const titleOf = (line: number, i: number) =>
+      svg.querySelectorAll(".ChantLineInner")[line].querySelectorAll("text.staff-letter")[i].querySelector("title")!.textContent;
+    expect(titleOf(0, 6)).toBe("j — do (chiave di c4)");
   });
 });

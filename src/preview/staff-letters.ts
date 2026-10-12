@@ -9,6 +9,7 @@
  *  um gutter fora da folha, no padding do #preview (o CSS deixa o <svg> com overflow
  *  visível) — não cobrem a clave nem a capitular e usam as cores do tema, não da folha. */
 import { staffLetters } from "../gabc/staff-letters";
+import { t, type MessageKey } from "../i18n";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 /** Distância (px) entre a borda esquerda da folha e o FIM das letras das LINHAS. */
@@ -17,7 +18,6 @@ export const STAFF_LETTERS_GAP = 5;
  *  pauta inteira (16,32 px) em vez de meio (8,16 px) — as letras não se encostam. */
 export const STAFF_LETTERS_STAGGER = 8;
 const LAYER = "staff-letters";
-const SOLFEGE_LABEL: Record<string, string> = { do: "dó", re: "ré", mi: "mi", fa: "fá", sol: "sol", la: "lá", si: "si" };
 
 export function clearStaffLetters(svg: Element | null): void {
   svg?.querySelectorAll(`g.${LAYER}`).forEach((g) => g.remove());
@@ -56,17 +56,17 @@ export function drawStaffLetters(
     for (const p of staffLetters(clef, ys.length)) {
       const k = p.degree / 2;
       const y = Number.isInteger(k) ? ys[k] : (ys[Math.floor(k)] + ys[Math.ceil(k)]) / 2;
-      const t = document.createElementNS(SVG_NS, "text");
-      t.setAttribute("class", `staff-letter staff-letter--${p.kind}`);
-      t.setAttribute("x", String(-(STAFF_LETTERS_GAP + (p.kind === "space" ? STAFF_LETTERS_STAGGER : 0))));
-      t.setAttribute("y", String(Math.round(y * 100) / 100));
-      t.setAttribute("text-anchor", "end");
-      t.setAttribute("dominant-baseline", "central");
-      t.appendChild(document.createTextNode(p.letter));
+      const txt = document.createElementNS(SVG_NS, "text");
+      txt.setAttribute("class", `staff-letter staff-letter--${p.kind}`);
+      txt.setAttribute("x", String(-(STAFF_LETTERS_GAP + (p.kind === "space" ? STAFF_LETTERS_STAGGER : 0))));
+      txt.setAttribute("y", String(Math.round(y * 100) / 100));
+      txt.setAttribute("text-anchor", "end");
+      txt.setAttribute("dominant-baseline", "central");
+      txt.appendChild(document.createTextNode(p.letter));
       const title = document.createElementNS(SVG_NS, "title");
-      title.textContent = `${p.letter} — ${SOLFEGE_LABEL[p.solfege] ?? p.solfege} (clave ${clef})`;
-      t.appendChild(title);
-      layer.appendChild(t);
+      title.textContent = t("staffLetters.title", { letter: p.letter, pitch: t(`pitch.${p.solfege}` as MessageKey), clef });
+      txt.appendChild(title);
+      layer.appendChild(txt);
     }
     inner.appendChild(layer);
     drawn++;

@@ -2,6 +2,7 @@ import { type EditorView, keymap } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
 import { startCompletion } from "@codemirror/autocomplete";
 import type { Tree } from "web-tree-sitter";
+import { t } from "../i18n";
 import { inNabcTextual } from "../editor/context";
 import { insertNabcAtCursor } from "./insert";
 import { neumeThumb } from "./render";
@@ -49,10 +50,10 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
     const root = document.createElement("div");
     root.className = "neume-palette sc-menu";
     root.setAttribute("role", "dialog");
-    root.setAttribute("aria-label", "Buscar neuma");
+    root.setAttribute("aria-label", t("palette.label"));
     const input = document.createElement("input");
     input.className = "sc-input";
-    input.placeholder = "Buscar neuma por nome ou código";
+    input.placeholder = t("palette.placeholder");
     const list = document.createElement("div");
     list.className = "neume-palette-list";
     list.setAttribute("role", "listbox");
@@ -99,8 +100,8 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
         if (naming === i) {
           const ni = document.createElement("input");
           ni.className = "sc-input neume-name-input";
-          ni.placeholder = "Novo nome";
-          ni.setAttribute("aria-label", "Novo nome do neuma");
+          ni.placeholder = t("palette.newName");
+          ni.setAttribute("aria-label", t("palette.newName.label"));
           ni.addEventListener("keydown", (ev) => {
             ev.stopPropagation();
             if (ev.isComposing) return;
@@ -123,7 +124,7 @@ export function neumePalette(deps: PaletteDeps): NeumePalette {
             }
           });
           ni.addEventListener("blur", onBlur);
-          for (const t of ["click", "mousedown"]) ni.addEventListener(t, (ev) => ev.stopPropagation());
+          for (const evName of ["click", "mousedown"]) ni.addEventListener(evName, (ev) => ev.stopPropagation());
           row.appendChild(ni);
           nameField = ni;
         } else {

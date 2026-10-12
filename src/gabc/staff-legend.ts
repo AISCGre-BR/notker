@@ -2,7 +2,8 @@ import { showPanel, type Panel, type EditorView } from "@codemirror/view";
 import { StateField, StateEffect } from "@codemirror/state";
 import type { Tree } from "web-tree-sitter";
 import { activeClefAt } from "../editor/context";
-import { pitchName } from "./gabc-pitch";
+import { pitchLabel } from "./gabc-pitch";
+import { t } from "../i18n";
 
 export const toggleLegend = StateEffect.define<boolean>();
 export const legendVisible = StateField.define<boolean>({
@@ -14,7 +15,7 @@ export const legendVisible = StateField.define<boolean>({
 let treeGetter: () => Tree | null = () => null;
 export function setLegendTreeGetter(g: () => Tree | null) { treeGetter = g; }
 
-/** Liga/desliga "Letras na pauta" (estado mora no main, como o comando view.staffLetters). */
+/** Liga/desliga t("cmd.view.staffLetters") (estado mora no main, como o comando view.staffLetters). */
 export interface LegendLettersHook { on: () => boolean; toggle: () => void }
 let lettersHook: LegendLettersHook = { on: () => false, toggle: () => {} };
 export function setLegendLetters(h: LegendLettersHook) { lettersHook = h; }
@@ -28,8 +29,8 @@ function legendPanel(view: EditorView): Panel {
   const letters = document.createElement("button");
   letters.type = "button";
   letters.className = "sc-btn legend-letters";
-  letters.textContent = "Letras na pauta";
-  letters.dataset.tip = "Mostrar a letra gabc de cada linha e espaço à esquerda da partitura";
+  letters.textContent = t("cmd.view.staffLetters");
+  letters.dataset.tip = t("legend.letters.tip");
   letters.addEventListener("click", () => {
     lettersHook.toggle();
     letters.setAttribute("aria-pressed", String(lettersHook.on()));
@@ -44,10 +45,10 @@ function legendPanel(view: EditorView): Panel {
     const cells = "abcdefghijklm".split("");
     letters.setAttribute("aria-pressed", String(lettersHook.on()));
     body.innerHTML =
-      `<span class="legend-clef" title="clave ativa">✛ ${clef}</span>` +
+      `<span class="legend-clef" title="${t("legend.activeClef")}">✛ ${clef}</span>` +
       `<span class="legend-cells">` +
       cells
-        .map((l) => `<span class="legend-cell"><b>${l}</b><i>${pitchName(l, clef)}</i></span>`)
+        .map((l) => `<span class="legend-cell"><b>${l}</b><i>${pitchLabel(l, clef)}</i></span>`)
         .join("") +
       `</span>`;
   };

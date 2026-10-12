@@ -4,6 +4,8 @@
 // qual linha é Dó (c-clef) ou Fá (f-clef). Convenção verificada contra
 // notker-LEGACY/src-tauri/src/render/native/note_glyph.rs (gregorio CLI):
 //   c4 → d=Ré e=Mi f=Fá g=Sol h=Lá i=Si j=Dó (clave na linha 4).
+import { t, type MessageKey } from "../i18n";
+
 const LETTERS = "abcdefghijklm";
 const SOLFEGE = ["do", "re", "mi", "fa", "sol", "la", "si"];
 
@@ -26,4 +28,10 @@ export function pitchName(letter: string, clef: string | null): string {
   const d = doOffset(clef ?? "c4");
   const idx = ((off - d) % 7 + 7) % 7;
   return SOLFEGE[idx];
+}
+
+/** Nome da nota no idioma da interface (pt "dó ré…", it "do re…", en "C D…"); `pitchName` é a chave. */
+export function pitchLabel(letter: string, clef: string | null): string {
+  const key = pitchName(letter, clef);
+  return key === "?" ? "?" : t(`pitch.${key}` as MessageKey);
 }
