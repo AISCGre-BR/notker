@@ -42,6 +42,10 @@ Atalhos: F2 ou Ctrl+K: buscar neuma (Ctrl+Enter num resultado: cadastrar nome) �
 
 Tela de nomes (Exibir ▸ Neumas, `Ctrl+3`; `Ctrl+1` ou Esc volta à Edição): setas navegam, N foca "Novo nome…", Enter grava, S cria uma sequência (cadeia nabc livre), / ou `Ctrl+F` busca, I insere no canto. Os nomes valem para todos os projetos e entram na busca, no hover e no completion.
 
+Remover episemas e puncta mora: ao colar ou importar gabc que os contenha, um aviso oferece **Remover…**; também em Editar ▸ Remover episemas e puncta mora… (sem atalho; age na seleção, ou no canto inteiro se não há seleção). O diálogo mostra a contagem de episemas verticais, episemas horizontais (com seus `[oh:…]`/`[uh:…]`) e puncta mora, e você escolhe quais tirar. Só mexe nas notas dentro de `( )`, antes do `|` do nabc; letra, cabeçalho, divisões e demais colchetes ficam intactos. Uma só ação no histórico: `Ctrl+Z` desfaz tudo.
+
+Letras na pauta: Exibir ▸ Letras na pauta (ou o botão na régua de altura, `Ctrl+Alt+L`) mostra, à esquerda de cada pauta da partitura, a letra gabc de cada linha e espaço conforme a clave daquela pauta; o tooltip dá o nome da nota. Desligado por padrão e só na mesa: nunca vai para o PDF nem para a miniatura.
+
 O playback (Tocar, modos e onda de interpretação) está desligado nesta versão; a interpretação salva nos projetos é preservada.
 
 Árvore de cantos: ↑↓ navegar, ←→ recolher/expandir, Enter abrir, F2 renomear, Del excluir, Alt+↑/↓ mover, Ctrl+D duplicar, Shift+F10 menu; arrastar para reordenar ou soltar dentro de um grupo.
