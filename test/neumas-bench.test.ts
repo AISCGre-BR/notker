@@ -100,7 +100,7 @@ describe("bancada: glifo do catálogo", () => {
     b.focusName();
     const n = q<HTMLInputElement>(".neumas-newname");
     n.value = "meio digitado";
-    b.render({ kind: "entry", entry: { ...glyph, hidden: true } }, st({ saveState: "salvo ✓" }));
+    b.render({ kind: "entry", entry: { ...glyph, hidden: true } }, st({ saveState: "saved" }));
     expect(q(".neumas-newname")).toBe(n);
     expect(document.activeElement).toBe(n);
     expect(n.value).toBe("meio digitado");
@@ -305,11 +305,12 @@ describe("bancada: Novo nome grava ao sair do campo", () => {
   });
   it("o indicador de gravação fica junto de 'Seus nomes' e mostra o estado", () => {
     const b = createBench(host, cbs(), drawFn());
-    b.render({ kind: "entry", entry: glyph }, st({ saveState: "salvo ✓" }));
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "saved" }));
     const names = q(".neumas-names");
     expect(names.querySelector(".neumas-savestate")!.textContent).toBe("salvo ✓");
-    b.render({ kind: "entry", entry: glyph }, st({ saveState: "erro ao salvar" }));
-    expect(names.querySelector(".neumas-savestate")!.getAttribute("data-state")).toBe("erro ao salvar");
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "error" }));
+    expect(names.querySelector(".neumas-savestate")!.getAttribute("data-state")).toBe("error");
+    expect(names.querySelector(".neumas-savestate")!.textContent).toBe("erro ao salvar");
   });
 });
 
@@ -329,9 +330,9 @@ describe("bancada — idiomas", () => {
   it("indicador de gravação: data-kind independe do idioma", () => {
     setLocale("en");
     const b = createBench(host, cbs(), drawFn());
-    b.render({ kind: "entry", entry: glyph }, st({ saveState: "saved ✓" }));
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "saved" }));
     expect(q(".neumas-savestate").getAttribute("data-kind")).toBe("saved");
-    b.render({ kind: "entry", entry: glyph }, st({ saveState: "error saving" }));
+    b.render({ kind: "entry", entry: glyph }, st({ saveState: "error" }));
     expect(q(".neumas-savestate").getAttribute("data-kind")).toBe("error");
   });
 });

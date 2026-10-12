@@ -164,7 +164,7 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
   // ── gravação ──
   function save(next: Overlay, inPlace = false): Promise<void> {
     if (next === deps.overlay()) return Promise.resolve();
-    saveState = t("neumas.saving");
+    saveState = "saving";
     const p = deps.commit(next);
     // inPlace (o usuário só saiu do campo): não recria a grade — o clique que causou o blur
     // ainda vai chegar ao cartão. Atualiza só o cartão do item e a bancada.
@@ -172,8 +172,8 @@ export function createNeumasView(host: HTMLElement, deps: NeumasDeps): NeumasVie
     if (cur && catalog.updateCard(cur)) renderBench(); else render();
     return p.then(
       // Só o estado de gravação mudou: refaz a bancada, não a grade (centenas de cartões).
-      () => { saveState = t("neumas.saved"); renderBench(); },
-      () => { saveState = t("neumas.saveError"); renderBench(); }, // o toast de erro vem de quem grava
+      () => { saveState = "saved"; renderBench(); },
+      () => { saveState = "error"; renderBench(); }, // o toast de erro vem de quem grava
     );
   }
 

@@ -20,8 +20,8 @@ export interface BenchStatus {
   /** Outro item que já representa esta cadeia (deduplicação). */
   duplicate: { id: string; label: string } | null;
   composing: boolean;
-  /** Texto já traduzido (vem de `neumas.saving|saved|saveError`) ou "". */
-  saveState: string;
+  /** Código do estado de gravação; o rótulo é traduzido só na renderização. */
+  saveState: "" | "saving" | "saved" | "error";
 }
 export type NameCommit = "enter" | "blur" | "flush";
 export interface BenchCallbacks {
@@ -352,10 +352,9 @@ export function createBench(host: HTMLElement, cb: BenchCallbacks, draw: DrawFn)
       if (document.activeElement !== r.note && noteTimer === null) r.note.value = savedNote;
     }
     if (r.hide && entry) r.hide.textContent = entry.hidden ? t("bench.show") : t("bench.hide");
-    r.save.textContent = st.saveState;
+    r.save.textContent = st.saveState === "saving" ? t("neumas.saving") : st.saveState === "saved" ? t("neumas.saved") : st.saveState === "error" ? t("neumas.saveError") : "";
     r.save.dataset.state = st.saveState;
-    // CSS por tipo (o texto muda com o idioma).
-    r.save.dataset.kind = st.saveState === t("neumas.saved") ? "saved" : st.saveState === t("neumas.saveError") ? "error" : "";
+    r.save.dataset.kind = st.saveState; // CSS por tipo (o texto muda com o idioma)
     ensureDrawing(r.family, st.chain, item.kind === "entry" && !entry?.userSequence);
   }
 
