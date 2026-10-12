@@ -279,8 +279,8 @@ async function boot() {
       search: () => searchInst,
       lookupByNabc: (nabc: string): EffectiveEntry[] => lookup(nabc),
       activeFamily: () => currentFamily(),
-      openNames: (t: { id?: string; family: Family; nabc: string }) =>
-        openNeumas(t.id ? { family: t.family, select: t.id, focus: "name" } : { family: t.family, newChain: t.nabc, focus: "name" }),
+      openNames: (target: { id?: string; family: Family; nabc: string }) =>
+        openNeumas(target.id ? { family: target.family, select: target.id, focus: "name" } : { family: target.family, newChain: target.nabc, focus: "name" }),
       onName: async (ids: string[], name: string) => {
         const n = name.trim();
         const targets = ids.map((id) => ({
@@ -952,7 +952,7 @@ async function boot() {
   }
   const confirmDiscardGuide = async (): Promise<boolean> => (await openDialog(dialogHost, {
     title: t("guide.discard.title"),
-    body: "O que foi preenchido no guia será perdido.",
+    body: t("guide.discard.body"),
     actions: [
       { id: "discard", label: t("common.discard"), kind: "danger" },
       { id: "keep", label: t("guide.discard.keep"), kind: "filled" },

@@ -21,4 +21,13 @@ describe("main.ts: idioma", () => {
     expect(code).toContain('label: t("menu.openRecent")');
     expect(code).not.toMatch(/label: "[A-ZÀ-Ý][a-zà-ÿ]/); // nenhum rótulo literal em pt
   });
+  it("nenhum title/body/toast literal em pt (inclui frases que começam com 'O ', 'A ', 'É ')", () => {
+    expect(code).not.toMatch(/\b(?:title|body|label): "[A-ZÀ-Ý][a-zà-ÿ]*[ …]/);
+    expect(code).not.toMatch(/\b(?:title|body): "[A-ZÀ-Ý]/);
+    expect(code).not.toMatch(/toaster\.show\("[A-ZÀ-Ý]/);
+    expect(code).not.toMatch(/toaster\.show\(`[A-ZÀ-Ý]/);
+  });
+  it("t() do i18n não é sombreado por parâmetro", () => {
+    expect(code).not.toMatch(/\(t: \{/);
+  });
 });

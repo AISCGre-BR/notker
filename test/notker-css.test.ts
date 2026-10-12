@@ -53,7 +53,7 @@ describe("achados da revisão final (beta 1a)", () => {
     expect(main).toMatch(/function toggleFamily\(\): void \{[^}]*applyTree\(/);
   });
   it("Excluir canto oferece Desfazer; clicar no canto ativo é no-op", () => {
-    expect(main).toMatch(/onRemove:[\s\S]*?"Desfazer"/);
+    expect(main).toMatch(/onRemove:[\s\S]*?label: t\("common\.undo"\)/);
     expect(main).toMatch(/function switchToChant\(id: string\): void \{\s*if \(id === shownId\) return;/);
   });
   it("nome duplicado avisa em vez de sucesso", () => {
